@@ -1,0 +1,5 @@
+add_library(antlr4 braneBaseListener.cpp braneBaseVisitor.cpp braneLexer.cpp braneListener.cpp braneParser.cpp braneVisitor.cpp)
+target_include_directories(antlr4 PUBLIC include/antlr4 include)
+if(UNIX)
+    target_link_libraries(antlr4 PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/lib/libantlr4-runtime.a)
+endif()
