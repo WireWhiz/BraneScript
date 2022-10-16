@@ -12,22 +12,34 @@
 #include <exception>
 
 #include "../antlr4/braneBaseVisitor.h"
+#include "scriptFunction.h"
+#include "irScript.h"
 
 class TypeDef;
 class Compiler : public braneBaseVisitor
 {
-    struct Variable
+    uint32_t _valueIndex = 0;
+    struct Value
     {
-        uint32_t memIndex = 0;
+        enum : uint8_t{
+            Const = 1,
+            Constexpr = 1 << 1,
+            Temp = 1 << 2
+        };
+        uint8_t flags = 0;
+        uint32_t valueIndex = 0;
         TypeDef* def = nullptr;
+        inline bool isVoid() const{return def == nullptr;};
     };
     struct Scope
     {
-        std::unordered_map<std::string, Variable> _localVariables;
+        std::unordered_map<std::string, Value> localValues;
     };
-    std::unordered_map<std::string, Variable> _globalVariables;
     std::list<Scope> _scopes;
 
+    IRScript* _currentScript = nullptr;
+    ScriptFunction* _currentFunction = nullptr;
+    std::unordered_map<std::string, TypeDef*> _types;
 public:
     struct CompileError
     {
@@ -66,9 +78,24 @@ private:
 
     std::any visitDeclaration(braneParser::DeclarationContext *context) override;
 
+    std::any visitArgumentList(braneParser::ArgumentListContext *ctx) override;
+
+    std::any visitFunction(braneParser::FunctionContext *ctx) override;
+
+    std::any visitExprList(braneParser::ExprListContext *ctx) override;
+
+    void registerType(TypeDef* type);
+    Value newValue(const std::string& type, uint8_t flags);
+    Value castTemp(const Value& value);
+
+    void registerValue(std::string name, Value value);
+    bool tryGetValue(const std::string&  name, Value& value);
+    void pushScope();
+    void popScope();
+
 public:
     Compiler();
-    bool compile(const std::string& script);
+    IRScript* compile(const std::string& script);
     const std::vector<CompileError>& errors() const;
 };
 

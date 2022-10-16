@@ -1,5 +1,8 @@
 add_library(scripting STATIC
-        operandNode.cpp
         compiler.cpp
-        typeDef.cpp)
+        typeDef.cpp
+        linker.cpp
+        irScript.cpp
+        nativeTypes.cpp
+        scriptFunction.cpp)
 target_link_libraries(scripting PUBLIC antlr4)

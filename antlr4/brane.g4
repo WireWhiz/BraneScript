@@ -16,10 +16,14 @@ ADD     : '+';
 SUB     : '-';
 
 program     : (statement+ EOF | EOF);
-statement   : SPACE* expression ';'
+statement   : function
             | preprocessor NEWLINE
             ;
+argumentList: declaration (',' declaration)*;
+function    : type=ID id=ID '(' arguments=argumentList? ')' '{' expressions=exprList '}'
+            ;
 preprocessor: '#include' content=.*? NEWLINE                                #include;
+exprList    : (expression ';')*;
 expression  : INT                                                           #constInt
             | FLOAT                                                         #constFloat
             | STRING                                                        #constString
@@ -30,6 +34,7 @@ expression  : INT                                                           #con
             | '{' expression '}'                                            #scope
             | dest=expression '=' expr=expression                           #assignment
             | declaration                                                   #decl
+            | 'return' expression                                           #return
             ;
 declaration : type=ID id=ID
             ;
