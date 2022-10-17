@@ -38,7 +38,6 @@ class JitErrorHandler : public asmjit::ErrorHandler {
 public:
     void handleError(asmjit::Error err, const char* message, asmjit::BaseEmitter* origin) override {
         printf("AsmJit error: %s\n", message);
-        throw std::runtime_error(message);
     }
 };
 
@@ -116,9 +115,39 @@ Script* ScriptRuntime::assembleScript(IRScript* irScript)
                     auto i1 = func.readCode<uint32_t>(iptr);
                     auto i2 = func.readCode<uint32_t>(iptr);
                     printf("ADD %u %u\n", i1, i2);
+                    auto a = getReg<Gp>(i1, asmjit::TypeId::kInt32, registers, cc);
+                    auto b = getReg<Gp>(i2, asmjit::TypeId::kInt32, registers, cc);
+                    chkErr(cc.add(a, b));
+                    break;
+                }
+                case ScriptFunction::SUB:
+                {
+                    auto i1 = func.readCode<uint32_t>(iptr);
+                    auto i2 = func.readCode<uint32_t>(iptr);
+                    printf("SUB %u %u\n", i1, i2);
                     auto a = getReg<Gp>(i1, asmjit::TypeId::kInt32, registers, cc);;
                     auto b = getReg<Gp>(i2, asmjit::TypeId::kInt32, registers, cc);;
-                    chkErr(cc.add(a, b));
+                    chkErr(cc.sub(a, b));
+                    break;
+                }
+                case ScriptFunction::MUL:
+                {
+                    auto i1 = func.readCode<uint32_t>(iptr);
+                    auto i2 = func.readCode<uint32_t>(iptr);
+                    auto a = getReg<Gp>(i1, asmjit::TypeId::kInt32, registers, cc);
+                    auto b = getReg<Gp>(i2, asmjit::TypeId::kInt32, registers, cc);
+                    printf("MUL %u %u\n", i1, i2);
+                    chkErr(cc.imul(a, b));
+                    break;
+                }
+                case ScriptFunction::DIV:
+                {
+                    auto i1 = func.readCode<uint32_t>(iptr);
+                    auto i2 = func.readCode<uint32_t>(iptr);
+                    printf("DIV %u %u\n", i1, i2);
+                    auto a = getReg<Gp>(i1, asmjit::TypeId::kInt32, registers, cc);
+                    auto b = getReg<Gp>(i2, asmjit::TypeId::kInt32, registers, cc);
+                    chkErr(cc.idiv(a, b));
                     break;
                 }
                 default:

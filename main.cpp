@@ -7,7 +7,7 @@
 
 int main(const int argc, const char** argv)
 {
-    std::string testString = "int main(int a, int b) { return a+ b +3 + 1;}";
+    std::string testString = "int main(int a, int b) { return (a - b) * 6 + 2 - 4;}";
 
     Compiler compiler;
     auto* ir = compiler.compile(testString);
