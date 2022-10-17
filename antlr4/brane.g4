@@ -34,7 +34,8 @@ expression  : INT                                                           #con
             | '{' expression '}'                                            #scope
             | dest=expression '=' expr=expression                           #assignment
             | declaration                                                   #decl
-            | 'return' expression                                           #return
+            | 'return' expression                                           #returnVal
+            | 'return'                                                      #returnVoid
             ;
 declaration : type=ID id=ID
             ;

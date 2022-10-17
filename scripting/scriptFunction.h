@@ -16,17 +16,17 @@ class ScriptFunction
 public:
     enum Operand : uint8_t
     {
-        RET,  //Exit function
-        RETV, // (uin32_t register) Return value
+        RET=0,  //Exit function
+        RETV=1, // (uin32_t register) Return int32 value
 
-        MOV,   // (uin32_t register,  uin32_t register) move register to another register.
-        MOVC,  // (uint32_t register, uint32_t constantIndex) load constant defined by byte array into the register
-        ADD,   // (uin32_t register,  uin32_t register) add registers.
-        SUB,   // (uin32_t register,  uin32_t register) subtract registers.
-        INC,   // (uin32_t register)  increment register.
-        DEC,   // (uint32_t register) decrement register.
-        MUL,   // (uin32_t register,  uin32_t register) multiply registers.
-        DIV,   // (uin32_t register,  uin32_t register) divide registers.
+        MOV=2,   // (uin32_t register,  uin32_t register) move gp register to another register.
+        MOVC=3,  // (uint32_t register, uint32_t constantIndex) load constant defined by byte array into the register
+        ADD=4,   // (uin32_t register,  uin32_t register) add registers.
+        SUB=5,   // (uin32_t register,  uin32_t register) subtract registers.
+        INC=6,   // (uin32_t register)  increment register.
+        DEC=7,   // (uint32_t register) decrement register.
+        MUL=8,   // (uin32_t register,  uin32_t register) multiply registers.
+        DIV=9,   // (uin32_t register,  uin32_t register) divide registers.
     };
 
     struct Constants
@@ -42,7 +42,8 @@ public:
 
     uint32_t registerConstant(int value);
 
-    template<typename A, typename B>
+    void appendCode(Operand op);
+    template<typename A>
     void appendCode(Operand op, A a)
     {
         size_t index = code.size();
@@ -62,6 +63,14 @@ public:
         *(A*)(code.data() + index) = a;
         index += sizeof(A);
         *(B*)(code.data() + index) = b;
+    }
+
+    template<typename T>
+    T readCode(size_t& index)
+    {
+        T value = *(T*)&code[index];
+        index += sizeof(T);
+        return value;
     }
 };
 

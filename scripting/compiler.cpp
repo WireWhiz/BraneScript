@@ -82,7 +82,6 @@ std::any Compiler::visitAddsub(braneParser::AddsubContext* context)
     auto right = std::any_cast<Value>(visit(context->right));
     left = castTemp(left);
     _currentFunction->appendCode((context->op->getText() == "+") ? ScriptFunction::ADD : ScriptFunction::SUB, left.valueIndex, right.valueIndex);
-
     return left;
 }
 
@@ -146,6 +145,7 @@ std::any Compiler::visitFunction(braneParser::FunctionContext* ctx)
     function.name = ctx->id->getText();
     pushScope();
     size_t argumentIndex =  0;
+    _valueIndex = 0;
     for(auto argument : ctx->arguments->declaration())
     {
         std::string type = argument->type->getText();
@@ -162,6 +162,26 @@ std::any Compiler::visitFunction(braneParser::FunctionContext* ctx)
     _currentScript->localFunctions.push_back(std::move(function));
     _currentFunction = previousFunction;
     return functionIndex;
+}
+
+std::any Compiler::visitReturnVoid(braneParser::ReturnVoidContext* ctx)
+{
+    _currentFunction->appendCode(ScriptFunction::RET);
+    return {};
+}
+
+std::any Compiler::visitReturnVal(braneParser::ReturnValContext* ctx)
+{
+    auto retVal = std::any_cast<Value>(visit(ctx->expression()));
+    switch(retVal.def->type())
+    {
+        case TypeDef::Int:
+            _currentFunction->appendCode(ScriptFunction::RETV, retVal.valueIndex);
+            break;
+        default:
+            throw std::runtime_error(std::string("Unknown return type ") + retVal.def->name());
+    }
+    return {};
 }
 
 std::any Compiler::visitExprList(braneParser::ExprListContext* ctx)
@@ -183,7 +203,7 @@ Compiler::Value Compiler::newValue(const std::string& type, uint8_t flags)
         value.def = nullptr;
     else if(_types.count(type))
         value.def = _types.at(type);
-    value.flags = Value::Const | Value::Constexpr;
+    value.flags = flags;
     value.valueIndex  = _valueIndex++;
     return std::move(value);
 }

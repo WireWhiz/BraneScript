@@ -10,3 +10,8 @@ uint32_t ScriptFunction::registerConstant(int value)
     constants.ints.push_back(value);
     return index;
 }
+
+void ScriptFunction::appendCode(Operand op)
+{
+    code.push_back(op);
+}

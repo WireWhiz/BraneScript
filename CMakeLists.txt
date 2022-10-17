@@ -11,3 +11,7 @@ endif()
 
 add_subdirectory(antlr4)
 add_subdirectory(scripting)
+
+set(ASMJIT_STATIC TRUE)
+set(ASMJIT_TEST)
+add_subdirectory(asmjit)

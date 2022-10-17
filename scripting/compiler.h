@@ -84,6 +84,10 @@ private:
 
     std::any visitExprList(braneParser::ExprListContext *ctx) override;
 
+    std::any visitReturnVoid(braneParser::ReturnVoidContext *ctx) override;
+
+    std::any visitReturnVal(braneParser::ReturnValContext *ctx) override;
+
     void registerType(TypeDef* type);
     Value newValue(const std::string& type, uint8_t flags);
     Value castTemp(const Value& value);
