@@ -4,6 +4,6 @@ add_library(scripting STATIC
         scriptRuntime.cpp
         irScript.cpp
         nativeTypes.cpp
-        scriptFunction.cpp)
+        scriptFunction.cpp valueIndex.cpp valueIndex.h aotNode/aotNode.cpp aotNode/aotOperationNodes.cpp)
 target_link_libraries(scripting PUBLIC antlr4 asmjit)
 target_compile_definitions(scripting PUBLIC ASMJIT_EMBED)
