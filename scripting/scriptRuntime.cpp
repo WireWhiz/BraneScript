@@ -7,6 +7,7 @@
 #include "irScript.h"
 #include "asmjit/asmjit.h"
 #include <cstdio>
+#include <stdexcept>
 
 using namespace asmjit::x86;
 

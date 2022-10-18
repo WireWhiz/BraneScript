@@ -1,5 +1,4 @@
 #include <iostream>
-#define ANTLR4CPP_STATIC
 
 #include "scripting/compiler.h"
 #include "scripting/scriptRuntime.h"
