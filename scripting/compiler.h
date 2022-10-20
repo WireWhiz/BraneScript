@@ -14,32 +14,14 @@
 #include "../antlr4/braneBaseVisitor.h"
 #include "scriptFunction.h"
 #include "irScript.h"
+#include "aotNode/aotNode.h"
+#include "aotNode/aotValueNodes.h"
 
 class TypeDef;
+class CompilerCtx;
 class Compiler : public braneBaseVisitor
 {
-    uint32_t _valueIndex = 0;
-    struct Value
-    {
-        enum : uint8_t{
-            Const = 1,
-            Constexpr = 1 << 1,
-            Temp = 1 << 2
-        };
-        uint8_t flags = 0;
-        uint32_t valueIndex = 0;
-        TypeDef* def = nullptr;
-        inline bool isVoid() const{return def == nullptr;};
-    };
-    struct Scope
-    {
-        std::unordered_map<std::string, Value> localValues;
-    };
-    std::list<Scope> _scopes;
 
-    IRScript* _currentScript = nullptr;
-    ScriptFunction* _currentFunction = nullptr;
-    std::unordered_map<std::string, TypeDef*> _types;
 public:
     struct CompileError
     {
@@ -49,6 +31,17 @@ public:
     };
 private:
     std::vector<CompileError> _errors;
+
+    std::unique_ptr<CompilerCtx> _ctx;
+    std::unordered_map<std::string, TypeDef*> _types;
+
+    uint16_t _lValueIndex = 0;
+
+    struct Scope
+    {
+        std::unordered_map<std::string, AotValueNode> localValues;
+    };
+    std::list<Scope> _scopes;
 
     std::any visitProgram(braneParser::ProgramContext *context);
 
@@ -88,12 +81,8 @@ private:
 
     std::any visitReturnVal(braneParser::ReturnValContext *ctx) override;
 
-    void registerType(TypeDef* type);
-    Value newValue(const std::string& type, uint8_t flags);
-    Value castTemp(const Value& value);
-
-    void registerValue(std::string name, Value value);
-    bool tryGetValue(const std::string&  name, Value& value);
+    void registerLocalValue(std::string name, const std::string type, bool constant);
+    AotNode* getValueNode(const std::string& name);
     void pushScope();
     void popScope();
 
@@ -101,6 +90,27 @@ public:
     Compiler();
     IRScript* compile(const std::string& script);
     const std::vector<CompileError>& errors() const;
+
+    void registerType(TypeDef* type);
+    const std::unordered_map<std::string, TypeDef*>& types() const;
+};
+
+struct CompilerCtx
+{
+    Compiler& compiler;
+    uint32_t regIndex = 0;
+    uint32_t memIndex = 0;
+
+    IRScript* script = nullptr;
+    ScriptFunction* function = nullptr;
+    std::map<uint16_t, AotValue> lValues;
+
+    CompilerCtx(Compiler& c, IRScript* s);
+
+    AotValue newReg(const std::string& type, uint8_t flags);
+    AotValue newConst(ValueType type, uint8_t flags = AotValue::Const | AotValue::Constexpr);
+    AotValue castTemp(const AotValue& value);
+    AotValue castReg(const AotValue& value);
 };
 
 

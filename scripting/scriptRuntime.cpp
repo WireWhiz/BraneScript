@@ -5,9 +5,11 @@
 #include "scriptRuntime.h"
 #include "script.h"
 #include "irScript.h"
+#include "valueIndex.h"
 #include "asmjit/asmjit.h"
 #include <cstdio>
 #include <stdexcept>
+#include <cassert>
 
 using namespace asmjit::x86;
 
@@ -26,8 +28,25 @@ asmjit::TypeId strToType(const std::string& str)
     return asmjit::TypeId::kVoid;
 }
 
+asmjit::TypeId typeToAsmType(ValueType type)
+{
+    switch(type)
+    {
+        case Int32:
+            return asmjit::TypeId::kInt32;
+        case Int64:
+            return asmjit::TypeId::kInt32;
+        case Ptr:
+            return asmjit::TypeId::kIntPtr;
+        case Float32:
+            return asmjit::TypeId::kFloat32;
+        case Float64:
+            return asmjit::TypeId::kFloat64;
+    }
+}
+
 template<class RT>
-RT& getReg(uint32_t index, asmjit::TypeId type, std::vector<Reg>& registers, Compiler& cc)
+RT& getReg(uint16_t index, asmjit::TypeId type, std::vector<Reg>& registers, Compiler& cc)
 {
     if(registers.size() == index)
         registers.push_back(cc.newReg(type));
@@ -41,11 +60,69 @@ public:
     }
 };
 
+enum class ValueRegType : uint8_t
+{
+    gp = 0,
+    xmm = 1,
+    mem = 2
+};
+
+ValueRegType getValueRegType(const ValueIndex& value)
+{
+    if(value.flags & ValueIndexFlags_Mem)
+        return ValueRegType::mem;
+    switch(value.valueType)
+    {
+        case Int32:
+        case Int64:
+        case Ptr:
+            return ValueRegType::gp;
+        case Float32:
+        case Float64:
+            return ValueRegType::xmm;
+    }
+}
+
+enum OperationType
+{
+    gp_gp,
+    gp_xmm,
+    gp_mem,
+    xmm_xmm,
+    xmm_gp,
+    xmm_mem,
+    mem_gp,
+    mem_xmm
+};
+
+OperationType getOperationType(const ValueIndex& a, const ValueIndex& b)
+{
+    const OperationType gpMap[] = {gp_gp, gp_xmm, gp_mem};
+    const OperationType xmmMap[] = {xmm_gp, xmm_xmm, xmm_mem};
+    const OperationType memMap[] = {mem_gp, mem_xmm};
+    const OperationType* typeMap;
+    switch(getValueRegType(a))
+    {
+        case ValueRegType::gp:
+            typeMap = gpMap;
+            break;
+        case ValueRegType::xmm:
+            typeMap = xmmMap;
+            break;
+        case ValueRegType::mem:
+            typeMap = memMap;
+            break;
+    }
+    assert(typeMap);
+
+    return typeMap[(uint8_t)getValueRegType(b)];
+}
+
 Script* ScriptRuntime::assembleScript(IRScript* irScript)
 {
     auto* script = new Script();
     JitErrorHandler errorHandler;
-
+    std::unordered_map<uint16_t, asmjit::x86::Mem> constants;
     for(auto& func : irScript->localFunctions)
     {
         asmjit::CodeHolder ch;
@@ -86,69 +163,171 @@ Script* ScriptRuntime::assembleScript(IRScript* irScript)
                     break;
                 case ScriptFunction::RETV:
                 {
-                    auto valIndex = func.readCode<uint32_t>(iptr);
-                    printf("RETV %u\n", valIndex);
-                    chkErr(cc.ret(getReg<Reg>(valIndex, asmjit::TypeId::kInt32, registers, cc)));
+                    auto valIndex = func.readCode<ValueIndex>(iptr);
+                    assert(valIndex.flags & ValueIndexFlags_Reg);
+                    printf("RETV r%hu\n", valIndex.index);
+                    chkErr(cc.ret(getReg<Reg>(valIndex.index, asmjit::TypeId::kInt32, registers, cc)));
+                    break;
+                }
+                case ScriptFunction::LOADC:
+                {
+                    ValueIndex constant = func.readCode<ValueIndex>(iptr);
+                    printf("LOADC %hu ", constant.index);
+                    assert(!constants.count(constant.index));
+                    switch(constant.valueType)
+                    {
+                        case Int32:
+                        {
+                            int32_t val = func.readCode<int32_t>(iptr);
+                            printf("int %i\n", val);
+                            constants[constant.index] = cc.newInt32Const(asmjit::ConstPoolScope::kLocal, val);
+                        }
+                            break;
+                        default:
+                            assert(false);
+                    }
+
                     break;
                 }
                 case ScriptFunction::MOV:
                 {
-                    auto i1 = func.readCode<uint32_t>(iptr);
-                    auto i2 = func.readCode<uint32_t>(iptr);
-                    printf("MOV %u %u\n", i1, i2);
-                    auto des = getReg<Gp>(i1, asmjit::TypeId::kInt32, registers, cc);
-                    auto src = getReg<Gp>(i2, asmjit::TypeId::kInt32, registers, cc);
-                    chkErr(cc.mov(des, src));
-                    break;
-                }
-                case ScriptFunction::MOVC:
-                {
-                    auto i1 = func.readCode<uint32_t>(iptr);
-                    auto i2 = func.readCode<uint32_t>(iptr);
-                    printf("MOVC %u %u\n", i1, i2);
-                    auto des = getReg<Gp>(i1, asmjit::TypeId::kInt32, registers, cc);
-                    chkErr(cc.mov(des, cc.newInt32Const(asmjit::ConstPoolScope::kLocal, func.constants.ints[i2])));
+                    auto dest = func.readCode<ValueIndex>(iptr);
+                    auto src = func.readCode<ValueIndex>(iptr);
+                    assert(dest.flags & ValueIndexFlags_Reg);
+                    printf("MOV ");
+                    switch(getOperationType(dest, src))
+                    {
+                        case gp_gp:
+                        {
+                            printf("r%hu r%hu\n", dest.index, src.index);
+                            auto destReg = getReg<Gp>(dest.index, typeToAsmType(dest.valueType), registers, cc);
+                            auto srcReg = getReg<Gp>(src.index, typeToAsmType(src.valueType), registers, cc);
+                            chkErr(cc.mov(destReg, srcReg));
+                        }
+                        break;
+                        case gp_mem:
+                        {
+                            printf("r%hu m%hu\n", dest.index, src.index);
+                            auto destReg = getReg<Gp>(dest.index, typeToAsmType(dest.valueType), registers, cc);
+                            auto srcReg = constants.at(src.index);
+                            chkErr(cc.mov(destReg, srcReg));
+                        }
+                            break;
+                        default:
+                            throw std::runtime_error("Invalid mov operands");
+                    }
                     break;
                 }
                 case ScriptFunction::ADD:
                 {
-                    auto i1 = func.readCode<uint32_t>(iptr);
-                    auto i2 = func.readCode<uint32_t>(iptr);
-                    printf("ADD %u %u\n", i1, i2);
-                    auto a = getReg<Gp>(i1, asmjit::TypeId::kInt32, registers, cc);
-                    auto b = getReg<Gp>(i2, asmjit::TypeId::kInt32, registers, cc);
-                    chkErr(cc.add(a, b));
+                    auto a = func.readCode<ValueIndex>(iptr);
+                    auto b = func.readCode<ValueIndex>(iptr);
+                    printf("ADD ");
+                    switch(getOperationType(a, b))
+                    {
+                        case gp_gp:
+                        {
+                            printf("r%hu r%hu\n", a.index, b.index);
+                            auto destReg = getReg<Gp>(a.index, typeToAsmType(a.valueType), registers, cc);
+                            auto srcReg = getReg<Gp>(b.index, typeToAsmType(b.valueType), registers, cc);
+                            chkErr(cc.add(destReg, srcReg));
+                        }
+                            break;
+                        case gp_mem:
+                        {
+                            printf("r%hu m%hu\n", a.index, b.index);
+                            auto destReg = getReg<Gp>(a.index, typeToAsmType(a.valueType), registers, cc);
+                            auto srcReg = constants.at(b.index);
+                            chkErr(cc.add(destReg, srcReg));
+                        }
+                            break;
+                        default:
+                            throw std::runtime_error("Invalid add operands");
+                    }
                     break;
                 }
                 case ScriptFunction::SUB:
                 {
-                    auto i1 = func.readCode<uint32_t>(iptr);
-                    auto i2 = func.readCode<uint32_t>(iptr);
-                    printf("SUB %u %u\n", i1, i2);
-                    auto a = getReg<Gp>(i1, asmjit::TypeId::kInt32, registers, cc);;
-                    auto b = getReg<Gp>(i2, asmjit::TypeId::kInt32, registers, cc);;
-                    chkErr(cc.sub(a, b));
+                    auto a = func.readCode<ValueIndex>(iptr);
+                    auto b = func.readCode<ValueIndex>(iptr);
+                    printf("SUB ");
+                    switch(getOperationType(a, b))
+                    {
+                        case gp_gp:
+                        {
+                            printf("r%hu r%hu\n", a.index, b.index);
+                            auto destReg = getReg<Gp>(a.index, typeToAsmType(a.valueType), registers, cc);
+                            auto srcReg = getReg<Gp>(b.index, typeToAsmType(b.valueType), registers, cc);
+                            chkErr(cc.sub(destReg, srcReg));
+                        }
+                            break;
+                        case gp_mem:
+                        {
+                            printf("r%hu m%hu\n", a.index, b.index);
+                            auto destReg = getReg<Gp>(a.index, typeToAsmType(a.valueType), registers, cc);
+                            auto srcReg = constants.at(b.index);
+                            chkErr(cc.sub(destReg, srcReg));
+                        }
+                            break;
+                        default:
+                            throw std::runtime_error("Invalid sub operands");
+                    }
                     break;
                 }
                 case ScriptFunction::MUL:
                 {
-                    auto i1 = func.readCode<uint32_t>(iptr);
-                    auto i2 = func.readCode<uint32_t>(iptr);
-                    auto a = getReg<Gp>(i1, asmjit::TypeId::kInt32, registers, cc);
-                    auto b = getReg<Gp>(i2, asmjit::TypeId::kInt32, registers, cc);
-                    printf("MUL %u %u\n", i1, i2);
-                    chkErr(cc.imul(a, b));
+                    auto a = func.readCode<ValueIndex>(iptr);
+                    auto b = func.readCode<ValueIndex>(iptr);
+                    printf("MUL ");
+                    switch(getOperationType(a, b))
+                    {
+                        case gp_gp:
+                        {
+                            printf("r%hu r%hu\n", a.index, b.index);
+                            auto destReg = getReg<Gp>(a.index, typeToAsmType(a.valueType), registers, cc);
+                            auto srcReg = getReg<Gp>(b.index, typeToAsmType(b.valueType), registers, cc);
+                            chkErr(cc.imul(destReg, srcReg));
+                        }
+                            break;
+                        case gp_mem:
+                        {
+                            printf("r%hu m%hu\n", a.index, b.index);
+                            auto destReg = getReg<Gp>(a.index, typeToAsmType(a.valueType), registers, cc);
+                            auto srcReg = constants.at(b.index);
+                            chkErr(cc.imul(destReg, srcReg));
+                        }
+                            break;
+                        default:
+                            throw std::runtime_error("Invalid mul operands");
+                    }
                     break;
                 }
                 case ScriptFunction::DIV:
                 {
-                    auto i1 = func.readCode<uint32_t>(iptr);
-                    auto i2 = func.readCode<uint32_t>(iptr);
-                    printf("DIV %u %u\n", i1, i2);
-                    auto a = getReg<Gp>(i1, asmjit::TypeId::kInt32, registers, cc);
-                    auto b = getReg<Gp>(i2, asmjit::TypeId::kInt32, registers, cc);
-                    chkErr(cc.idiv(a, b));
-                    break;
+                    auto a = func.readCode<ValueIndex>(iptr);
+                    auto b = func.readCode<ValueIndex>(iptr);
+                    printf("DIV ");
+                    switch(getOperationType(a, b))
+                    {
+                        case gp_gp:
+                        {
+                            printf("r%hu r%hu\n", a.index, b.index);
+                            auto destReg = getReg<Gp>(a.index, typeToAsmType(a.valueType), registers, cc);
+                            auto srcReg = getReg<Gp>(b.index, typeToAsmType(b.valueType), registers, cc);
+                            chkErr(cc.idiv(destReg, srcReg));
+                        }
+                            break;
+                        case gp_mem:
+                        {
+                            printf("r%hu m%hu\n", a.index, b.index);
+                            auto destReg = getReg<Gp>(a.index, typeToAsmType(a.valueType), registers, cc);
+                            auto srcReg = constants.at(b.index);
+                            chkErr(cc.idiv(destReg, srcReg));
+                        }
+                            break;
+                        default:
+                            throw std::runtime_error("Invalid div operands");
+                    }
                 }
                 default:
                     throw std::runtime_error("unknown op: " + std::to_string(code[iptr]));

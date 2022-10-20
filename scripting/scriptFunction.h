@@ -18,9 +18,9 @@ public:
     {
         RET=0,  //Exit function
         RETV=1, // (uin32_t register) Return int32 value
+        LOADC=2,  // (uint32_t register, uint32_t constantIndex) load constant defined by byte array into the register
 
-        MOV=2,   // (uin32_t register,  uin32_t register) move gp register to another register.
-        MOVC=3,  // (uint32_t register, uint32_t constantIndex) load constant defined by byte array into the register
+        MOV=3,   // (uin32_t register,  uin32_t register) move gp register to another register.
         ADD=4,   // (uin32_t register,  uin32_t register) add registers.
         SUB=5,   // (uin32_t register,  uin32_t register) subtract registers.
         INC=6,   // (uin32_t register)  increment register.
@@ -29,18 +29,10 @@ public:
         DIV=9,   // (uin32_t register,  uin32_t register) divide registers.
     };
 
-    struct Constants
-    {
-        std::vector<int> ints;
-    };
-    Constants constants;
-
     std::vector<uint8_t> code;
     std::vector<std::string> arguments;
     std::string returnType = "void";
     std::string name;
-
-    uint32_t registerConstant(int value);
 
     void appendCode(Operand op);
     template<typename A>

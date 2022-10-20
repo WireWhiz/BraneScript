@@ -7,21 +7,15 @@
 
 #include <cstdint>
 #include <string>
+#include "valueIndex.h"
 
 class TypeDef
 {
 public:
-    enum Type
-    {
-        Void,
-        Int,
-        Float
-    };
-
     virtual ~TypeDef() = default;
     virtual const char* name() const = 0;
     virtual uint32_t size() const = 0;
-    virtual Type type() const = 0;
+    virtual ValueType type() const = 0;
 };
 
 

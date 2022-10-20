@@ -9,13 +9,14 @@
 #include <vector>
 
 std::vector<TypeDef*> getNativeTypes();
+TypeDef* getTypeDef(ValueType type);
 
 class IntDef : public TypeDef
 {
 public:
     const char* name() const override;
     uint32_t size() const override;
-    Type type() const override;
+    ValueType type() const override;
 
 };
 

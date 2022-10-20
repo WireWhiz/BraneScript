@@ -6,6 +6,8 @@
 #include "../antlr4/braneLexer.h"
 #include "antlr4/ANTLRInputStream.h"
 #include "nativeTypes.h"
+#include "aotNode/aotOperationNodes.h"
+#include "aotNode/aotValueNodes.h"
 
 Compiler::Compiler()
 {
@@ -24,9 +26,9 @@ IRScript* Compiler::compile(const std::string& script)
     braneLexer lexer(&input);
     antlr4::CommonTokenStream tokens(&lexer);
     braneParser parser(&tokens);
-    _currentScript = new IRScript();
+    _ctx = std::make_unique<CompilerCtx>(*this, new IRScript());
     visit(parser.program());
-    return _currentScript;
+    return _ctx->script;
 }
 
 std::any Compiler::visitStatement(braneParser::StatementContext* context)
@@ -51,8 +53,8 @@ std::any Compiler::visitInlineScope(braneParser::InlineScopeContext* context)
 
 std::any Compiler::visitAssignment(braneParser::AssignmentContext* context)
 {
-    Value lValue;
-    if(!tryGetValue(context->dest->getText(), lValue))
+    /*Value lValue;
+    if(!getValueNode(context->dest->getText(), lValue))
         throw std::runtime_error("Could not find identifier");
     if(lValue.flags & Value::Temp)
         throw std::runtime_error("Can not assign to temporary value");
@@ -61,9 +63,9 @@ std::any Compiler::visitAssignment(braneParser::AssignmentContext* context)
     _currentFunction->appendCode(ScriptFunction::MOV, lValue, rValue);
 
     if(!(rValue.flags & Value::Constexpr))
-        lValue.flags &= ~Value::Constexpr;
+        lValue.flags &= ~Value::Constexpr;*/
 
-    return lValue;
+    return {};
 }
 
 std::any Compiler::visitScope(braneParser::ScopeContext* context)
@@ -78,45 +80,44 @@ std::any Compiler::visitConstFloat(braneParser::ConstFloatContext* context)
 
 std::any Compiler::visitAddsub(braneParser::AddsubContext* context)
 {
-    auto left  = std::any_cast<Value>(visit(context->left));
-    auto right = std::any_cast<Value>(visit(context->right));
-    left = castTemp(left);
-    _currentFunction->appendCode((context->op->getText() == "+") ? ScriptFunction::ADD : ScriptFunction::SUB, left.valueIndex, right.valueIndex);
-    return left;
+    auto left  = std::any_cast<AotNode*>(visit(context->left));
+    auto right = std::any_cast<AotNode*>(visit(context->right));
+    AotNode* node = nullptr;
+    if(context->op->getText() == "+")
+        node = new AotAddNode(left, right);
+    else
+        node = new AotSubNode(left, right);
+    return node;
+}
+
+std::any Compiler::visitMuldiv(braneParser::MuldivContext* context)
+{
+    auto left  = std::any_cast<AotNode*>(visit(context->left));
+    auto right = std::any_cast<AotNode*>(visit(context->right));
+    AotNode* node = nullptr;
+    if(context->op->getText() == "*")
+        node = new AotMulNode(left, right);
+    else
+        node = new AotDivNode(left, right);
+    return node;
 }
 
 std::any Compiler::visitConstInt(braneParser::ConstIntContext* context)
 {
-
-    auto value = newValue("int", Value::Const | Value::Constexpr);
-
-    auto constIndex = _currentFunction->registerConstant(std::stoi(context->getText()));
-    _currentFunction->appendCode(ScriptFunction::MOVC, value.valueIndex, constIndex);
-
-    return value;
+    return (AotNode*)new AotConst((int32_t)std::stoi(context->getText()));
 }
 
 std::any Compiler::visitId(braneParser::IdContext* context)
 {
-    Value value;
-    if(!tryGetValue(context->getText(), value))
-        throw std::runtime_error("could not find identifier");
-    return value;
+    AotNode* node = getValueNode(context->getText());
+    if(!node)
+        throw std::runtime_error("could not find identifier: " + std::string(context->getText()));
+    return node;
 }
 
 std::any Compiler::visitDecl(braneParser::DeclContext* context)
 {
     return visit(context->declaration());
-}
-
-std::any Compiler::visitMuldiv(braneParser::MuldivContext* context)
-{
-    auto left  = std::any_cast<Value>(visit(context->left));
-    auto right = std::any_cast<Value>(visit(context->right));
-    left = castTemp(left);
-    _currentFunction->appendCode((context->op->getText() == "*") ? ScriptFunction::MUL : ScriptFunction::DIV, left.valueIndex, right.valueIndex);
-
-    return left;
 }
 
 std::any Compiler::visitDeclaration(braneParser::DeclarationContext* context)
@@ -136,59 +137,61 @@ std::any Compiler::visitArgumentList(braneParser::ArgumentListContext* ctx)
 
 std::any Compiler::visitFunction(braneParser::FunctionContext* ctx)
 {
-    ScriptFunction function;
-    ScriptFunction* previousFunction = _currentFunction;
-    _currentFunction = &function;
+    ScriptFunction* previousFunction = _ctx->function;
+    _ctx->function = new ScriptFunction();
 
     //TODO: TypeAssert()
-    function.returnType = ctx->type->getText();
-    function.name = ctx->id->getText();
+    _ctx->function->returnType = ctx->type->getText();
+    _ctx->function->name = ctx->id->getText();
     pushScope();
     size_t argumentIndex =  0;
-    _valueIndex = 0;
     for(auto argument : ctx->arguments->declaration())
     {
         std::string type = argument->type->getText();
-        function.arguments.push_back(type);
-        auto argValue = newValue(type, 0);
-        registerValue(argument->id->getText(), argValue);
+        _ctx->function->arguments.push_back(type);
+        registerLocalValue(argument->id->getText(), type, false);
         ++argumentIndex;
     }
 
-    visit(ctx->expressions);
+    for(auto* expression : std::any_cast<std::vector<AotNode*>>(visit(ctx->expressions)))
+    {
+        //TODO optimize toggle
+        auto expr = std::unique_ptr<AotNode>(expression);
+
+        AotNode* optimizedTree = expr->optimize();
+        if(expr.get() != optimizedTree)
+            expr = std::unique_ptr<AotNode>(optimizedTree);
+
+        optimizedTree->generateBytecode(*_ctx);
+    }
     popScope();
 
-    uint32_t functionIndex = _currentScript->localFunctions.size();
-    _currentScript->localFunctions.push_back(std::move(function));
-    _currentFunction = previousFunction;
+    uint32_t functionIndex = _ctx->script->localFunctions.size();
+    _ctx->script->localFunctions.push_back(std::move(*_ctx->function));
+    delete _ctx->function;
+    _ctx->function = previousFunction;
     return functionIndex;
 }
 
 std::any Compiler::visitReturnVoid(braneParser::ReturnVoidContext* ctx)
 {
-    _currentFunction->appendCode(ScriptFunction::RET);
-    return {};
+    // _currentFunction->appendCode(ScriptFunction::RET);
+    assert(false);
+    return (AotNode*)nullptr;
 }
 
 std::any Compiler::visitReturnVal(braneParser::ReturnValContext* ctx)
 {
-    auto retVal = std::any_cast<Value>(visit(ctx->expression()));
-    switch(retVal.def->type())
-    {
-        case TypeDef::Int:
-            _currentFunction->appendCode(ScriptFunction::RETV, retVal.valueIndex);
-            break;
-        default:
-            throw std::runtime_error(std::string("Unknown return type ") + retVal.def->name());
-    }
-    return {};
+    auto retVal = std::any_cast<AotNode*>(visit(ctx->expression()));
+    return (AotNode*)new AotReturnValueNode(retVal);
 }
 
 std::any Compiler::visitExprList(braneParser::ExprListContext* ctx)
 {
+    std::vector<AotNode*> nodes;
     for(auto expr : ctx->expression())
-        visit(expr);
-    return {};
+        nodes.push_back(std::any_cast<AotNode*>(visit(expr)));
+    return nodes;
 }
 
 void Compiler::registerType(TypeDef* type)
@@ -196,44 +199,25 @@ void Compiler::registerType(TypeDef* type)
     _types.insert({type->name(), type});
 }
 
-Compiler::Value Compiler::newValue(const std::string& type, uint8_t flags)
+const std::unordered_map<std::string, TypeDef*>& Compiler::types() const
 {
-    Value value;
-    if(type == "void")
-        value.def = nullptr;
-    else if(_types.count(type))
-        value.def = _types.at(type);
-    value.flags = flags;
-    value.valueIndex  = _valueIndex++;
-    return std::move(value);
+    return _types;
 }
 
-Compiler::Value Compiler::castTemp(const Value& value)
+void Compiler::registerLocalValue(std::string name, const std::string type, bool constant)
 {
-    if(value.flags & Value::Temp)
-        return value;
-    Value tempValue = newValue(value.def->name(), Value::Temp | (Value::Constexpr & value.flags));
-    _currentFunction->appendCode(ScriptFunction::MOV, tempValue.valueIndex, value.valueIndex);
-    return tempValue;
+    _scopes.back().localValues.emplace(std::move(name), AotValueNode(_lValueIndex++, type, constant));
 }
 
-void Compiler::registerValue(std::string name, Compiler::Value value)
-{
-    _scopes.back().localValues.emplace(std::move(name), std::move(value));
-}
-
-bool Compiler::tryGetValue(const std::string& name, Compiler::Value& value)
+AotNode* Compiler::getValueNode(const std::string& name)
 {
     for(auto i = _scopes.rbegin(); i != _scopes.rend(); ++i)
     {
         auto v = i->localValues.find(name);
         if(v != i->localValues.end())
-        {
-            value = v->second;
-            return true;
-        }
+            return new AotValueNode(v->second);
     }
-    return false;
+    return nullptr;
 }
 
 void Compiler::pushScope()
@@ -244,4 +228,57 @@ void Compiler::pushScope()
 void Compiler::popScope()
 {
     _scopes.pop_back();
+}
+
+CompilerCtx::CompilerCtx(Compiler& c, IRScript* s) : compiler(c), script(s)
+{
+
+}
+
+AotValue CompilerCtx::newReg(const std::string& type, uint8_t flags)
+{
+    AotValue value;
+    if(type == "void")
+        value.def = nullptr;
+    else if(compiler.types().count(type))
+        value.def = compiler.types().at(type);
+    value.flags = flags;
+    if(!value.isVoid())
+    {
+        value.valueIndex.index = regIndex++;
+        value.valueIndex.valueType = value.def->type();
+        value.valueIndex.flags |= ValueIndexFlags_Reg;
+    }
+    return std::move(value);
+}
+
+AotValue CompilerCtx::newConst(ValueType type, uint8_t flags)
+{
+    AotValue value;
+    value.def = getTypeDef(type);
+    assert(value.def);
+    value.flags = flags;
+    value.valueIndex.index = memIndex++;
+    value.valueIndex.valueType = type;
+    value.valueIndex.flags |= ValueIndexFlags_Mem;
+    return std::move(value);
+}
+
+AotValue CompilerCtx::castTemp(const AotValue& value)
+{
+    assert(function);
+    if(value.flags & AotValue::Temp)
+        return value;
+    AotValue tempValue = newReg(value.def->name(), AotValue::Temp | (AotValue::Constexpr & value.flags));
+    function->appendCode(ScriptFunction::MOV, tempValue.valueIndex, value.valueIndex);
+    return tempValue;
+}
+
+AotValue CompilerCtx::castReg(const AotValue& value)
+{
+    if(value.valueIndex.flags & ValueIndexFlags_Reg)
+        return value;
+    AotValue regValue = newReg(value.def->name(), AotValue::Temp | (AotValue::Constexpr & value.flags));
+    function->appendCode(ScriptFunction::MOV, regValue.valueIndex, value.valueIndex);
+    return regValue;
 }

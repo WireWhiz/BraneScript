@@ -17,10 +17,17 @@ enum ValueType : uint8_t
 
 };
 
-struct ValueIndex
+enum ValueIndexFlags : uint8_t
 {
-    uint16_t registerIndex;
+    ValueIndexFlags_Mem = 1,
+    ValueIndexFlags_Reg = 1 << 1
+};
+
+struct alignas(2) ValueIndex
+{
+    uint16_t index;
     ValueType valueType;
+    uint8_t flags;
 };
 
 
