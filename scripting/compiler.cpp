@@ -144,13 +144,14 @@ std::any Compiler::visitFunction(braneParser::FunctionContext* ctx)
     _ctx->function->returnType = ctx->type->getText();
     _ctx->function->name = ctx->id->getText();
     pushScope();
-    size_t argumentIndex =  0;
     for(auto argument : ctx->arguments->declaration())
     {
         std::string type = argument->type->getText();
         _ctx->function->arguments.push_back(type);
-        registerLocalValue(argument->id->getText(), type, false);
-        ++argumentIndex;
+
+        AotValue value = _ctx->newReg(type, false);
+        _ctx->lValues.insert({_lValueIndex, value});
+        registerLocalValue(argument->id->getText(), type, false);\
     }
 
     for(auto* expression : std::any_cast<std::vector<AotNode*>>(visit(ctx->expressions)))
@@ -162,7 +163,7 @@ std::any Compiler::visitFunction(braneParser::FunctionContext* ctx)
         if(expr.get() != optimizedTree)
             expr = std::unique_ptr<AotNode>(optimizedTree);
 
-        optimizedTree->generateBytecode(*_ctx);
+        expr->generateBytecode(*_ctx);
     }
     popScope();
 
@@ -206,7 +207,9 @@ const std::unordered_map<std::string, TypeDef*>& Compiler::types() const
 
 void Compiler::registerLocalValue(std::string name, const std::string type, bool constant)
 {
-    _scopes.back().localValues.emplace(std::move(name), AotValueNode(_lValueIndex++, type, constant));
+    auto index = _lValueIndex++;
+    _scopes.back().localValues.emplace(std::move(name), AotValueNode(index, type, constant));
+
 }
 
 AotNode* Compiler::getValueNode(const std::string& name)

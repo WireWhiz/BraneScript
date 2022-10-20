@@ -109,6 +109,7 @@ AotValue AotDivNode::generateBytecode(CompilerCtx& ctx) const
     AotValue left  = _argA->generateBytecode(ctx);
     AotValue right = _argB->generateBytecode(ctx);
     left = ctx.castTemp(left);
+    right = ctx.castReg(right);
     ctx.function->appendCode(ScriptFunction::DIV, left.valueIndex, right.valueIndex);
     return left;
 }

@@ -126,6 +126,10 @@ Script* ScriptRuntime::assembleScript(IRScript* irScript)
     for(auto& func : irScript->localFunctions)
     {
         asmjit::CodeHolder ch;
+        for(auto& e : ch.emitters())
+        {
+            e->addDiagnosticOptions(asmjit::DiagnosticOptions::kRADebugAll);
+        }
 
         ch.init(_runtime.environment());
         ch.setErrorHandler(&errorHandler);
@@ -166,13 +170,13 @@ Script* ScriptRuntime::assembleScript(IRScript* irScript)
                     auto valIndex = func.readCode<ValueIndex>(iptr);
                     assert(valIndex.flags & ValueIndexFlags_Reg);
                     printf("RETV r%hu\n", valIndex.index);
-                    chkErr(cc.ret(getReg<Reg>(valIndex.index, asmjit::TypeId::kInt32, registers, cc)));
+                    chkErr(cc.ret(registers[valIndex.index]));
                     break;
                 }
                 case ScriptFunction::LOADC:
                 {
                     ValueIndex constant = func.readCode<ValueIndex>(iptr);
-                    printf("LOADC %hu ", constant.index);
+                    printf("LOADC m%hu ", constant.index);
                     assert(!constants.count(constant.index));
                     switch(constant.valueType)
                     {
@@ -209,8 +213,8 @@ Script* ScriptRuntime::assembleScript(IRScript* irScript)
                         {
                             printf("r%hu m%hu\n", dest.index, src.index);
                             auto destReg = getReg<Gp>(dest.index, typeToAsmType(dest.valueType), registers, cc);
-                            auto srcReg = constants.at(src.index);
-                            chkErr(cc.mov(destReg, srcReg));
+                            auto srcMem = constants.at(src.index);
+                            chkErr(cc.mov(destReg, srcMem));
                         }
                             break;
                         default:
@@ -237,8 +241,8 @@ Script* ScriptRuntime::assembleScript(IRScript* irScript)
                         {
                             printf("r%hu m%hu\n", a.index, b.index);
                             auto destReg = getReg<Gp>(a.index, typeToAsmType(a.valueType), registers, cc);
-                            auto srcReg = constants.at(b.index);
-                            chkErr(cc.add(destReg, srcReg));
+                            auto srcMem = constants.at(b.index);
+                            chkErr(cc.add(destReg, srcMem));
                         }
                             break;
                         default:
@@ -265,8 +269,8 @@ Script* ScriptRuntime::assembleScript(IRScript* irScript)
                         {
                             printf("r%hu m%hu\n", a.index, b.index);
                             auto destReg = getReg<Gp>(a.index, typeToAsmType(a.valueType), registers, cc);
-                            auto srcReg = constants.at(b.index);
-                            chkErr(cc.sub(destReg, srcReg));
+                            auto srcMem = constants.at(b.index);
+                            chkErr(cc.sub(destReg, srcMem));
                         }
                             break;
                         default:
@@ -293,8 +297,8 @@ Script* ScriptRuntime::assembleScript(IRScript* irScript)
                         {
                             printf("r%hu m%hu\n", a.index, b.index);
                             auto destReg = getReg<Gp>(a.index, typeToAsmType(a.valueType), registers, cc);
-                            auto srcReg = constants.at(b.index);
-                            chkErr(cc.imul(destReg, srcReg));
+                            auto srcMem = constants.at(b.index);
+                            chkErr(cc.imul(destReg, srcMem));
                         }
                             break;
                         default:
@@ -314,30 +318,27 @@ Script* ScriptRuntime::assembleScript(IRScript* irScript)
                             printf("r%hu r%hu\n", a.index, b.index);
                             auto destReg = getReg<Gp>(a.index, typeToAsmType(a.valueType), registers, cc);
                             auto srcReg = getReg<Gp>(b.index, typeToAsmType(b.valueType), registers, cc);
-                            chkErr(cc.idiv(destReg, srcReg));
+                            chkErr(cc.idiv(cc.newInt32(),destReg, srcReg));
                         }
                             break;
                         case gp_mem:
                         {
                             printf("r%hu m%hu\n", a.index, b.index);
                             auto destReg = getReg<Gp>(a.index, typeToAsmType(a.valueType), registers, cc);
-                            auto srcReg = constants.at(b.index);
-                            chkErr(cc.idiv(destReg, srcReg));
+                            auto srcMem = constants.at(b.index);
+                            chkErr(cc.idiv(cc.newInt32(),destReg, srcMem));
                         }
                             break;
                         default:
                             throw std::runtime_error("Invalid div operands");
                     }
+                    break;
                 }
                 default:
                     throw std::runtime_error("unknown op: " + std::to_string(code[iptr]));
             }
         }
-
-        if(!f->hasRet())
-            chkErr(cc.ret());
         chkErr(cc.endFunc());
-
         chkErr(cc.finalize());
         void* fPtr = nullptr;
         chkErr(_runtime.add(&fPtr, &ch));
