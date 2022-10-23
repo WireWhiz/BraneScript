@@ -10,21 +10,23 @@
 
 class AotSingleArgNode : public AotNode
 {
-protected:
-    std::unique_ptr<AotNode> _arg;
 public:
-    explicit AotSingleArgNode(AotNode* arg, NodeType type);
+    std::unique_ptr<AotNode> arg;
+    explicit AotSingleArgNode(AotNode* arg,TypeDef* resType, NodeType type);
     AotNode* optimize() override;
 };
 
 class AotDualArgNode : public AotNode
 {
-protected:
-    std::unique_ptr<AotNode> _argA;
-    std::unique_ptr<AotNode> _argB;
 public:
-    explicit AotDualArgNode(AotNode* argA, AotNode* argB, NodeType type);
+    std::unique_ptr<AotNode> argA;
+    std::unique_ptr<AotNode> argB;
+    explicit AotDualArgNode(AotNode* argA, AotNode* argB, TypeDef* resType, NodeType type);
     AotNode* optimize() override;
+
+    AotNode* constArg() const;
+    AotNode* nonConstArg() const;
+    AotNode* releaseNonConstArg();
 };
 
 class AotReturnValueNode : public AotSingleArgNode
@@ -34,10 +36,19 @@ public:
     AotValue generateBytecode(CompilerCtx& ctx) const override;
 };
 
+class AotCastNode : public AotSingleArgNode
+{
+public:
+    explicit AotCastNode(AotNode* arg, TypeDef* castType);
+    AotNode* optimize() override;
+    AotValue generateBytecode(CompilerCtx& ctx) const override;
+};
+
 class AotAddNode : public AotDualArgNode
 {
 public:
     AotAddNode(AotNode* argA, AotNode* argB);
+    AotNode* optimize() override;
     AotValue generateBytecode(CompilerCtx& ctx) const override;
 };
 

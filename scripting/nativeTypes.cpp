@@ -4,7 +4,7 @@
 
 #include "nativeTypes.h"
 
-std::vector<TypeDef*> nativeTypes({new IntDef()});
+std::vector<TypeDef*> nativeTypes({new IntDef(), new FloatDef()});
 std::vector<TypeDef*> getNativeTypes()
 {
     return nativeTypes;
@@ -20,7 +20,7 @@ TypeDef* getTypeDef(ValueType type)
         case Int64:
             break;
         case Float32:
-            break;
+            return nativeTypes[1];
         case Float64:
             break;
         case Ptr:
@@ -42,4 +42,19 @@ uint32_t IntDef::size() const
 ValueType IntDef::type() const
 {
     return ValueType::Int32;
+}
+
+const char* FloatDef::name() const
+{
+    return "float";
+}
+
+uint32_t FloatDef::size() const
+{
+    return sizeof(float);
+}
+
+ValueType FloatDef::type() const
+{
+    return Float32;
 }

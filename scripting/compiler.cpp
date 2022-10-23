@@ -75,7 +75,7 @@ std::any Compiler::visitScope(braneParser::ScopeContext* context)
 
 std::any Compiler::visitConstFloat(braneParser::ConstFloatContext* context)
 {
-    return std::stof(context->FLOAT()->getText());
+    return (AotNode*)new AotConst(std::stof(context->FLOAT()->getText()), _types.at("float"));
 }
 
 std::any Compiler::visitAddsub(braneParser::AddsubContext* context)
@@ -104,7 +104,7 @@ std::any Compiler::visitMuldiv(braneParser::MuldivContext* context)
 
 std::any Compiler::visitConstInt(braneParser::ConstIntContext* context)
 {
-    return (AotNode*)new AotConst((int32_t)std::stoi(context->getText()));
+    return (AotNode*)new AotConst((int32_t)std::stoi(context->getText()), _types.at("int"));
 }
 
 std::any Compiler::visitId(braneParser::IdContext* context)
@@ -174,6 +174,11 @@ std::any Compiler::visitFunction(braneParser::FunctionContext* ctx)
     return functionIndex;
 }
 
+std::any Compiler::visitCast(braneParser::CastContext* ctx)
+{
+    return (AotNode*) new AotCastNode(std::any_cast<AotNode*>(visit(ctx->expression())), _types.at(ctx->ID()->getText()));
+}
+
 std::any Compiler::visitReturnVoid(braneParser::ReturnVoidContext* ctx)
 {
     // _currentFunction->appendCode(ScriptFunction::RET);
@@ -184,6 +189,8 @@ std::any Compiler::visitReturnVoid(braneParser::ReturnVoidContext* ctx)
 std::any Compiler::visitReturnVal(braneParser::ReturnValContext* ctx)
 {
     auto retVal = std::any_cast<AotNode*>(visit(ctx->expression()));
+    if(retVal->resType()->name() != _ctx->function->returnType)
+        retVal = new AotCastNode(retVal, _types.at(_ctx->function->returnType));
     return (AotNode*)new AotReturnValueNode(retVal);
 }
 
@@ -205,11 +212,9 @@ const std::unordered_map<std::string, TypeDef*>& Compiler::types() const
     return _types;
 }
 
-void Compiler::registerLocalValue(std::string name, const std::string type, bool constant)
+void Compiler::registerLocalValue(std::string name, const std::string& type, bool constant)
 {
-    auto index = _lValueIndex++;
-    _scopes.back().localValues.emplace(std::move(name), AotValueNode(index, type, constant));
-
+    _scopes.back().localValues.emplace(std::move(name), AotValueNode(_lValueIndex++, _types.at(type), constant));
 }
 
 AotNode* Compiler::getValueNode(const std::string& name)
@@ -240,11 +245,16 @@ CompilerCtx::CompilerCtx(Compiler& c, IRScript* s) : compiler(c), script(s)
 
 AotValue CompilerCtx::newReg(const std::string& type, uint8_t flags)
 {
+    TypeDef* t = nullptr;
+    if(compiler.types().count(type))
+        t = compiler.types().at(type);
+    return newReg(t, flags);
+}
+
+AotValue CompilerCtx::newReg(TypeDef* type, uint8_t flags)
+{
     AotValue value;
-    if(type == "void")
-        value.def = nullptr;
-    else if(compiler.types().count(type))
-        value.def = compiler.types().at(type);
+    value.def = type;
     value.flags = flags;
     if(!value.isVoid())
     {
@@ -252,7 +262,7 @@ AotValue CompilerCtx::newReg(const std::string& type, uint8_t flags)
         value.valueIndex.valueType = value.def->type();
         value.valueIndex.flags |= ValueIndexFlags_Reg;
     }
-    return std::move(value);
+    return value;
 }
 
 AotValue CompilerCtx::newConst(ValueType type, uint8_t flags)

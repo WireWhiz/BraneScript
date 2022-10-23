@@ -81,7 +81,9 @@ private:
 
     std::any visitReturnVal(braneParser::ReturnValContext *ctx) override;
 
-    void registerLocalValue(std::string name, const std::string type, bool constant);
+    std::any visitCast(braneParser::CastContext *context) override;
+
+    void registerLocalValue(std::string name, const std::string& type, bool constant);
     AotNode* getValueNode(const std::string& name);
     void pushScope();
     void popScope();
@@ -108,6 +110,7 @@ struct CompilerCtx
     CompilerCtx(Compiler& c, IRScript* s);
 
     AotValue newReg(const std::string& type, uint8_t flags);
+    AotValue newReg(TypeDef* type, uint8_t flags);
     AotValue newConst(ValueType type, uint8_t flags = AotValue::Const | AotValue::Constexpr);
     AotValue castTemp(const AotValue& value);
     AotValue castReg(const AotValue& value);

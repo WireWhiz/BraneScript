@@ -31,6 +31,7 @@ protected:
     {
         Const,
         Value,
+        Cast,
         Return,
         ReturnValue,
         Move,
@@ -40,8 +41,10 @@ protected:
         Div
     };
     NodeType _type;
+    TypeDef* _resType = nullptr;
+    static TypeDef* dominantArgType(TypeDef* a, TypeDef* b);
 public:
-    explicit AotNode(NodeType type);
+    explicit AotNode(TypeDef* resType, NodeType type);
     virtual ~AotNode() =default;
     virtual AotNode* optimize() = 0;
     virtual AotValue generateBytecode(CompilerCtx& ctx) const = 0;
@@ -52,6 +55,7 @@ public:
         return dynamic_cast<T*>(this);
     }
     NodeType type() const;
+    TypeDef* resType() const;
 };
 
 

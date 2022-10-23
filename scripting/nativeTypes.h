@@ -17,7 +17,14 @@ public:
     const char* name() const override;
     uint32_t size() const override;
     ValueType type() const override;
+};
 
+class FloatDef : public TypeDef
+{
+public:
+    const char* name() const override;
+    uint32_t size() const override;
+    ValueType type() const override;
 };
 
 

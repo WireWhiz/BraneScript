@@ -32,6 +32,7 @@ expression  : INT                                                           #con
             | left=expression op=(ADD | SUB) right=expression               #addsub
             | '(' expression ')'                                            #inlineScope
             | '{' expression '}'                                            #scope
+            | '(' ID ')' expression                                         #cast
             | dest=expression '=' expr=expression                           #assignment
             | declaration                                                   #decl
             | 'return' expression                                           #returnVal

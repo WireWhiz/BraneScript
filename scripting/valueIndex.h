@@ -17,6 +17,8 @@ enum ValueType : uint8_t
 
 };
 
+const char* valueTypeName(ValueType type);
+
 enum ValueIndexFlags : uint8_t
 {
     ValueIndexFlags_Mem = 1,
