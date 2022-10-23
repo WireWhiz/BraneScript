@@ -173,7 +173,15 @@ Script* ScriptRuntime::assembleScript(IRScript* irScript)
                     assert(valIndex.flags & ValueIndexFlags_Reg);
                     printf("RETV r%hu\n", valIndex.index);
                     auto& ret = registers[valIndex.index];
-                    chkErr(cc.ret(ret));
+
+                    //Bad workaround for error I don't understand and only happens in this situation
+                    if(retType == asmjit::TypeId::kFloat32 && registers[0].isXmm())
+                    {
+                        auto baseReg = getReg<Xmm>(0, asmjit::TypeId::kFloat32, registers, cc);
+                        cc.movss(baseReg, getReg<Xmm>(valIndex.index, asmjit::TypeId::kFloat32, registers, cc));
+                        cc.ret(baseReg);
+                    }
+                    cc.ret(ret);
                     break;
                 }
                 case ScriptFunction::LOADC:
