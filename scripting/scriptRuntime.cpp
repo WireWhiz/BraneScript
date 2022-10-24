@@ -6,6 +6,8 @@
 #include "script.h"
 #include "irScript.h"
 #include "valueIndex.h"
+#include "asmjit/core/globals.h"
+
 #include "asmjit/asmjit.h"
 #include <cstdio>
 #include <stdexcept>
@@ -23,6 +25,7 @@ class JitErrorHandler : public asmjit::ErrorHandler {
 public:
     void handleError(asmjit::Error err, const char* message, asmjit::BaseEmitter* origin) override {
         printf("AsmJit error: %s\n", message);
+        fflush(stdout);
     }
 };
 
@@ -110,11 +113,24 @@ OperationType getOperationType(const ValueIndex& a, const ValueIndex& b)
     return typeMap[(uint8_t)getValueRegType(b)];
 }
 
+Reg newReg(asmjit::TypeId type, Compiler& cc)
+{
+    switch(type)
+    {
+        case asmjit::TypeId::kInt32:
+            return cc.newInt32();
+        case asmjit::TypeId::kFloat32:
+            return cc.newXmmSs();
+        default:
+            throw std::runtime_error("Unimplemented type");
+    }
+}
+
 template<class RT>
 RT& getReg(uint16_t index, asmjit::TypeId type, std::vector<Reg>& registers, Compiler& cc)
 {
     if(registers.size() == index)
-        registers.push_back(cc.newReg(type));
+        registers.push_back(newReg(type, cc));
     return registers[index].as<RT>();
 }
 
@@ -130,13 +146,15 @@ Script* ScriptRuntime::assembleScript(IRScript* irScript)
         ch.init(_runtime.environment());
         ch.setErrorHandler(&errorHandler);
         Compiler cc(&ch);
-        cc.addDiagnosticOptions(asmjit::DiagnosticOptions::kValidateAssembler);
+        cc.addDiagnosticOptions(asmjit::DiagnosticOptions::kValidateAssembler | asmjit::DiagnosticOptions::kRADebugAll);
+        cc.addEncodingOptions(asmjit::EncodingOptions::kOptimizedAlign);
 
         std::vector<asmjit::Label> labels;
         std::vector<asmjit::x86::Reg> registers;
 
         asmjit::FuncSignatureBuilder sigBuilder;
         std::vector<asmjit::TypeId> argTypes;
+        sigBuilder.setCallConvId(asmjit::CallConvId::kCDecl);
         for(auto& arg : func.arguments)
         {
             auto type = strToType(arg);
@@ -147,10 +165,9 @@ Script* ScriptRuntime::assembleScript(IRScript* irScript)
         sigBuilder.setRet(retType);
         auto* f = cc.addFunc(sigBuilder);
 
-
         for (size_t i = 0; i < func.arguments.size(); ++i)
         {
-            registers.push_back(cc.newReg(argTypes[i]));
+            registers.push_back(newReg(argTypes[i], cc));
             f->setArg(i, registers[i]);
         }
 
@@ -173,21 +190,13 @@ Script* ScriptRuntime::assembleScript(IRScript* irScript)
                     assert(valIndex.flags & ValueIndexFlags_Reg);
                     printf("RETV r%hu\n", valIndex.index);
                     auto& ret = registers[valIndex.index];
-
-                    //Bad workaround for error I don't understand and only happens in this situation
-                    if(retType == asmjit::TypeId::kFloat32 && registers[0].isXmm())
-                    {
-                        auto baseReg = getReg<Xmm>(0, asmjit::TypeId::kFloat32, registers, cc);
-                        cc.movss(baseReg, getReg<Xmm>(valIndex.index, asmjit::TypeId::kFloat32, registers, cc));
-                        cc.ret(baseReg);
-                    }
                     cc.ret(ret);
                     break;
                 }
                 case ScriptFunction::LOADC:
                 {
                     ValueIndex constant = func.readCode<ValueIndex>(iptr);
-                    printf("LOADC m%hu ", constant.index);
+                    printf("LOADC mem%hu ", constant.index);
                     assert(!constants.count(constant.index));
                     switch(constant.valueType)
                     {
@@ -221,7 +230,7 @@ Script* ScriptRuntime::assembleScript(IRScript* irScript)
                     {
                         case gp_gp:
                         {
-                            printf("r%hu r%hu\n", dest.index, src.index);
+                            printf("gp%hu gp%hu\n", dest.index, src.index);
                             auto destReg = getReg<Gp>(dest.index, typeToAsmType(dest.valueType), registers, cc);
                             auto srcReg = getReg<Gp>(src.index, typeToAsmType(src.valueType), registers, cc);
                             chkErr(cc.mov(destReg, srcReg));
@@ -229,7 +238,7 @@ Script* ScriptRuntime::assembleScript(IRScript* irScript)
                         break;
                         case gp_mem:
                         {
-                            printf("r%hu m%hu\n", dest.index, src.index);
+                            printf("gp%hu mem%hu\n", dest.index, src.index);
                             auto destReg = getReg<Gp>(dest.index, typeToAsmType(dest.valueType), registers, cc);
                             auto srcMem = constants.at(src.index);
                             chkErr(cc.mov(destReg, srcMem));
@@ -261,7 +270,7 @@ Script* ScriptRuntime::assembleScript(IRScript* irScript)
                             break;
                         case xmm_mem:
                         {
-                            printf("xmm%hu gp%hu\n", dest.index, src.index);
+                            printf("xmm%hu mem%hu\n", dest.index, src.index);
                             auto destReg = getReg<Xmm>(dest.index, typeToAsmType(dest.valueType), registers, cc);
                             auto srcMem = constants.at(src.index);
                             chkErr(cc.movss(destReg, srcMem));
@@ -289,7 +298,7 @@ Script* ScriptRuntime::assembleScript(IRScript* irScript)
                             break;
                         case gp_mem:
                         {
-                            printf("gp%hu m%hu\n", a.index, b.index);
+                            printf("gp%hu mem%hu\n", a.index, b.index);
                             auto destReg = getReg<Gp>(a.index, typeToAsmType(a.valueType), registers, cc);
                             auto srcMem = constants.at(b.index);
                             chkErr(cc.add(destReg, srcMem));
@@ -305,7 +314,7 @@ Script* ScriptRuntime::assembleScript(IRScript* irScript)
                             break;
                         case xmm_mem:
                         {
-                            printf("xmm%hu m%hu\n", a.index, b.index);
+                            printf("xmm%hu mem%hu\n", a.index, b.index);
                             auto destReg = getReg<Xmm>(a.index, typeToAsmType(a.valueType), registers, cc);
                             auto srcReg = constants.at(b.index);
                             chkErr(cc.addss(destReg, srcReg));
@@ -325,7 +334,7 @@ Script* ScriptRuntime::assembleScript(IRScript* irScript)
                     {
                         case gp_gp:
                         {
-                            printf("r%hu r%hu\n", a.index, b.index);
+                            printf("gp%hu gp%hu\n", a.index, b.index);
                             auto destReg = getReg<Gp>(a.index, typeToAsmType(a.valueType), registers, cc);
                             auto srcReg = getReg<Gp>(b.index, typeToAsmType(b.valueType), registers, cc);
                             chkErr(cc.sub(destReg, srcReg));
@@ -333,10 +342,26 @@ Script* ScriptRuntime::assembleScript(IRScript* irScript)
                             break;
                         case gp_mem:
                         {
-                            printf("r%hu m%hu\n", a.index, b.index);
+                            printf("gp%hu mem%hu\n", a.index, b.index);
                             auto destReg = getReg<Gp>(a.index, typeToAsmType(a.valueType), registers, cc);
                             auto srcMem = constants.at(b.index);
                             chkErr(cc.sub(destReg, srcMem));
+                        }
+                            break;
+                        case xmm_xmm:
+                        {
+                            printf("xmm%hu xmm%hu\n", a.index, b.index);
+                            auto destReg = getReg<Xmm>(a.index, typeToAsmType(a.valueType), registers, cc);
+                            auto srcReg = getReg<Xmm>(b.index, typeToAsmType(b.valueType), registers, cc);
+                            chkErr(cc.subss(destReg, srcReg));
+                        }
+                            break;
+                        case xmm_mem:
+                        {
+                            printf("xmm%hu mem%hu\n", a.index, b.index);
+                            auto destReg = getReg<Xmm>(a.index, typeToAsmType(a.valueType), registers, cc);
+                            auto srcMem = constants.at(b.index);
+                            chkErr(cc.subss(destReg, srcMem));
                         }
                             break;
                         default:
@@ -353,7 +378,7 @@ Script* ScriptRuntime::assembleScript(IRScript* irScript)
                     {
                         case gp_gp:
                         {
-                            printf("r%hu r%hu\n", a.index, b.index);
+                            printf("gp%hu gp%hu\n", a.index, b.index);
                             auto destReg = getReg<Gp>(a.index, typeToAsmType(a.valueType), registers, cc);
                             auto srcReg = getReg<Gp>(b.index, typeToAsmType(b.valueType), registers, cc);
                             chkErr(cc.imul(destReg, srcReg));
@@ -361,10 +386,26 @@ Script* ScriptRuntime::assembleScript(IRScript* irScript)
                             break;
                         case gp_mem:
                         {
-                            printf("r%hu m%hu\n", a.index, b.index);
+                            printf("gp%hu mem%hu\n", a.index, b.index);
                             auto destReg = getReg<Gp>(a.index, typeToAsmType(a.valueType), registers, cc);
                             auto srcMem = constants.at(b.index);
                             chkErr(cc.imul(destReg, srcMem));
+                        }
+                            break;
+                        case xmm_xmm:
+                        {
+                            printf("xmm%hu xmm%hu\n", a.index, b.index);
+                            auto destReg = getReg<Xmm>(a.index, typeToAsmType(a.valueType), registers, cc);
+                            auto srcReg = getReg<Xmm>(b.index, typeToAsmType(b.valueType), registers, cc);
+                            chkErr(cc.mulss(destReg, srcReg));
+                        }
+                            break;
+                        case xmm_mem:
+                        {
+                            printf("xmm%hu mem%hu\n", a.index, b.index);
+                            auto destReg = getReg<Xmm>(a.index, typeToAsmType(a.valueType), registers, cc);
+                            auto srcMem = constants.at(b.index);
+                            chkErr(cc.mulss(destReg, srcMem));
                         }
                             break;
                         default:
@@ -381,7 +422,7 @@ Script* ScriptRuntime::assembleScript(IRScript* irScript)
                     {
                         case gp_gp:
                         {
-                            printf("r%hu r%hu\n", a.index, b.index);
+                            printf("gp%hu gp%hu\n", a.index, b.index);
                             auto destReg = getReg<Gp>(a.index, typeToAsmType(a.valueType), registers, cc);
                             auto srcReg = getReg<Gp>(b.index, typeToAsmType(b.valueType), registers, cc);
                             chkErr(cc.idiv(cc.newInt32(),destReg, srcReg));
@@ -389,10 +430,26 @@ Script* ScriptRuntime::assembleScript(IRScript* irScript)
                             break;
                         case gp_mem:
                         {
-                            printf("r%hu m%hu\n", a.index, b.index);
+                            printf("gp%hu mem%hu\n", a.index, b.index);
                             auto destReg = getReg<Gp>(a.index, typeToAsmType(a.valueType), registers, cc);
                             auto srcMem = constants.at(b.index);
                             chkErr(cc.idiv(cc.newInt32(),destReg, srcMem));
+                        }
+                            break;
+                        case xmm_xmm:
+                        {
+                            printf("xmm%hu xmm%hu\n", a.index, b.index);
+                            auto destReg = getReg<Xmm>(a.index, typeToAsmType(a.valueType), registers, cc);
+                            auto srcReg = getReg<Xmm>(b.index, typeToAsmType(b.valueType), registers, cc);
+                            chkErr(cc.divss(destReg, srcReg));
+                        }
+                            break;
+                        case xmm_mem:
+                        {
+                            printf("xmm%hu mem%hu\n", a.index, b.index);
+                            auto destReg = getReg<Xmm>(a.index, typeToAsmType(a.valueType), registers, cc);
+                            auto srcMem = constants.at(b.index);
+                            chkErr(cc.divss(destReg, srcMem));
                         }
                             break;
                         default:
