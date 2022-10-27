@@ -44,6 +44,13 @@ public:
     AotValue generateBytecode(CompilerCtx& ctx) const override;
 };
 
+class AotAssignNode : public AotDualArgNode
+{
+public:
+    AotAssignNode(AotNode* lvalue, AotNode* rvalue);
+    AotValue generateBytecode(CompilerCtx& ctx) const override;
+};
+
 class AotAddNode : public AotDualArgNode
 {
 public:
@@ -71,6 +78,24 @@ class AotDivNode : public AotDualArgNode
 {
 public:
     AotDivNode(AotNode* argA, AotNode* argB);
+    AotValue generateBytecode(CompilerCtx& ctx) const override;
+};
+
+class AotCompareNode : public AotDualArgNode
+{
+public:
+    enum Mode
+    {
+        Equal = ValueStorageType_EqualRes,
+        NotEqual = ValueStorageType_NotEqualRes,
+        Greater  = ValueStorageType_GreaterRes,
+        GreaterEqual = ValueStorageType_GreaterEqualRes
+    };
+private:
+    Mode _mode;
+public:
+
+    AotCompareNode(Mode mode, AotNode* a, AotNode* b);
     AotValue generateBytecode(CompilerCtx& ctx) const override;
 };
 

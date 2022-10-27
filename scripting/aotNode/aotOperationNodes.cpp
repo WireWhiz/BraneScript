@@ -5,6 +5,7 @@
 #include "aotOperationNodes.h"
 #include "../compiler.h"
 #include "../typeDef.h"
+#include "../nativeTypes.h"
 
 AotSingleArgNode::AotSingleArgNode(AotNode*arg, TypeDef* resType, NodeType type) : AotNode(resType, type), arg(arg)
 {
@@ -251,3 +252,60 @@ AotValue AotReturnValueNode::generateBytecode(CompilerCtx& ctx) const
     AotValue voidValue;
     return voidValue;
 }
+
+AotCompareNode::AotCompareNode(Mode mode, AotNode* a, AotNode* b) : _mode(mode), AotDualArgNode(a, b, getNativeTypeDef(ValueType::Bool), Compare)
+{
+    auto castType = dominantArgType(a->resType(), b->resType());
+    if(argA->resType() != castType)
+        argA = std::unique_ptr<AotNode>(new AotCastNode(argA.release(), castType));
+    if(argB->resType() != castType)
+        argB = std::unique_ptr<AotNode>(new AotCastNode(argB.release(), castType));
+}
+
+AotValue AotCompareNode::generateBytecode(CompilerCtx& ctx) const
+{
+
+
+    auto a = argA->generateBytecode(ctx);
+    auto b = argB->generateBytecode(ctx);
+    a = ctx.castReg(a);
+
+    AotValue result;
+    bool sign = a.def->type() == Int32 || a.def->type() == Int64;
+    switch(_mode)
+    {
+        case Equal:
+        case NotEqual:
+            result.valueIndex.storageType = (ValueStorageType)_mode;
+            break;
+        case Greater:
+            result.valueIndex.storageType = sign ? ValueStorageType_GreaterRes : ValueStorageType_AboveRes;
+            break;
+        case GreaterEqual:
+            result.valueIndex.storageType = sign ? ValueStorageType_GreaterEqualRes : ValueStorageType_AboveEqualRes;
+            break;
+    }
+
+    result.def = resType();
+
+    ctx.function->appendCode(ScriptFunction::CMP, a.valueIndex, b.valueIndex);
+
+    return result;
+}
+
+AotAssignNode::AotAssignNode(AotNode* lvalue, AotNode* rvalue) : AotDualArgNode(lvalue, rvalue, lvalue->resType(), Assign)
+{
+    if(argB->resType() != _resType)
+        argB = std::unique_ptr<AotNode>(new AotCastNode(argB.release(), _resType));
+}
+
+AotValue AotAssignNode::generateBytecode(CompilerCtx& ctx) const
+{
+    auto rValue = argB->generateBytecode(ctx);
+    rValue = ctx.castReg(rValue);
+    auto lValue = argA->generateBytecode(ctx);
+
+    ctx.function->appendCode(ScriptFunction::MOV, lValue.valueIndex, rValue.valueIndex);
+
+    return lValue;
+};

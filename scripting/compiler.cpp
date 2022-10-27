@@ -8,6 +8,7 @@
 #include "nativeTypes.h"
 #include "aotNode/aotOperationNodes.h"
 #include "aotNode/aotValueNodes.h"
+#include "aotNode/aotFlowNodes.h"
 
 Compiler::Compiler()
 {
@@ -53,24 +54,20 @@ std::any Compiler::visitInlineScope(braneParser::InlineScopeContext* context)
 
 std::any Compiler::visitAssignment(braneParser::AssignmentContext* context)
 {
-    /*Value lValue;
-    if(!getValueNode(context->dest->getText(), lValue))
+    auto* rValue= std::any_cast<AotNode*>(visit(context->expr));
+    auto* lValue = std::any_cast<AotNode*>(visit(context->dest));
+    if(!lValue)
         throw std::runtime_error("Could not find identifier");
-    if(lValue.flags & Value::Temp)
-        throw std::runtime_error("Can not assign to temporary value");
-    auto rValue= std::any_cast<Value>(visit(context->expr));
 
-    _currentFunction->appendCode(ScriptFunction::MOV, lValue, rValue);
-
-    if(!(rValue.flags & Value::Constexpr))
-        lValue.flags &= ~Value::Constexpr;*/
-
-    return {};
+    return (AotNode*)new AotAssignNode(lValue, rValue);
 }
 
 std::any Compiler::visitScope(braneParser::ScopeContext* context)
 {
-    return braneBaseVisitor::visitScope(context);
+    pushScope();
+    auto operations = std::any_cast<std::vector<AotNode*>>(visit(context->exprList()));
+    popScope();
+    return (AotNode*)new AotScope(operations);
 }
 
 std::any Compiler::visitConstFloat(braneParser::ConstFloatContext* context)
@@ -122,7 +119,9 @@ std::any Compiler::visitDecl(braneParser::DeclContext* context)
 
 std::any Compiler::visitDeclaration(braneParser::DeclarationContext* context)
 {
-    return braneBaseVisitor::visitDeclaration(context);
+    auto name = context->id->getText();
+    registerLocalValue(name, context->type->getText(), false);
+    return getValueNode(name);
 }
 
 const std::vector<Compiler::CompileError>& Compiler::errors() const
@@ -138,7 +137,7 @@ std::any Compiler::visitArgumentList(braneParser::ArgumentListContext* ctx)
 std::any Compiler::visitFunction(braneParser::FunctionContext* ctx)
 {
     ScriptFunction* previousFunction = _ctx->function;
-    _ctx->function = new ScriptFunction();
+    _ctx->setFunction(new ScriptFunction());
 
     //TODO: TypeAssert()
     _ctx->function->returnType = ctx->type->getText();
@@ -238,6 +237,51 @@ void Compiler::popScope()
     _scopes.pop_back();
 }
 
+std::any Compiler::visitConstBool(braneParser::ConstBoolContext* ctx)
+{
+    if(ctx->getText() == "true")
+        return (AotNode*)new AotConst(true, _types.at("bool"));
+    else
+        return (AotNode*)new AotConst(false, _types.at("bool"));
+}
+
+std::any Compiler::visitIf(braneParser::IfContext* ctx)
+{
+    auto condition = std::any_cast<AotNode*>(visit(ctx->cond));
+    auto operation = std::any_cast<AotNode*>(visit(ctx->operation));
+    return (AotNode*)new AotIf(condition, operation);
+}
+
+std::any Compiler::visitComparison(braneParser::ComparisonContext* context)
+{
+    auto* a = std::any_cast<AotNode*>(visit(context->left));
+    auto* b = std::any_cast<AotNode*>(visit(context->right));
+
+    AotCompareNode::Mode mode = AotCompareNode::Mode::Equal;
+    std::string symbol = context->op->getText();
+    if(symbol == "==")
+        mode = AotCompareNode::Equal;
+    else if(symbol == "!=")
+        mode = AotCompareNode::NotEqual;
+    else if(symbol == ">")
+        mode = AotCompareNode::Greater;
+    else if(symbol == ">=")
+        mode = AotCompareNode::GreaterEqual;
+    else if(symbol == "<")
+    {
+        std::swap(a, b);
+        mode = AotCompareNode::Greater;
+    }
+    else if(symbol == "<=")
+    {
+        std::swap(a, b);
+        mode = AotCompareNode::GreaterEqual;
+    }
+
+
+    return (AotNode*)new AotCompareNode(mode, a, b);
+}
+
 CompilerCtx::CompilerCtx(Compiler& c, IRScript* s) : compiler(c), script(s)
 {
 
@@ -260,7 +304,7 @@ AotValue CompilerCtx::newReg(TypeDef* type, uint8_t flags)
     {
         value.valueIndex.index = regIndex++;
         value.valueIndex.valueType = value.def->type();
-        value.valueIndex.flags |= ValueIndexFlags_Reg;
+        value.valueIndex.storageType = ValueStorageType_Reg;
     }
     return value;
 }
@@ -268,12 +312,12 @@ AotValue CompilerCtx::newReg(TypeDef* type, uint8_t flags)
 AotValue CompilerCtx::newConst(ValueType type, uint8_t flags)
 {
     AotValue value;
-    value.def = getTypeDef(type);
+    value.def = getNativeTypeDef(type);
     assert(value.def);
     value.flags = flags;
     value.valueIndex.index = memIndex++;
     value.valueIndex.valueType = type;
-    value.valueIndex.flags |= ValueIndexFlags_Mem;
+    value.valueIndex.storageType = ValueStorageType_Mem;
     return std::move(value);
 }
 
@@ -282,16 +326,65 @@ AotValue CompilerCtx::castTemp(const AotValue& value)
     assert(function);
     if(value.flags & AotValue::Temp)
         return value;
-    AotValue tempValue = newReg(value.def->name(), AotValue::Temp | (AotValue::Constexpr & value.flags));
+    AotValue tempValue = newReg(value.def, AotValue::Temp | (AotValue::Constexpr & value.flags));
     function->appendCode(ScriptFunction::MOV, tempValue.valueIndex, value.valueIndex);
     return tempValue;
 }
 
 AotValue CompilerCtx::castReg(const AotValue& value)
 {
-    if(value.valueIndex.flags & ValueIndexFlags_Reg)
+    if(value.valueIndex.storageType == ValueStorageType_Reg)
         return value;
-    AotValue regValue = newReg(value.def->name(), AotValue::Temp | (AotValue::Constexpr & value.flags));
-    function->appendCode(ScriptFunction::MOV, regValue.valueIndex, value.valueIndex);
-    return regValue;
+    AotValue regValue = newReg(value.def, AotValue::Temp | (AotValue::Constexpr & value.flags));
+    switch(value.valueIndex.storageType)
+    {
+        case ValueStorageType_Mem:
+        {
+            function->appendCode(ScriptFunction::MOV, regValue.valueIndex, value.valueIndex);
+            return regValue;
+        }
+        case ValueStorageType_EqualRes:
+        {
+            function->appendCode(ScriptFunction::SETE, regValue.valueIndex);
+            return regValue;
+        }
+        case ValueStorageType_NotEqualRes:
+        {
+            function->appendCode(ScriptFunction::SETNE, regValue.valueIndex);
+            return regValue;
+        }
+        case ValueStorageType_AboveRes:
+        {
+            function->appendCode(ScriptFunction::SETA, regValue.valueIndex);
+            return regValue;
+        }
+        case ValueStorageType_GreaterRes:
+        {
+            function->appendCode(ScriptFunction::SETG, regValue.valueIndex);
+            return regValue;
+        }
+        case ValueStorageType_AboveEqualRes:
+        {
+            function->appendCode(ScriptFunction::SETAE, regValue.valueIndex);
+            return regValue;
+        }
+        case ValueStorageType_GreaterEqualRes:
+        {
+            function->appendCode(ScriptFunction::SETGE, regValue.valueIndex);
+            return regValue;
+        }
+        default:
+            assert(false);
+    }
+
+}
+
+uint32_t CompilerCtx::newMark()
+{
+    return markIndex++;
+}
+
+void CompilerCtx::setFunction(ScriptFunction* f)
+{
+    function = f;
 }

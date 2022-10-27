@@ -83,6 +83,12 @@ private:
 
     std::any visitCast(braneParser::CastContext *context) override;
 
+    std::any visitConstBool(braneParser::ConstBoolContext *ctx) override;
+
+    std::any visitIf(braneParser::IfContext *ctx) override;
+
+    std::any visitComparison(braneParser::ComparisonContext *context) override;
+
     void registerLocalValue(std::string name, const std::string& type, bool constant);
     AotNode* getValueNode(const std::string& name);
     void pushScope();
@@ -102,13 +108,16 @@ struct CompilerCtx
     Compiler& compiler;
     uint32_t regIndex = 0;
     uint32_t memIndex = 0;
+    uint32_t markIndex = 0;
 
     IRScript* script = nullptr;
     ScriptFunction* function = nullptr;
     std::map<uint16_t, AotValue> lValues;
 
     CompilerCtx(Compiler& c, IRScript* s);
+    void setFunction(ScriptFunction* function);
 
+    uint32_t newMark();
     AotValue newReg(const std::string& type, uint8_t flags);
     AotValue newReg(TypeDef* type, uint8_t flags);
     AotValue newConst(ValueType type, uint8_t flags = AotValue::Const | AotValue::Constexpr);

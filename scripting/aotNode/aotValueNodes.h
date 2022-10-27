@@ -18,6 +18,7 @@ public:
     AotValue generateBytecode(CompilerCtx& ctx) const override;
     const std::any& value() const;
     bool isNumber() const;
+    bool isBool() const;
     AotConst* operator+(const AotConst&);
     AotConst* operator-(const AotConst&);
     AotConst* operator*(const AotConst&);

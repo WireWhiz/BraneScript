@@ -20,6 +20,9 @@ AotValue AotConst::generateBytecode(CompilerCtx& ctx) const
     auto value = ctx.newConst(_resType->type());
     switch(_resType->type())
     {
+        case Bool:
+            ctx.function->appendCode(ScriptFunction::LOADC, value.valueIndex, (uint8_t)std::any_cast<bool>(_value));
+            break;
         case Int32:
             ctx.function->appendCode(ScriptFunction::LOADC, value.valueIndex, std::any_cast<int32_t>(_value));
             break;
@@ -55,6 +58,11 @@ bool AotConst::isNumber() const
     if(_value.type() == typeid(double))
         return true;
     return false;
+}
+
+bool AotConst::isBool() const
+{
+    return _value.type() == typeid(bool);
 }
 
 #define CONST_OP(operator, t1, t2, rt, other) \
