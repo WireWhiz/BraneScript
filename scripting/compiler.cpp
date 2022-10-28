@@ -150,7 +150,7 @@ std::any Compiler::visitFunction(braneParser::FunctionContext* ctx)
 
         AotValue value = _ctx->newReg(type, false);
         _ctx->lValues.insert({_lValueIndex, value});
-        registerLocalValue(argument->id->getText(), type, false);\
+        registerLocalValue(argument->id->getText(), type, false);
     }
 
     for(auto* expression : std::any_cast<std::vector<AotNode*>>(visit(ctx->expressions)))
@@ -387,4 +387,8 @@ uint32_t CompilerCtx::newMark()
 void CompilerCtx::setFunction(ScriptFunction* f)
 {
     function = f;
+    regIndex = 0;
+    memIndex = 0;
+    markIndex = 0;
+    lValues.clear();
 }

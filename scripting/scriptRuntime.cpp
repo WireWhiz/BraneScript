@@ -154,10 +154,10 @@ struct AssemblyCtx
 Script* ScriptRuntime::assembleScript(IRScript* irScript)
 {
     auto* script = new Script();
-    JitErrorHandler errorHandler;
-    AssemblyCtx ctx;
+    JitErrorHandler errorHandler;;
     for(auto& func : irScript->localFunctions)
     {
+        AssemblyCtx ctx;
         asmjit::CodeHolder ch;
         ctx.currentFunction = &func;
 
@@ -166,6 +166,8 @@ Script* ScriptRuntime::assembleScript(IRScript* irScript)
         Compiler cc(&ch);
         cc.addDiagnosticOptions(asmjit::DiagnosticOptions::kValidateAssembler | asmjit::DiagnosticOptions::kRADebugAll);
         cc.addEncodingOptions(asmjit::EncodingOptions::kOptimizedAlign);
+
+        printf("Assembling function: %s\n", ctx.currentFunction->name.c_str());
 
         asmjit::FuncSignatureBuilder sigBuilder;
         std::vector<asmjit::TypeId> argTypes;
