@@ -9,9 +9,11 @@
     for(auto& argPair : argList)                                \
         EXPECT_EQ(function(argPair.first, argPair.second), argPair.first operator argPair.second);
 
-TEST(OperatorTests, AddSub)
+TEST(OperatorTests, Operators)
 {
     std::string testString = R"(
+
+    //Addition/Subtraction
     int testIntAdd(int a, int b)
     {
         return a + b;
@@ -35,6 +37,20 @@ TEST(OperatorTests, AddSub)
     float testIntFloatSub(int a, float b)
     {
         return a - b;
+    }
+
+    //Casting
+    bool testBoolCast(int a, int b)
+    {
+        return a > b;
+    }
+    float testFloatCast(int a)
+    {
+        return a;
+    }
+    int testIntCast(float a)
+    {
+        return a;
     }
 )";
 
@@ -62,5 +78,14 @@ TEST(OperatorTests, AddSub)
     TEST_DUAL_ARG_OPERATOR(+, testIntFloatAdd, intFloatTestArgs);
     auto testIntFloatSub = testScript->getFunction<float, int, float>("testIntFloatSub");
     TEST_DUAL_ARG_OPERATOR(-, testIntFloatSub, intFloatTestArgs);
+
+    auto testBoolCast = testScript->getFunction<bool, int, int>("testBoolCast");
+    EXPECT_TRUE(testBoolCast(5, 3));
+    EXPECT_FALSE(testBoolCast(2,4));
+
+    auto testFloatCast = testScript->getFunction<float, int>("testFloatCast");
+    EXPECT_EQ(testFloatCast(23), 23);
+    auto testIntCast = testScript->getFunction<int, float>("testIntCast");
+    EXPECT_EQ(testIntCast(23.23f), 23);
 
 }
