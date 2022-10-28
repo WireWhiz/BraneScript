@@ -20,22 +20,25 @@ statement   : function
             | preprocessor NEWLINE
             ;
 argumentList: declaration (',' declaration)*;
-function    : type=ID id=ID '(' arguments=argumentList? ')' '{' expressions=exprList '}'
-            ;
+function    : type=ID id=ID '(' arguments=argumentList? ')' '{' expressions=exprList '}';
 preprocessor: '#include' content=.*? NEWLINE                                #include;
-exprList    : (expression ';')*;
-expression  : INT                                                           #constInt
+exprList    : expression*;
+expression  : INT                                         #constInt
             | FLOAT                                                         #constFloat
             | STRING                                                        #constString
+            | ('true'|'false')                                              #constBool
+            | declaration                                                   #decl
             | ID                                                            #id
             | left=expression op=(MUL | DIV) right=expression               #muldiv
             | left=expression op=(ADD | SUB) right=expression               #addsub
+            | left=expression op=('==' | '!=' | '<' | '>' | '<=' | '>=') right=expression             #comparison
             | '(' expression ')'                                            #inlineScope
-            | '{' expression '}'                                            #scope
-            | dest=expression '=' expr=expression                           #assignment
-            | declaration                                                   #decl
-            | 'return' expression                                           #returnVal
-            | 'return'                                                      #returnVoid
+            | '{' exprList '}'                                              #scope
+            | '(' ID ')' expression                                         #cast
+            | 'if' '(' cond=expression ')' operation=expression             #if
+            | dest=expression '=' expr=expression ';'                       #assignment
+            | 'return' expression ';'                                       #returnVal
+            | 'return' ';'                                                  #returnVoid
             ;
 declaration : type=ID id=ID
             ;

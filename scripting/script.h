@@ -17,7 +17,7 @@ public:
     std::unordered_map<std::string, size_t> functionNames;
 
     template<typename Ret, typename... Args>
-    using FunctionHandle = Ret (*)(Args...);
+    using FunctionHandle = Ret (__cdecl *)(Args...);
 
     template<typename Ret, typename... Args>
     FunctionHandle<Ret, Args...> getFunction(size_t index)

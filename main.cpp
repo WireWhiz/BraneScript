@@ -7,24 +7,21 @@
 
 int main(const int argc, const char** argv)
 {
-    std::string testString = "int main(int a, int b) { return 3 + 4 - (a - b) * 6 / 2 + (2 - 4);}";
+    std::string testString = R"(
+bool main(float a, int b) {
+    bool condition = a < b;
+    return condition;
+}
+)";
 
     Compiler compiler;
     auto* ir = compiler.compile(testString);
 
     ScriptRuntime rt;
-    Script* testScript = nullptr;
-    try{
-        testScript =  rt.assembleScript(ir);
-    }
-    catch(const std::runtime_error& e)
-    {
-        std::cout << "assemble error: " << e.what() << std::endl;
-        return 1;
-    }
+    Script* testScript = rt.assembleScript(ir);
 
-    auto testFunction  = testScript->getFunction<int, int, int>("main");
-    int result = testFunction(5, 2);
-    std::cout << "Test result: " << result;
+    auto testFunction = testScript->getFunction<bool, float, int>("main");
+    std::cout << "Test result 3 < 5: " << (testFunction(3.0f, 5.0f) ? "true" : "false") << std::endl;
+    std::cout << "Test result 5 < 3: " << (testFunction(5.0f, 3.0f) ? "true" : "false") << std::endl;
     return 0;
 }

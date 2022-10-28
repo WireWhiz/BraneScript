@@ -6,6 +6,8 @@
 #include "script.h"
 #include "irScript.h"
 #include "valueIndex.h"
+#include "asmjit/core/globals.h"
+
 #include "asmjit/asmjit.h"
 #include <cstdio>
 #include <stdexcept>
@@ -13,52 +15,24 @@
 
 using namespace asmjit::x86;
 
-void chkErr(asmjit::Error err)
-{
-    if(err)
-        throw std::runtime_error("Compile error " + (std::string)asmjit::DebugUtils::errorAsString(err));
-}
-
-asmjit::TypeId strToType(const std::string& str)
-{
-    if(str == "void") return asmjit::TypeId::kVoid;
-    if(str == "int") return asmjit::TypeId::kInt32;
-    if(str == "float") return asmjit::TypeId::kMmx32;
-    if(str == "uint") return asmjit::TypeId::kUInt32;
-    return asmjit::TypeId::kVoid;
-}
-
-asmjit::TypeId typeToAsmType(ValueType type)
-{
-    switch(type)
-    {
-        case Int32:
-            return asmjit::TypeId::kInt32;
-        case Int64:
-            return asmjit::TypeId::kInt32;
-        case Ptr:
-            return asmjit::TypeId::kIntPtr;
-        case Float32:
-            return asmjit::TypeId::kFloat32;
-        case Float64:
-            return asmjit::TypeId::kFloat64;
-    }
-}
-
-template<class RT>
-RT& getReg(uint16_t index, asmjit::TypeId type, std::vector<Reg>& registers, Compiler& cc)
-{
-    if(registers.size() == index)
-        registers.push_back(cc.newReg(type));
-    return registers[index].as<RT>();
-}
-
 class JitErrorHandler : public asmjit::ErrorHandler {
 public:
     void handleError(asmjit::Error err, const char* message, asmjit::BaseEmitter* origin) override {
         printf("AsmJit error: %s\n", message);
+        fflush(stdout);
+        throw std::runtime_error("JIT error assembling script: " + std::string(message));
     }
 };
+
+asmjit::TypeId strToType(const std::string& str)
+{
+    if(str == "void") return asmjit::TypeId::kVoid;
+    if(str == "bool") return asmjit::TypeId::kInt8;
+    if(str == "int") return asmjit::TypeId::kInt32;
+    if(str == "float") return asmjit::TypeId::kFloat32;
+    if(str == "uint") return asmjit::TypeId::kUInt32;
+    return asmjit::TypeId::kVoid;
+}
 
 enum class ValueRegType : uint8_t
 {
@@ -66,22 +40,6 @@ enum class ValueRegType : uint8_t
     xmm = 1,
     mem = 2
 };
-
-ValueRegType getValueRegType(const ValueIndex& value)
-{
-    if(value.flags & ValueIndexFlags_Mem)
-        return ValueRegType::mem;
-    switch(value.valueType)
-    {
-        case Int32:
-        case Int64:
-        case Ptr:
-            return ValueRegType::gp;
-        case Float32:
-        case Float64:
-            return ValueRegType::xmm;
-    }
-}
 
 enum OperationType
 {
@@ -94,6 +52,23 @@ enum OperationType
     mem_gp,
     mem_xmm
 };
+
+ValueRegType getValueRegType(const ValueIndex& value)
+{
+    if(value.storageType == ValueStorageType::ValueStorageType_Mem)
+        return ValueRegType::mem;
+    switch(value.valueType)
+    {
+        case Bool:
+        case Int32:
+        case Int64:
+        case Ptr:
+            return ValueRegType::gp;
+        case Float32:
+        case Float64:
+            return ValueRegType::xmm;
+    }
+}
 
 OperationType getOperationType(const ValueIndex& a, const ValueIndex& b)
 {
@@ -118,73 +93,159 @@ OperationType getOperationType(const ValueIndex& a, const ValueIndex& b)
     return typeMap[(uint8_t)getValueRegType(b)];
 }
 
+struct AssemblyCtx
+{
+    size_t iptr = 0;
+
+    ScriptFunction* currentFunction = nullptr;
+
+    std::vector<asmjit::x86::Reg> registers;
+    std::vector<asmjit::x86::Mem> constants;
+    std::vector<asmjit::Label> labels;
+
+    template<typename T>
+    T readCode()
+    {
+        return currentFunction->readCode<T>(iptr);
+    }
+
+    bool endOfCode() const
+    {
+        return iptr >= currentFunction->code.size();
+    }
+
+    void verifyValue(ValueIndex value, Compiler& cc)
+    {
+        if(value.index < registers.size())
+            return;
+        if(value.index != registers.size())
+            throw std::runtime_error("Can only create next register index in sequence");
+        switch(value.valueType)
+        {
+            case ValueType::Bool:
+                registers.push_back(cc.newInt8());
+                break;
+            case ValueType::Int32:
+                registers.push_back(cc.newInt32());
+                break;
+            case ValueType::Float32:
+                registers.push_back(cc.newXmmSs());
+                break;
+            default:
+                throw std::runtime_error("Unimplemented type");
+        }
+    }
+
+    template<class RT>
+    RT& getReg(ValueIndex value)
+    {
+        assert(value.index < registers.size());
+        return registers[value.index].as<RT>();
+    }
+
+    asmjit::Label getLabel(uint32_t index, Compiler& cc)
+    {
+        while(index >= labels.size())
+            labels.push_back(cc.newLabel());
+        return labels[index];
+    }
+};
+
 Script* ScriptRuntime::assembleScript(IRScript* irScript)
 {
     auto* script = new Script();
-    JitErrorHandler errorHandler;
-    std::unordered_map<uint16_t, asmjit::x86::Mem> constants;
+    JitErrorHandler errorHandler;;
     for(auto& func : irScript->localFunctions)
     {
+        AssemblyCtx ctx;
         asmjit::CodeHolder ch;
-        for(auto& e : ch.emitters())
-        {
-            e->addDiagnosticOptions(asmjit::DiagnosticOptions::kRADebugAll);
-        }
+        ctx.currentFunction = &func;
 
         ch.init(_runtime.environment());
         ch.setErrorHandler(&errorHandler);
         Compiler cc(&ch);
+        cc.addDiagnosticOptions(asmjit::DiagnosticOptions::kValidateAssembler | asmjit::DiagnosticOptions::kRADebugAll);
+        cc.addEncodingOptions(asmjit::EncodingOptions::kOptimizedAlign);
 
-        std::vector<asmjit::Label> labels;
-        std::vector<asmjit::x86::Reg> registers;
+        printf("Assembling function: %s\n", ctx.currentFunction->name.c_str());
 
         asmjit::FuncSignatureBuilder sigBuilder;
+        std::vector<asmjit::TypeId> argTypes;
+        sigBuilder.setCallConvId(asmjit::CallConvId::kCDecl);
         for(auto& arg : func.arguments)
         {
             auto type = strToType(arg);
             sigBuilder.addArg(type);
-            registers.push_back(cc.newReg(type));
+            argTypes.push_back(type);
         }
         auto retType = strToType(func.returnType);
         sigBuilder.setRet(retType);
         auto* f = cc.addFunc(sigBuilder);
 
         for (size_t i = 0; i < func.arguments.size(); ++i)
-            f->setArg(i, registers[i]);
+        {
+            switch(argTypes[i])
+            {
+                case asmjit::TypeId::kInt32:
+                    ctx.registers.push_back(cc.newInt32());
+                    break;
+                case asmjit::TypeId::kFloat32:
+                    ctx.registers.push_back(cc.newXmmSs());
+                    break;
+                default:
+                    assert(false);
+            }
+            f->setArg(i, ctx.registers[i]);
+        }
 
-        size_t iptr = 0;
         auto& code = func.code;
 
-        while(iptr < code.size())
+        while(!ctx.endOfCode())
         {
-            switch(func.readCode<ScriptFunction::Operand>(iptr))
+            auto op = ctx.readCode<ScriptFunction::Operand>();
+            switch(op)
             {
                 case ScriptFunction::RET:
                     printf("RET\n");
                     if(func.returnType != "void")
                         throw std::runtime_error("cannot return nothing from non-void functions");
-                    chkErr(cc.ret());
+                    cc.ret();
                     break;
                 case ScriptFunction::RETV:
                 {
-                    auto valIndex = func.readCode<ValueIndex>(iptr);
-                    assert(valIndex.flags & ValueIndexFlags_Reg);
+                    auto valIndex = ctx.readCode<ValueIndex>();
+                    assert(valIndex.storageType == ValueStorageType_Reg);
                     printf("RETV r%hu\n", valIndex.index);
-                    chkErr(cc.ret(registers[valIndex.index]));
+                    auto& ret = ctx.registers[valIndex.index];
+                    cc.ret(ret);
                     break;
                 }
                 case ScriptFunction::LOADC:
                 {
-                    ValueIndex constant = func.readCode<ValueIndex>(iptr);
-                    printf("LOADC m%hu ", constant.index);
-                    assert(!constants.count(constant.index));
+                    ValueIndex constant = ctx.readCode<ValueIndex>();
+                    printf("LOADC mem%hu ", constant.index);
+                    assert(ctx.constants.size() == constant.index);
                     switch(constant.valueType)
                     {
+                        case Bool:
+                        {
+                            int32_t val = ctx.readCode<uint8_t>();
+                            printf("bool %i\n", val);
+                            ctx.constants.push_back(cc.newByteConst(asmjit::ConstPoolScope::kLocal, val));
+                            break;
+                        }
                         case Int32:
                         {
-                            int32_t val = func.readCode<int32_t>(iptr);
+                            int32_t val = ctx.readCode<int32_t>();
                             printf("int %i\n", val);
-                            constants[constant.index] = cc.newInt32Const(asmjit::ConstPoolScope::kLocal, val);
+                            ctx.constants.push_back(cc.newInt32Const(asmjit::ConstPoolScope::kLocal, val));
+                        }
+                            break;
+                        case Float32:
+                        {
+                            float val = ctx.readCode<float>();
+                            printf("float %f\n", val);
+                            ctx.constants.push_back(cc.newFloatConst(asmjit::ConstPoolScope::kLocal, val));
                         }
                             break;
                         default:
@@ -193,28 +254,155 @@ Script* ScriptRuntime::assembleScript(IRScript* irScript)
 
                     break;
                 }
+                case ScriptFunction::MARK:
+                {
+                    auto markIndex = ctx.readCode<uint32_t>();
+                    printf("MARK mark%u\n", markIndex);
+                    cc.bind(ctx.getLabel(markIndex, cc));
+                    break;
+                }
+                case ScriptFunction::CMP:
+                {
+                    auto a = ctx.readCode<ValueIndex>();
+                    auto b = ctx.readCode<ValueIndex>();
+                    printf("CMP ");
+                    switch(getOperationType(a, b))
+                    {
+                        case gp_gp:
+                        {
+                            printf("gp%hu gp%hu\n", a.index, b.index);
+                            auto ar = ctx.getReg<Gpd>(a);
+                            auto br = ctx.getReg<Gpd>(b);
+                            cc.cmp(ar, br);
+                        }
+                            break;
+                        case gp_mem:
+                        {
+                            printf("gp%hu mem%hu\n", a.index, b.index);
+                            auto ar = ctx.getReg<Gpd>(a);
+                            auto br = ctx.constants[b.index];
+                            cc.cmp(ar, br);
+                        }
+                            break;
+                        case xmm_xmm:
+                        {
+                            printf("xmm%hu xmm%hu\n", a.index, b.index);
+                            auto ar = ctx.getReg<Xmm>(a);
+                            auto br = ctx.getReg<Xmm>(b);
+                            cc.ucomiss(ar, br);
+                        }
+                            break;
+                        case xmm_mem:
+                        {
+                            printf("xmm%hu mem%hu\n", a.index, b.index);
+                            auto ar = ctx.getReg<Xmm>(a);
+                            auto br = ctx.constants[b.index];
+                            cc.ucomiss(ar, br);
+                        }
+                            break;
+                        default:
+                            assert(false);
+                    }
+                    break;
+                }
+                case ScriptFunction::TEST0:
+                {
+                    auto a = ctx.readCode<ValueIndex>();
+                    printf("TEST0 ");
+                    switch(getValueRegType(a))
+                    {
+                        case ValueRegType::gp:
+                            cc.test(ctx.getReg<Gp>(a), 0);
+                            break;
+                        default:
+                            assert(false);
+                    }
+                    break;
+                }
+                case ScriptFunction::JE:
+                {
+                    auto markIndex = ctx.readCode<uint32_t>();
+                    printf("JE mark%u\n", markIndex);
+                    cc.je(ctx.getLabel(markIndex, cc));
+                    break;
+                }
+                case ScriptFunction::JNE:
+                {
+                    auto markIndex = ctx.readCode<uint32_t>();
+                    printf("JNE mark%u\n", markIndex);
+                    cc.jne(ctx.getLabel(markIndex, cc));
+                    break;
+                }
+                case ScriptFunction::JG:
+                {
+                    auto markIndex = ctx.readCode<uint32_t>();
+                    printf("JG mark%u\n", markIndex);
+                    cc.jg(ctx.getLabel(markIndex, cc));
+                    break;
+                }
+                case ScriptFunction::JGE:
+                {
+                    auto markIndex = ctx.readCode<uint32_t>();
+                    printf("JGE mark%u\n", markIndex);
+                    cc.jge(ctx.getLabel(markIndex, cc));
+                    break;
+                }
                 case ScriptFunction::MOV:
                 {
-                    auto dest = func.readCode<ValueIndex>(iptr);
-                    auto src = func.readCode<ValueIndex>(iptr);
-                    assert(dest.flags & ValueIndexFlags_Reg);
+                    auto dest = ctx.readCode<ValueIndex>();
+                    auto src = ctx.readCode<ValueIndex>();
+                    assert(dest.storageType == ValueStorageType_Reg);
+
+                    ctx.verifyValue(dest, cc);
                     printf("MOV ");
                     switch(getOperationType(dest, src))
                     {
                         case gp_gp:
                         {
-                            printf("r%hu r%hu\n", dest.index, src.index);
-                            auto destReg = getReg<Gp>(dest.index, typeToAsmType(dest.valueType), registers, cc);
-                            auto srcReg = getReg<Gp>(src.index, typeToAsmType(src.valueType), registers, cc);
-                            chkErr(cc.mov(destReg, srcReg));
+                            printf("gp%hu gp%hu\n", dest.index, src.index);
+                            auto destReg = ctx.getReg<Gp>(dest);
+                            auto srcReg = ctx.getReg<Gp>(src);
+                            cc.mov(destReg, srcReg);
                         }
                         break;
                         case gp_mem:
                         {
-                            printf("r%hu m%hu\n", dest.index, src.index);
-                            auto destReg = getReg<Gp>(dest.index, typeToAsmType(dest.valueType), registers, cc);
-                            auto srcMem = constants.at(src.index);
-                            chkErr(cc.mov(destReg, srcMem));
+                            printf("gp%hu mem%hu\n", dest.index, src.index);
+                            auto srcMem = ctx.constants[src.index];
+                            auto destReg = ctx.getReg<Gp>(dest);
+                            cc.mov(destReg, srcMem);
+                        }
+                            break;
+                        case gp_xmm:
+                        {
+                            printf("gp%hu xmm%hu\n", dest.index, src.index);
+                            auto destReg = ctx.getReg<Gp>(dest);
+                            auto srcReg = ctx.getReg<Xmm>(src);
+                            cc.cvttss2si(destReg, srcReg);
+                        }
+                            break;
+                        case xmm_xmm:
+                        {
+                            printf("xmm%hu xmm%hu\n", dest.index, src.index);
+                            auto destReg = ctx.getReg<Xmm>(dest);
+                            auto srcReg = ctx.getReg<Xmm>(src);
+                            cc.movss(destReg, srcReg);
+                        }
+                            break;
+                        case xmm_gp:
+                        {
+                            printf("xmm%hu gp%hu\n", dest.index, src.index);
+                            auto destReg = ctx.getReg<Xmm>(dest);
+                            auto srcReg = ctx.getReg<Gp>(src);
+                            cc.cvtsi2ss(destReg, srcReg);
+                        }
+                            break;
+                        case xmm_mem:
+                        {
+                            printf("xmm%hu mem%hu\n", dest.index, src.index);
+                            auto destReg = ctx.getReg<Xmm>(dest);
+                            auto srcMem = ctx.constants[src.index];
+                            cc.movss(destReg, srcMem);
                         }
                             break;
                         default:
@@ -222,27 +410,103 @@ Script* ScriptRuntime::assembleScript(IRScript* irScript)
                     }
                     break;
                 }
+                case ScriptFunction::SETE:
+                {
+                    auto regIndex = ctx.readCode<ValueIndex>();
+                    assert(regIndex.storageType == ValueStorageType_Reg);
+
+                    ctx.verifyValue(regIndex, cc);
+                    printf("SETE %hu", regIndex.index);
+                    cc.sete(ctx.getReg<Gp>(regIndex));
+                    break;
+                }
+                case ScriptFunction::SETNE:
+                {
+                    auto regIndex = ctx.readCode<ValueIndex>();
+                    assert(regIndex.storageType == ValueStorageType_Reg);
+
+                    ctx.verifyValue(regIndex, cc);
+                    printf("SETNE %hu", regIndex.index);
+                    cc.sete(ctx.getReg<Gp>(regIndex));
+                    break;
+                }
+                case ScriptFunction::SETA:
+                {
+                    auto regIndex = ctx.readCode<ValueIndex>();
+                    assert(regIndex.storageType == ValueStorageType_Reg);
+
+                    ctx.verifyValue(regIndex, cc);
+                    printf("SETA %hu", regIndex.index);
+                    cc.seta(ctx.getReg<Gp>(regIndex));
+                    break;
+                }
+                case ScriptFunction::SETG:
+                {
+                    auto regIndex = ctx.readCode<ValueIndex>();
+                    assert(regIndex.storageType == ValueStorageType_Reg);
+
+                    ctx.verifyValue(regIndex, cc);
+                    printf("SETG %hu", regIndex.index);
+                    cc.setg(ctx.getReg<Gp>(regIndex));
+                    break;
+                }
+                case ScriptFunction::SETAE:
+                {
+                    auto regIndex = ctx.readCode<ValueIndex>();
+                    assert(regIndex.storageType == ValueStorageType_Reg);
+
+                    ctx.verifyValue(regIndex, cc);
+                    printf("SETAE %hu", regIndex.index);
+                    cc.setae(ctx.getReg<Gp>(regIndex));
+                    break;
+                }
+                case ScriptFunction::SETGE:
+                {
+                    auto regIndex = ctx.readCode<ValueIndex>();
+                    assert(regIndex.storageType == ValueStorageType_Reg);
+
+                    ctx.verifyValue(regIndex, cc);
+                    printf("SETGE %hu", regIndex.index);
+                    cc.setge(ctx.getReg<Gp>(regIndex));
+                    break;
+                }
                 case ScriptFunction::ADD:
                 {
-                    auto a = func.readCode<ValueIndex>(iptr);
-                    auto b = func.readCode<ValueIndex>(iptr);
+                    auto a = ctx.readCode<ValueIndex>();
+                    auto b = ctx.readCode<ValueIndex>();
                     printf("ADD ");
                     switch(getOperationType(a, b))
                     {
                         case gp_gp:
                         {
-                            printf("r%hu r%hu\n", a.index, b.index);
-                            auto destReg = getReg<Gp>(a.index, typeToAsmType(a.valueType), registers, cc);
-                            auto srcReg = getReg<Gp>(b.index, typeToAsmType(b.valueType), registers, cc);
-                            chkErr(cc.add(destReg, srcReg));
+                            printf("gp%hu gp%hu\n", a.index, b.index);
+                            auto destReg = ctx.getReg<Gp>(a);
+                            auto srcReg = ctx.getReg<Gp>(b);
+                            cc.add(destReg, srcReg);
                         }
                             break;
                         case gp_mem:
                         {
-                            printf("r%hu m%hu\n", a.index, b.index);
-                            auto destReg = getReg<Gp>(a.index, typeToAsmType(a.valueType), registers, cc);
-                            auto srcMem = constants.at(b.index);
-                            chkErr(cc.add(destReg, srcMem));
+                            printf("gp%hu mem%hu\n", a.index, b.index);
+                            auto destReg = ctx.getReg<Gp>(a);
+                            auto srcMem = ctx.constants[b.index];
+                            cc.add(destReg, srcMem);
+                        }
+                            break;
+                        case xmm_xmm:
+                        {
+                            printf("xmm%hu xmm%hu\n", a.index, b.index);
+                            auto destReg = ctx.getReg<Xmm>(a);
+                            auto srcReg = ctx.getReg<Xmm>(b);
+                            cc.addss(destReg, srcReg);
+                        }
+                            break;
+                        case xmm_mem:
+                        {
+                            printf("xmm%hu mem%hu\n", a.index, b.index);
+                            auto destReg = ctx.getReg<Xmm>(a);
+                            auto srcReg = ctx.constants[b.index];
+                            cc.addss(destReg, srcReg);
                         }
                             break;
                         default:
@@ -252,25 +516,41 @@ Script* ScriptRuntime::assembleScript(IRScript* irScript)
                 }
                 case ScriptFunction::SUB:
                 {
-                    auto a = func.readCode<ValueIndex>(iptr);
-                    auto b = func.readCode<ValueIndex>(iptr);
+                    auto a = ctx.readCode<ValueIndex>();
+                    auto b = ctx.readCode<ValueIndex>();
                     printf("SUB ");
                     switch(getOperationType(a, b))
                     {
                         case gp_gp:
                         {
-                            printf("r%hu r%hu\n", a.index, b.index);
-                            auto destReg = getReg<Gp>(a.index, typeToAsmType(a.valueType), registers, cc);
-                            auto srcReg = getReg<Gp>(b.index, typeToAsmType(b.valueType), registers, cc);
-                            chkErr(cc.sub(destReg, srcReg));
+                            printf("gp%hu gp%hu\n", a.index, b.index);
+                            auto destReg = ctx.getReg<Gp>(a);
+                            auto srcReg = ctx.getReg<Gp>(b);
+                            cc.sub(destReg, srcReg);
                         }
                             break;
                         case gp_mem:
                         {
-                            printf("r%hu m%hu\n", a.index, b.index);
-                            auto destReg = getReg<Gp>(a.index, typeToAsmType(a.valueType), registers, cc);
-                            auto srcMem = constants.at(b.index);
-                            chkErr(cc.sub(destReg, srcMem));
+                            printf("gp%hu mem%hu\n", a.index, b.index);
+                            auto destReg = ctx.getReg<Gp>(a);
+                            auto srcMem = ctx.constants[b.index];
+                            cc.sub(destReg, srcMem);
+                        }
+                            break;
+                        case xmm_xmm:
+                        {
+                            printf("xmm%hu xmm%hu\n", a.index, b.index);
+                            auto destReg = ctx.getReg<Xmm>(a);
+                            auto srcReg = ctx.getReg<Xmm>(b);
+                            cc.subss(destReg, srcReg);
+                        }
+                            break;
+                        case xmm_mem:
+                        {
+                            printf("xmm%hu mem%hu\n", a.index, b.index);
+                            auto destReg = ctx.getReg<Xmm>(a);
+                            auto srcMem = ctx.constants[b.index];
+                            cc.subss(destReg, srcMem);
                         }
                             break;
                         default:
@@ -280,25 +560,41 @@ Script* ScriptRuntime::assembleScript(IRScript* irScript)
                 }
                 case ScriptFunction::MUL:
                 {
-                    auto a = func.readCode<ValueIndex>(iptr);
-                    auto b = func.readCode<ValueIndex>(iptr);
+                    auto a = ctx.readCode<ValueIndex>();
+                    auto b = ctx.readCode<ValueIndex>();
                     printf("MUL ");
                     switch(getOperationType(a, b))
                     {
                         case gp_gp:
                         {
-                            printf("r%hu r%hu\n", a.index, b.index);
-                            auto destReg = getReg<Gp>(a.index, typeToAsmType(a.valueType), registers, cc);
-                            auto srcReg = getReg<Gp>(b.index, typeToAsmType(b.valueType), registers, cc);
-                            chkErr(cc.imul(destReg, srcReg));
+                            printf("gp%hu gp%hu\n", a.index, b.index);
+                            auto destReg = ctx.getReg<Gp>(a);
+                            auto srcReg = ctx.getReg<Gp>(b);
+                            cc.imul(destReg, srcReg);
                         }
                             break;
                         case gp_mem:
                         {
-                            printf("r%hu m%hu\n", a.index, b.index);
-                            auto destReg = getReg<Gp>(a.index, typeToAsmType(a.valueType), registers, cc);
-                            auto srcMem = constants.at(b.index);
-                            chkErr(cc.imul(destReg, srcMem));
+                            printf("gp%hu mem%hu\n", a.index, b.index);
+                            auto destReg = ctx.getReg<Gp>(a);
+                            auto srcMem = ctx.constants[b.index];
+                            cc.imul(destReg, srcMem);
+                        }
+                            break;
+                        case xmm_xmm:
+                        {
+                            printf("xmm%hu xmm%hu\n", a.index, b.index);
+                            auto destReg = ctx.getReg<Xmm>(a);
+                            auto srcReg = ctx.getReg<Xmm>(b);
+                            cc.mulss(destReg, srcReg);
+                        }
+                            break;
+                        case xmm_mem:
+                        {
+                            printf("xmm%hu mem%hu\n", a.index, b.index);
+                            auto destReg = ctx.getReg<Xmm>(a);
+                            auto srcMem = ctx.constants[b.index];
+                            cc.mulss(destReg, srcMem);
                         }
                             break;
                         default:
@@ -308,25 +604,41 @@ Script* ScriptRuntime::assembleScript(IRScript* irScript)
                 }
                 case ScriptFunction::DIV:
                 {
-                    auto a = func.readCode<ValueIndex>(iptr);
-                    auto b = func.readCode<ValueIndex>(iptr);
+                    auto a = ctx.readCode<ValueIndex>();
+                    auto b = ctx.readCode<ValueIndex>();
                     printf("DIV ");
                     switch(getOperationType(a, b))
                     {
                         case gp_gp:
                         {
-                            printf("r%hu r%hu\n", a.index, b.index);
-                            auto destReg = getReg<Gp>(a.index, typeToAsmType(a.valueType), registers, cc);
-                            auto srcReg = getReg<Gp>(b.index, typeToAsmType(b.valueType), registers, cc);
-                            chkErr(cc.idiv(cc.newInt32(),destReg, srcReg));
+                            printf("gp%hu gp%hu\n", a.index, b.index);
+                            auto destReg = ctx.getReg<Gp>(a);
+                            auto srcReg = ctx.getReg<Gp>(b);
+                            cc.idiv(cc.newInt32(),destReg, srcReg);
                         }
                             break;
                         case gp_mem:
                         {
-                            printf("r%hu m%hu\n", a.index, b.index);
-                            auto destReg = getReg<Gp>(a.index, typeToAsmType(a.valueType), registers, cc);
-                            auto srcMem = constants.at(b.index);
-                            chkErr(cc.idiv(cc.newInt32(),destReg, srcMem));
+                            printf("gp%hu mem%hu\n", a.index, b.index);
+                            auto destReg = ctx.getReg<Gp>(a);
+                            auto srcMem = ctx.constants[b.index];
+                            cc.idiv(cc.newInt32(),destReg, srcMem);
+                        }
+                            break;
+                        case xmm_xmm:
+                        {
+                            printf("xmm%hu xmm%hu\n", a.index, b.index);
+                            auto destReg = ctx.getReg<Xmm>(a);
+                            auto srcReg = ctx.getReg<Xmm>(b);
+                            cc.divss(destReg, srcReg);
+                        }
+                            break;
+                        case xmm_mem:
+                        {
+                            printf("xmm%hu mem%hu\n", a.index, b.index);
+                            auto destReg = ctx.getReg<Xmm>(a);
+                            auto srcMem = ctx.constants[b.index];
+                            cc.divss(destReg, srcMem);
                         }
                             break;
                         default:
@@ -335,13 +647,13 @@ Script* ScriptRuntime::assembleScript(IRScript* irScript)
                     break;
                 }
                 default:
-                    throw std::runtime_error("unknown op: " + std::to_string(code[iptr]));
+                    throw std::runtime_error("unknown op code " + std::to_string(op));
             }
         }
-        chkErr(cc.endFunc());
-        chkErr(cc.finalize());
+        cc.endFunc();
+        cc.finalize();
         void* fPtr = nullptr;
-        chkErr(_runtime.add(&fPtr, &ch));
+        _runtime.add(&fPtr, &ch);
 
         script->functionNames.insert({func.name, script->functions.size()});
         script->functions.push_back(fPtr);

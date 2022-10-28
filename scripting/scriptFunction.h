@@ -10,23 +10,41 @@
 #include <string>
 #include <unordered_map>
 #include "baseTypes.h"
+#include "aotNode/aotNode.h"
 
 class ScriptFunction
 {
 public:
     enum Operand : uint8_t
     {
-        RET=0,  //Exit function
-        RETV=1, // (uin32_t register) Return int32 value
-        LOADC=2,  // (uint32_t register, uint32_t constantIndex) load constant defined by byte array into the register
+        RET,  //Exit function
+        RETV, // (uin32_t value) Return int32 value
+        LOADC,  // (uint32_t value, uint32_t constantIndex) load constant defined by byte array into the value
 
-        MOV=3,   // (uin32_t register,  uin32_t register) move gp register to another register.
-        ADD=4,   // (uin32_t register,  uin32_t register) add registers.
-        SUB=5,   // (uin32_t register,  uin32_t register) subtract registers.
-        INC=6,   // (uin32_t register)  increment register.
-        DEC=7,   // (uint32_t register) decrement register.
-        MUL=8,   // (uin32_t register,  uin32_t register) multiply registers.
-        DIV=9,   // (uin32_t register,  uin32_t register) divide registers.
+        SETE,
+        SETNE,
+        SETA,
+        SETG,
+        SETAE,
+        SETGE,
+
+        CMP,
+        TEST0,
+        MARK,
+        JMP,
+        JE,
+        JNE,
+        JG,
+        JGE,
+
+        MOV,   // (uin32_t value,  uin32_t value) move value to another value.
+
+        ADD,   // (uin32_t value,  uin32_t value) add values.
+        SUB,   // (uin32_t value,  uin32_t value) subtract values.
+        INC,   // (uin32_t value)  increment value.
+        DEC,   // (uint32_t value) decrement value.
+        MUL,   // (uin32_t value,  uin32_t value) multiply values.
+        DIV,   // (uin32_t value,  uin32_t value) divide values.
     };
 
     std::vector<uint8_t> code;
@@ -38,6 +56,7 @@ public:
     template<typename A>
     void appendCode(Operand op, A a)
     {
+        static_assert(!std::is_same<A, AotNode>());
         size_t index = code.size();
         code.resize(code.size() + sizeof(op) + sizeof(a));
         code[index] = op;
@@ -48,6 +67,7 @@ public:
     template<typename A, typename B>
     void appendCode(Operand op, A a, B b)
     {
+        static_assert(!std::is_same<A, AotNode>() && !std::is_same<B, AotNode>());
         size_t index = code.size();
         code.resize(code.size() + sizeof(op) + sizeof(a) + sizeof(b));
         code[index] = op;

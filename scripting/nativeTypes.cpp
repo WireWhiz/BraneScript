@@ -4,23 +4,25 @@
 
 #include "nativeTypes.h"
 
-std::vector<TypeDef*> nativeTypes({new IntDef()});
+std::vector<TypeDef*> nativeTypes({new BoolDef(), new IntDef(), new FloatDef()});
 std::vector<TypeDef*> getNativeTypes()
 {
     return nativeTypes;
 };
 
 
-TypeDef* getTypeDef(ValueType type)
+TypeDef* getNativeTypeDef(ValueType type)
 {
     switch(type)
     {
-        case Int32:
+        case Bool:
             return nativeTypes[0];
+        case Int32:
+            return nativeTypes[1];
         case Int64:
             break;
         case Float32:
-            break;
+            return nativeTypes[2];
         case Float64:
             break;
         case Ptr:
@@ -28,6 +30,22 @@ TypeDef* getTypeDef(ValueType type)
     }
     return nullptr;
 };
+
+
+const char* BoolDef::name() const
+{
+    return "bool";
+}
+
+uint32_t BoolDef::size() const
+{
+    return sizeof(bool);
+}
+
+ValueType BoolDef::type() const
+{
+    return Bool;
+}
 
 const char* IntDef::name() const
 {
@@ -41,5 +59,20 @@ uint32_t IntDef::size() const
 
 ValueType IntDef::type() const
 {
-    return ValueType::Int32;
+    return Int32;
+}
+
+const char* FloatDef::name() const
+{
+    return "float";
+}
+
+uint32_t FloatDef::size() const
+{
+    return sizeof(float);
+}
+
+ValueType FloatDef::type() const
+{
+    return Float32;
 }
