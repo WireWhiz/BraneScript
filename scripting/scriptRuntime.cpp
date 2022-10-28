@@ -614,7 +614,9 @@ Script* ScriptRuntime::assembleScript(IRScript* irScript)
                             printf("gp%hu gp%hu\n", a.index, b.index);
                             auto destReg = ctx.getReg<Gp>(a);
                             auto srcReg = ctx.getReg<Gp>(b);
-                            cc.idiv(cc.newInt32(),destReg, srcReg);
+                            auto remainder = cc.newInt32();
+                            cc.cdq(remainder, destReg);
+                            cc.idiv(remainder, destReg, srcReg);
                         }
                             break;
                         case gp_mem:
@@ -622,7 +624,9 @@ Script* ScriptRuntime::assembleScript(IRScript* irScript)
                             printf("gp%hu mem%hu\n", a.index, b.index);
                             auto destReg = ctx.getReg<Gp>(a);
                             auto srcMem = ctx.constants[b.index];
-                            cc.idiv(cc.newInt32(),destReg, srcMem);
+                            auto remainder = cc.newInt32();
+                            cc.cdq(remainder, destReg);
+                            cc.idiv(remainder, destReg, srcMem);
                         }
                             break;
                         case xmm_xmm:
