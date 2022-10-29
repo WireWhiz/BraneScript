@@ -9,7 +9,11 @@ int main(const int argc, const char** argv)
 {
     std::string testString = R"(
 bool main(float a, int b) {
-    bool condition = a < b;
+    bool condition;
+    if(a > b)
+    {
+        condition = true;
+    }
     return condition;
 }
 )";

@@ -34,7 +34,9 @@ public:
         JMP,
         JE,
         JNE,
+        JA,
         JG,
+        JAE,
         JGE,
 
         MOV,   // (uin32_t value,  uin32_t value) move value to another value.

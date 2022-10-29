@@ -43,13 +43,11 @@ private:
     };
     std::list<Scope> _scopes;
 
-    std::any visitProgram(braneParser::ProgramContext *context);
+    std::any visitProgram(braneParser::ProgramContext *context) override;
 
-    std::any visitStatement(braneParser::StatementContext *context);
+    std::any visitInclude(braneParser::IncludeContext *context) override;
 
-    std::any visitInclude(braneParser::IncludeContext *context);
-
-    std::any visitConstString(braneParser::ConstStringContext *context);
+    std::any visitConstString(braneParser::ConstStringContext *context) override;
 
     std::any visitInlineScope(braneParser::InlineScopeContext *context) override;
 
@@ -75,7 +73,7 @@ private:
 
     std::any visitFunction(braneParser::FunctionContext *ctx) override;
 
-    std::any visitExprList(braneParser::ExprListContext *ctx) override;
+    std::any visitExprStatement(braneParser::ExprStatementContext *context) override;
 
     std::any visitReturnVoid(braneParser::ReturnVoidContext *ctx) override;
 

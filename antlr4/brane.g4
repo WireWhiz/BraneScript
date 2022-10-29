@@ -15,15 +15,27 @@ DIV     : '/';
 ADD     : '+';
 SUB     : '-';
 
-program     : (statement+ EOF | EOF);
-statement   : function
+program     : (progSegment+ EOF | EOF);
+
+progSegment : function
             | preprocessor NEWLINE
+            //Possibly globals here as well
             ;
+
+declaration : type=ID id=ID;
 argumentList: declaration (',' declaration)*;
-function    : type=ID id=ID '(' arguments=argumentList? ')' '{' expressions=exprList '}';
+function    : type=ID id=ID '(' arguments=argumentList? ')' '{' statements=statement* '}';
+
 preprocessor: '#include' content=.*? NEWLINE                                #include;
-exprList    : expression*;
-expression  : INT                                         #constInt
+
+statement   : expression ';'                                                #exprStatement
+            | '{' statement* '}'                                            #scope
+            | 'return' expression ';'                                       #returnVal
+            | 'return' ';'                                                  #returnVoid
+            | 'if' '(' cond=expression ')' operation=statement              #if
+            ;
+
+expression  : INT                                                           #constInt
             | FLOAT                                                         #constFloat
             | STRING                                                        #constString
             | ('true'|'false')                                              #constBool
@@ -33,12 +45,7 @@ expression  : INT                                         #constInt
             | left=expression op=(ADD | SUB) right=expression               #addsub
             | left=expression op=('==' | '!=' | '<' | '>' | '<=' | '>=') right=expression             #comparison
             | '(' expression ')'                                            #inlineScope
-            | '{' exprList '}'                                              #scope
             | '(' ID ')' expression                                         #cast
-            | 'if' '(' cond=expression ')' operation=expression             #if
-            | dest=expression '=' expr=expression ';'                       #assignment
-            | 'return' expression ';'                                       #returnVal
-            | 'return' ';'                                                  #returnVoid
+            | dest=expression '=' expr=expression                           #assignment
             ;
-declaration : type=ID id=ID
-            ;
+

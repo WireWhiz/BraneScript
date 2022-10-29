@@ -333,11 +333,25 @@ Script* ScriptRuntime::assembleScript(IRScript* irScript)
                     cc.jne(ctx.getLabel(markIndex, cc));
                     break;
                 }
+                case ScriptFunction::JA:
+                {
+                    auto markIndex = ctx.readCode<uint32_t>();
+                    printf("JA mark%u\n", markIndex);
+                    cc.ja(ctx.getLabel(markIndex, cc));
+                    break;
+                }
                 case ScriptFunction::JG:
                 {
                     auto markIndex = ctx.readCode<uint32_t>();
                     printf("JG mark%u\n", markIndex);
                     cc.jg(ctx.getLabel(markIndex, cc));
+                    break;
+                }
+                case ScriptFunction::JAE:
+                {
+                    auto markIndex = ctx.readCode<uint32_t>();
+                    printf("JAE mark%u\n", markIndex);
+                    cc.jae(ctx.getLabel(markIndex, cc));
                     break;
                 }
                 case ScriptFunction::JGE:

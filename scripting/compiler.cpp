@@ -32,11 +32,6 @@ IRScript* Compiler::compile(const std::string& script)
     return _ctx->script;
 }
 
-std::any Compiler::visitStatement(braneParser::StatementContext* context)
-{
-    return braneBaseVisitor::visitStatement(context);
-}
-
 std::any Compiler::visitInclude(braneParser::IncludeContext* context)
 {
     return braneBaseVisitor::visitInclude(context);
@@ -65,9 +60,11 @@ std::any Compiler::visitAssignment(braneParser::AssignmentContext* context)
 std::any Compiler::visitScope(braneParser::ScopeContext* context)
 {
     pushScope();
-    auto operations = std::any_cast<std::vector<AotNode*>>(visit(context->exprList()));
+    std::vector<AotNode*> operations;
+    for(auto stmt : context->statement())
+        operations.push_back(std::any_cast<AotNode*>(visit(stmt)));
     popScope();
-    return (AotNode*)new AotScope(operations);
+    return (AotNode*)new AotScope(std::move(operations));
 }
 
 std::any Compiler::visitConstFloat(braneParser::ConstFloatContext* context)
@@ -153,10 +150,11 @@ std::any Compiler::visitFunction(braneParser::FunctionContext* ctx)
         registerLocalValue(argument->id->getText(), type, false);
     }
 
-    for(auto* expression : std::any_cast<std::vector<AotNode*>>(visit(ctx->expressions)))
+    for(auto* stmtCtx : ctx->statement())
     {
+        auto stmt = std::any_cast<AotNode*>(visit(stmtCtx));
         //TODO optimize toggle
-        auto expr = std::unique_ptr<AotNode>(expression);
+        auto expr = std::unique_ptr<AotNode>(stmt);
 
         AotNode* optimizedTree = expr->optimize();
         if(expr.get() != optimizedTree)
@@ -191,14 +189,6 @@ std::any Compiler::visitReturnVal(braneParser::ReturnValContext* ctx)
     if(retVal->resType()->name() != _ctx->function->returnType)
         retVal = new AotCastNode(retVal, _types.at(_ctx->function->returnType));
     return (AotNode*)new AotReturnValueNode(retVal);
-}
-
-std::any Compiler::visitExprList(braneParser::ExprListContext* ctx)
-{
-    std::vector<AotNode*> nodes;
-    for(auto expr : ctx->expression())
-        nodes.push_back(std::any_cast<AotNode*>(visit(expr)));
-    return nodes;
 }
 
 void Compiler::registerType(TypeDef* type)
@@ -280,6 +270,11 @@ std::any Compiler::visitComparison(braneParser::ComparisonContext* context)
 
 
     return (AotNode*)new AotCompareNode(mode, a, b);
+}
+
+std::any Compiler::visitExprStatement(braneParser::ExprStatementContext* context)
+{
+    return visit(context->expression());
 }
 
 CompilerCtx::CompilerCtx(Compiler& c, IRScript* s) : compiler(c), script(s)
