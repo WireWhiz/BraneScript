@@ -14,12 +14,19 @@ bool main(float a, int b) {
     {
         condition = true;
     }
-    return condition;
+    //return condition;
 }
 )";
 
     Compiler compiler;
     auto* ir = compiler.compile(testString);
+    if(!ir)
+    {
+        std::cout << "Failed to compile script!\n";
+        for(auto& compileError: compiler.errors())
+            std::cerr << compileError << std::endl;
+        return 1;
+    }
 
     ScriptRuntime rt;
     Script* testScript = rt.assembleScript(ir);

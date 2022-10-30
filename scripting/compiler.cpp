@@ -10,26 +10,83 @@
 #include "aotNode/aotValueNodes.h"
 #include "aotNode/aotFlowNodes.h"
 
+#define PROPAGATE_NULL(node) \
+    if(!node) return (AotNode*)nullptr;
+
+class LexerErrorListener : public antlr4::BaseErrorListener {
+
+    Compiler& _compiler;
+public:
+    LexerErrorListener(Compiler& compiler) : _compiler(compiler){};
+    void syntaxError(antlr4::Recognizer *recognizer, antlr4::Token * offendingSymbol, size_t line, size_t charPositionInLine,
+                             const std::string &msg, std::exception_ptr e) override
+    {
+        if(offendingSymbol)
+            _compiler.throwError(offendingSymbol, msg);
+        else
+        {
+            size_t charIndex = 0;
+            size_t lineIndex = 0;
+            while(lineIndex < line - 1)
+            {
+                if((*_compiler._currentFile)[charIndex] == '\n')
+                    ++lineIndex;
+                charIndex++;
+            }
+            _compiler.throwError((std::string)"Unknown Token \"" + (*_compiler._currentFile)[charIndex + charPositionInLine] + "\" on line " + std::to_string(line) + ":" + std::to_string(charPositionInLine));
+        }
+    }
+};
+
+class ParserErrorListener : public antlr4::BaseErrorListener
+{
+    Compiler& _compiler;
+public:
+    ParserErrorListener(Compiler& compiler) : _compiler(compiler)
+    {
+
+    }
+    void syntaxError(antlr4::Recognizer *recognizer, antlr4::Token * offendingSymbol, size_t line, size_t charPositionInLine,
+                     const std::string &msg, std::exception_ptr e) override
+    {
+        if(offendingSymbol)
+            _compiler.throwError(offendingSymbol, msg);
+    }
+};
+
 Compiler::Compiler()
 {
     for(auto type : getNativeTypes())
         registerType(type);
 }
 
+IRScript* Compiler::compile(const std::string& script)
+{
+    _currentFile = &script;
+    antlr4::ANTLRInputStream input(script);
+
+    LexerErrorListener lexErrListener(*this);
+    braneLexer lexer(&input);
+    lexer.removeErrorListeners();
+    lexer.addErrorListener(&lexErrListener);
+    antlr4::CommonTokenStream tokens(&lexer);
+
+    ParserErrorListener parserErrListener(*this);
+    braneParser parser(&tokens);
+    parser.removeErrorListeners();
+    parser.addErrorListener(&parserErrListener);
+
+    _ctx = std::make_unique<CompilerCtx>(*this, new IRScript());
+    visit(parser.program());
+
+    if(contextValid())
+        return _ctx->script;
+    return nullptr;
+}
+
 std::any Compiler::visitProgram(braneParser::ProgramContext* context)
 {
     return braneBaseVisitor::visitProgram(context);
-}
-
-IRScript* Compiler::compile(const std::string& script)
-{
-    antlr4::ANTLRInputStream input(script);
-    braneLexer lexer(&input);
-    antlr4::CommonTokenStream tokens(&lexer);
-    braneParser parser(&tokens);
-    _ctx = std::make_unique<CompilerCtx>(*this, new IRScript());
-    visit(parser.program());
-    return _ctx->script;
 }
 
 std::any Compiler::visitInclude(braneParser::IncludeContext* context)
@@ -50,7 +107,9 @@ std::any Compiler::visitInlineScope(braneParser::InlineScopeContext* context)
 std::any Compiler::visitAssignment(braneParser::AssignmentContext* context)
 {
     auto* rValue= std::any_cast<AotNode*>(visit(context->expr));
+    PROPAGATE_NULL(rValue);
     auto* lValue = std::any_cast<AotNode*>(visit(context->dest));
+    PROPAGATE_NULL(rValue);
     if(!lValue)
         throw std::runtime_error("Could not find identifier");
 
@@ -62,7 +121,11 @@ std::any Compiler::visitScope(braneParser::ScopeContext* context)
     pushScope();
     std::vector<AotNode*> operations;
     for(auto stmt : context->statement())
-        operations.push_back(std::any_cast<AotNode*>(visit(stmt)));
+    {
+        auto* operation = std::any_cast<AotNode*>(visit(stmt));
+        PROPAGATE_NULL(operation);
+        operations.push_back(operation);
+    }
     popScope();
     return (AotNode*)new AotScope(std::move(operations));
 }
@@ -75,7 +138,9 @@ std::any Compiler::visitConstFloat(braneParser::ConstFloatContext* context)
 std::any Compiler::visitAddsub(braneParser::AddsubContext* context)
 {
     auto left  = std::any_cast<AotNode*>(visit(context->left));
+    PROPAGATE_NULL(left);
     auto right = std::any_cast<AotNode*>(visit(context->right));
+    PROPAGATE_NULL(right);
     AotNode* node = nullptr;
     if(context->op->getText() == "+")
         node = new AotAddNode(left, right);
@@ -87,7 +152,9 @@ std::any Compiler::visitAddsub(braneParser::AddsubContext* context)
 std::any Compiler::visitMuldiv(braneParser::MuldivContext* context)
 {
     auto left  = std::any_cast<AotNode*>(visit(context->left));
+    PROPAGATE_NULL(left);
     auto right = std::any_cast<AotNode*>(visit(context->right));
+    PROPAGATE_NULL(right);
     AotNode* node = nullptr;
     if(context->op->getText() == "*")
         node = new AotMulNode(left, right);
@@ -105,7 +172,10 @@ std::any Compiler::visitId(braneParser::IdContext* context)
 {
     AotNode* node = getValueNode(context->getText());
     if(!node)
-        throw std::runtime_error("could not find identifier: " + std::string(context->getText()));
+    {
+        throwError(context->start, "Undefined identifier");
+        return (AotNode*)nullptr;
+    }
     return node;
 }
 
@@ -117,11 +187,16 @@ std::any Compiler::visitDecl(braneParser::DeclContext* context)
 std::any Compiler::visitDeclaration(braneParser::DeclarationContext* context)
 {
     auto name = context->id->getText();
+    if(!getType(context->type->getText()))
+    {
+        throwError(context->type, "Undefined type");
+        return (AotNode*)nullptr;
+    }
     registerLocalValue(name, context->type->getText(), false);
     return getValueNode(name);
 }
 
-const std::vector<Compiler::CompileError>& Compiler::errors() const
+const std::vector<std::string>& Compiler::errors() const
 {
     return _errors;
 }
@@ -138,11 +213,22 @@ std::any Compiler::visitFunction(braneParser::FunctionContext* ctx)
 
     //TODO: TypeAssert()
     _ctx->function->returnType = ctx->type->getText();
+    if(!getType(_ctx->function->returnType))
+    {
+        throwError(ctx->type, "Unknown return type");
+        return {};
+    }
+
     _ctx->function->name = ctx->id->getText();
     pushScope();
     for(auto argument : ctx->arguments->declaration())
     {
         std::string type = argument->type->getText();
+        if(!getType(type))
+        {
+            throwError(argument->type, "Unknown argument type");
+            return {};
+        }
         _ctx->function->arguments.push_back(type);
 
         AotValue value = _ctx->newReg(type, false);
@@ -150,11 +236,15 @@ std::any Compiler::visitFunction(braneParser::FunctionContext* ctx)
         registerLocalValue(argument->id->getText(), type, false);
     }
 
+    bool previousReturnVal = _ctx->returnCalled;
+    _ctx->returnCalled = false;
     for(auto* stmtCtx : ctx->statement())
     {
         auto stmt = std::any_cast<AotNode*>(visit(stmtCtx));
+
         //TODO optimize toggle
         auto expr = std::unique_ptr<AotNode>(stmt);
+        PROPAGATE_NULL(expr);
 
         AotNode* optimizedTree = expr->optimize();
         if(expr.get() != optimizedTree)
@@ -162,13 +252,21 @@ std::any Compiler::visitFunction(braneParser::FunctionContext* ctx)
 
         expr->generateBytecode(*_ctx);
     }
+    if(!_ctx->returnCalled && _ctx->function->returnType != "void")
+    {
+        size_t begin = ctx->start->getStartIndex();
+        size_t end = ctx->stop->getStopIndex() + 1;
+        throwError(ctx->getStart()->getLine(), ctx->getStart()->getCharPositionInLine(), "\n" + _currentFile->substr(begin, end - begin), "Function missing call to return");
+        return {};
+    }
+    _ctx->returnCalled = previousReturnVal;
     popScope();
 
     uint32_t functionIndex = _ctx->script->localFunctions.size();
     _ctx->script->localFunctions.push_back(std::move(*_ctx->function));
     delete _ctx->function;
     _ctx->function = previousFunction;
-    return functionIndex;
+    return {};
 }
 
 std::any Compiler::visitCast(braneParser::CastContext* ctx)
@@ -187,7 +285,10 @@ std::any Compiler::visitReturnVal(braneParser::ReturnValContext* ctx)
 {
     auto retVal = std::any_cast<AotNode*>(visit(ctx->expression()));
     if(retVal->resType()->name() != _ctx->function->returnType)
+    {
+
         retVal = new AotCastNode(retVal, _types.at(_ctx->function->returnType));
+    }
     return (AotNode*)new AotReturnValueNode(retVal);
 }
 
@@ -275,6 +376,37 @@ std::any Compiler::visitComparison(braneParser::ComparisonContext* context)
 std::any Compiler::visitExprStatement(braneParser::ExprStatementContext* context)
 {
     return visit(context->expression());
+}
+
+void Compiler::throwError(const std::string& message)
+{
+    _errors.push_back(message);
+}
+
+void Compiler::throwError(antlr4::Token* token, const std::string& message)
+{
+    assert(token);
+    throwError(token->getLine(), token->getCharPositionInLine(), token->getText(), message);
+}
+
+void Compiler::throwError(size_t line, size_t position,  const std::string& context,  const std::string& message)
+{
+    std::string error = "Compile Error at [" + std::to_string(line) + ":" + std::to_string(position) + "] "+ message;
+    if(!context.empty())
+        error += ": " + context;
+    _errors.push_back(std::move(error));
+}
+
+bool Compiler::contextValid()
+{
+    return _errors.empty();
+}
+
+TypeDef* Compiler::getType(const std::string& typeName)
+{
+    if(!_types.count(typeName))
+        return nullptr;
+    return _types.at(typeName);
 }
 
 CompilerCtx::CompilerCtx(Compiler& c, IRScript* s) : compiler(c), script(s)
@@ -387,3 +519,4 @@ void CompilerCtx::setFunction(ScriptFunction* f)
     markIndex = 0;
     lValues.clear();
 }
+

@@ -21,18 +21,11 @@ class TypeDef;
 class CompilerCtx;
 class Compiler : public braneBaseVisitor
 {
-
-public:
-    struct CompileError
-    {
-        size_t start;
-        size_t end;
-        std::string message;
-    };
 private:
-    std::vector<CompileError> _errors;
-
+    const std::string* _currentFile = nullptr;
     std::unique_ptr<CompilerCtx> _ctx;
+    std::vector<std::string> _errors;
+
     std::unordered_map<std::string, TypeDef*> _types;
 
     uint16_t _lValueIndex = 0;
@@ -92,12 +85,21 @@ private:
     void pushScope();
     void popScope();
 
+    friend class LexerErrorListener;
+    friend class ParserErrorListener;
+
+    void throwError(const std::string& message);
+    void throwError(antlr4::Token* token, const std::string& message);
+    void throwError(size_t line, size_t position, const std::string& context, const std::string& message);
+    bool contextValid();
 public:
+
     Compiler();
     IRScript* compile(const std::string& script);
-    const std::vector<CompileError>& errors() const;
+    const std::vector<std::string>& errors() const;
 
     void registerType(TypeDef* type);
+    TypeDef* getType(const std::string& typeName);
     const std::unordered_map<std::string, TypeDef*>& types() const;
 };
 
@@ -110,6 +112,7 @@ struct CompilerCtx
 
     IRScript* script = nullptr;
     ScriptFunction* function = nullptr;
+    bool returnCalled = false;
     std::map<uint16_t, AotValue> lValues;
 
     CompilerCtx(Compiler& c, IRScript* s);
@@ -121,6 +124,7 @@ struct CompilerCtx
     AotValue newConst(ValueType type, uint8_t flags = AotValue::Const | AotValue::Constexpr);
     AotValue castTemp(const AotValue& value);
     AotValue castReg(const AotValue& value);
+
 };
 
 
