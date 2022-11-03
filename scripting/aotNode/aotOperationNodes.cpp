@@ -302,7 +302,7 @@ AotAssignNode::AotAssignNode(AotNode* lvalue, AotNode* rvalue) : AotDualArgNode(
 AotValue AotAssignNode::generateBytecode(CompilerCtx& ctx) const
 {
     auto rValue = argB->generateBytecode(ctx);
-    rValue = ctx.castReg(rValue);
+    rValue = ctx.castValue(rValue);
     auto lValue = argA->generateBytecode(ctx);
 
     ctx.function->appendCode(ScriptFunction::MOV, lValue.valueIndex, rValue.valueIndex);

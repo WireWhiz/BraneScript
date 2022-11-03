@@ -33,6 +33,7 @@ statement   : expression ';'                                                #exp
             | 'return' expression ';'                                       #returnVal
             | 'return' ';'                                                  #returnVoid
             | 'if' '(' cond=expression ')' operation=statement              #if
+            | 'while' '(' cond=expression ')' operation=statement           #while
             ;
 
 expression  : INT                                                           #constInt

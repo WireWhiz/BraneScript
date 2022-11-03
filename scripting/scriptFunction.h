@@ -35,9 +35,13 @@ public:
         JE,
         JNE,
         JA,
+        JB,
         JG,
+        JL,
         JAE,
+        JBE,
         JGE,
+        JLE,
 
         MOV,   // (uin32_t value,  uin32_t value) move value to another value.
 

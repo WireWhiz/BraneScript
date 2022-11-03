@@ -158,29 +158,6 @@ AotValue AotValueNode::generateBytecode(CompilerCtx& ctx) const
     if(ctx.lValues.count(_lValueIndex))
         return ctx.lValues.at(_lValueIndex);
     AotValue value = ctx.newReg(_resType, _constant & AotValue::Const);
-    auto defaultValue = ctx.newConst(_resType->type(), AotValue::Constexpr | AotValue::Const);
-    switch(_resType->type())
-    {
-        case Bool:
-            ctx.function->appendCode(ScriptFunction::LOADC, defaultValue.valueIndex, (uint8_t)false);
-            break;
-        case Int32:
-            ctx.function->appendCode(ScriptFunction::LOADC, defaultValue.valueIndex, (int32_t)0);
-            break;
-        case Int64:
-            ctx.function->appendCode(ScriptFunction::LOADC, defaultValue.valueIndex, (int64_t)0);
-            break;
-        case Float32:
-            ctx.function->appendCode(ScriptFunction::LOADC, defaultValue.valueIndex, (float)0.0f);
-            break;
-        case Float64:
-            ctx.function->appendCode(ScriptFunction::LOADC, defaultValue.valueIndex, (double)0.0);
-            break;
-        case Ptr:
-            ctx.function->appendCode(ScriptFunction::LOADC, defaultValue.valueIndex, (uint32_t)0);
-            break;
-    }
-    ctx.function->appendCode(ScriptFunction::MOV, value.valueIndex, defaultValue.valueIndex);
     ctx.lValues.insert({_lValueIndex, value});
     return value;
 }

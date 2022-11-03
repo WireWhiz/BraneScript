@@ -319,6 +319,13 @@ Script* ScriptRuntime::assembleScript(IRScript* irScript)
                     }
                     break;
                 }
+                case ScriptFunction::JMP:
+                {
+                    auto markIndex = ctx.readCode<uint32_t>();
+                    printf("JMP mark%u\n", markIndex);
+                    cc.jmp(ctx.getLabel(markIndex, cc));
+                    break;
+                }
                 case ScriptFunction::JE:
                 {
                     auto markIndex = ctx.readCode<uint32_t>();
@@ -340,11 +347,25 @@ Script* ScriptRuntime::assembleScript(IRScript* irScript)
                     cc.ja(ctx.getLabel(markIndex, cc));
                     break;
                 }
+                case ScriptFunction::JB:
+                {
+                    auto markIndex = ctx.readCode<uint32_t>();
+                    printf("JB mark%u\n", markIndex);
+                    cc.jb(ctx.getLabel(markIndex, cc));
+                    break;
+                }
                 case ScriptFunction::JG:
                 {
                     auto markIndex = ctx.readCode<uint32_t>();
                     printf("JG mark%u\n", markIndex);
                     cc.jg(ctx.getLabel(markIndex, cc));
+                    break;
+                }
+                case ScriptFunction::JL:
+                {
+                    auto markIndex = ctx.readCode<uint32_t>();
+                    printf("JL mark%u\n", markIndex);
+                    cc.jl(ctx.getLabel(markIndex, cc));
                     break;
                 }
                 case ScriptFunction::JAE:
@@ -354,11 +375,25 @@ Script* ScriptRuntime::assembleScript(IRScript* irScript)
                     cc.jae(ctx.getLabel(markIndex, cc));
                     break;
                 }
+                case ScriptFunction::JBE:
+                {
+                    auto markIndex = ctx.readCode<uint32_t>();
+                    printf("JBE mark%u\n", markIndex);
+                    cc.jbe(ctx.getLabel(markIndex, cc));
+                    break;
+                }
                 case ScriptFunction::JGE:
                 {
                     auto markIndex = ctx.readCode<uint32_t>();
                     printf("JGE mark%u\n", markIndex);
                     cc.jge(ctx.getLabel(markIndex, cc));
+                    break;
+                }
+                case ScriptFunction::JLE:
+                {
+                    auto markIndex = ctx.readCode<uint32_t>();
+                    printf("JLE mark%u\n", markIndex);
+                    cc.jle(ctx.getLabel(markIndex, cc));
                     break;
                 }
                 case ScriptFunction::MOV:

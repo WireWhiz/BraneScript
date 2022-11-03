@@ -37,6 +37,7 @@ protected:
         ReturnValue,
         Scope,
         If,
+        While,
         Assign,
         Add,
         Sub,

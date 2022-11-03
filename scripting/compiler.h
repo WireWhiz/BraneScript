@@ -78,8 +78,11 @@ private:
 
     std::any visitIf(braneParser::IfContext *ctx) override;
 
+    std::any visitWhile(braneParser::WhileContext *context) override;
+
     std::any visitComparison(braneParser::ComparisonContext *context) override;
 
+    bool localValueExists(const std::string& name);
     void registerLocalValue(std::string name, const std::string& type, bool constant);
     AotNode* getValueNode(const std::string& name);
     void pushScope();
@@ -122,6 +125,7 @@ struct CompilerCtx
     AotValue newReg(const std::string& type, uint8_t flags);
     AotValue newReg(TypeDef* type, uint8_t flags);
     AotValue newConst(ValueType type, uint8_t flags = AotValue::Const | AotValue::Constexpr);
+    AotValue castValue(const AotValue& value);
     AotValue castTemp(const AotValue& value);
     AotValue castReg(const AotValue& value);
 

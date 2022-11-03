@@ -192,6 +192,11 @@ std::any Compiler::visitDeclaration(braneParser::DeclarationContext* context)
         throwError(context->type, "Undefined type");
         return (AotNode*)nullptr;
     }
+    if(localValueExists(name))
+    {
+        throwError(context->id, "Identifier is already in use");
+        return (AotNode*)nullptr;
+    }
     registerLocalValue(name, context->type->getText(), false);
     return getValueNode(name);
 }
@@ -216,6 +221,7 @@ std::any Compiler::visitFunction(braneParser::FunctionContext* ctx)
     if(!getType(_ctx->function->returnType))
     {
         throwError(ctx->type, "Unknown return type");
+        delete _ctx->function;
         return {};
     }
 
@@ -227,6 +233,7 @@ std::any Compiler::visitFunction(braneParser::FunctionContext* ctx)
         if(!getType(type))
         {
             throwError(argument->type, "Unknown argument type");
+            delete _ctx->function;
             return {};
         }
         _ctx->function->arguments.push_back(type);
@@ -241,10 +248,11 @@ std::any Compiler::visitFunction(braneParser::FunctionContext* ctx)
     for(auto* stmtCtx : ctx->statement())
     {
         auto stmt = std::any_cast<AotNode*>(visit(stmtCtx));
+        if(!stmt)
+            continue;
 
         //TODO optimize toggle
         auto expr = std::unique_ptr<AotNode>(stmt);
-        PROPAGATE_NULL(expr);
 
         AotNode* optimizedTree = expr->optimize();
         if(expr.get() != optimizedTree)
@@ -262,7 +270,6 @@ std::any Compiler::visitFunction(braneParser::FunctionContext* ctx)
     _ctx->returnCalled = previousReturnVal;
     popScope();
 
-    uint32_t functionIndex = _ctx->script->localFunctions.size();
     _ctx->script->localFunctions.push_back(std::move(*_ctx->function));
     delete _ctx->function;
     _ctx->function = previousFunction;
@@ -276,8 +283,9 @@ std::any Compiler::visitCast(braneParser::CastContext* ctx)
 
 std::any Compiler::visitReturnVoid(braneParser::ReturnVoidContext* ctx)
 {
-    // _currentFunction->appendCode(ScriptFunction::RET);
     assert(false);
+    throwError("Void return statements not implemented");
+    _ctx->returnCalled = true;
     return (AotNode*)nullptr;
 }
 
@@ -285,10 +293,8 @@ std::any Compiler::visitReturnVal(braneParser::ReturnValContext* ctx)
 {
     auto retVal = std::any_cast<AotNode*>(visit(ctx->expression()));
     if(retVal->resType()->name() != _ctx->function->returnType)
-    {
-
         retVal = new AotCastNode(retVal, _types.at(_ctx->function->returnType));
-    }
+    _ctx->returnCalled = true;
     return (AotNode*)new AotReturnValueNode(retVal);
 }
 
@@ -341,6 +347,13 @@ std::any Compiler::visitIf(braneParser::IfContext* ctx)
     auto condition = std::any_cast<AotNode*>(visit(ctx->cond));
     auto operation = std::any_cast<AotNode*>(visit(ctx->operation));
     return (AotNode*)new AotIf(condition, operation);
+}
+
+std::any Compiler::visitWhile(braneParser::WhileContext* ctx)
+{
+    auto condition = std::any_cast<AotNode*>(visit(ctx->cond));
+    auto operation = std::any_cast<AotNode*>(visit(ctx->operation));
+    return (AotNode*)new AotWhile(condition, operation);
 }
 
 std::any Compiler::visitComparison(braneParser::ComparisonContext* context)
@@ -409,6 +422,16 @@ TypeDef* Compiler::getType(const std::string& typeName)
     return _types.at(typeName);
 }
 
+bool Compiler::localValueExists(const std::string& name)
+{
+    for(auto& s : _scopes)
+    {
+        if(s.localValues.count(name))
+            return true;
+    }
+    return false;
+}
+
 CompilerCtx::CompilerCtx(Compiler& c, IRScript* s) : compiler(c), script(s)
 {
 
@@ -434,6 +457,13 @@ AotValue CompilerCtx::newReg(TypeDef* type, uint8_t flags)
         value.valueIndex.storageType = ValueStorageType_Reg;
     }
     return value;
+}
+
+AotValue CompilerCtx::castValue(const AotValue& value)
+{
+    if(value.valueIndex.storageType == ValueStorageType_Mem)
+        return value;
+    return castReg(value);
 }
 
 AotValue CompilerCtx::newConst(ValueType type, uint8_t flags)
