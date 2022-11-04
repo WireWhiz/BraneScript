@@ -4,7 +4,10 @@
 
 #include "scriptFunction.h"
 
-void ScriptFunction::appendCode(Operand op)
+namespace BraneScript
 {
-    code.push_back(op);
+    void ScriptFunction::appendCode(Operand op)
+    {
+        code.push_back(op);
+    }
 }

@@ -9,31 +9,32 @@
 #include <unordered_map>
 #include <string>
 #include <asmjit/core/codeholder.h>
-
-class Script
+namespace BraneScript
 {
-public:
-    std::vector<void*> functions;
-    std::unordered_map<std::string, size_t> functionNames;
-
-    template<typename Ret, typename... Args>
-    using FunctionHandle = Ret (__cdecl *)(Args...);
-
-    template<typename Ret, typename... Args>
-    FunctionHandle<Ret, Args...> getFunction(size_t index)
+    class Script
     {
-        return (FunctionHandle<Ret, Args...>)functions[index];
-    }
+    public:
+        std::vector<void*> functions;
+        std::unordered_map<std::string, size_t> functionNames;
 
-    template<typename Ret, typename... Args>
-    FunctionHandle<Ret, Args...> getFunction(const std::string& name)
-    {
-        auto f = functionNames.find(name);
-        if(f == functionNames.end())
-            return nullptr;
-        return (FunctionHandle<Ret, Args...>)functions[f->second];
-    }
-};
+        template<typename Ret, typename... Args>
+        using FunctionHandle = Ret (__cdecl*)(Args...);
 
+        template<typename Ret, typename... Args>
+        FunctionHandle<Ret, Args...> getFunction(size_t index)
+        {
+            return (FunctionHandle<Ret, Args...>)functions[index];
+        }
+
+        template<typename Ret, typename... Args>
+        FunctionHandle<Ret, Args...> getFunction(const std::string& name)
+        {
+            auto f = functionNames.find(name);
+            if (f == functionNames.end())
+                return nullptr;
+            return (FunctionHandle<Ret, Args...>)functions[f->second];
+        }
+    };
+}
 
 #endif //BRANESCRIPT_SCRIPT_H

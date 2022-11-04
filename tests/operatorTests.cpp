@@ -5,6 +5,8 @@
 #include "../scripting/scriptRuntime.h"
 #include "../scripting/script.h"
 
+using namespace BraneScript;
+
 #define TEST_DUAL_ARG_OPERATOR(operator, function, argList)     \
     for(auto& argPair : argList)                                \
         EXPECT_EQ(function(argPair.first, argPair.second), argPair.first operator argPair.second) << "Operation args: " << argPair.first << ", " << argPair.second << std::endl;

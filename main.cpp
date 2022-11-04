@@ -4,6 +4,8 @@
 #include "scripting/scriptRuntime.h"
 #include "scripting/script.h"
 
+ using namespace BraneScript;
+
  int countLoop(int target)
  {
      int counter = 0;

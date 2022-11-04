@@ -7,32 +7,40 @@
 
 #include "typeDef.h"
 #include <vector>
-
-std::vector<TypeDef*> getNativeTypes();
-TypeDef* getNativeTypeDef(ValueType type);
-
-class BoolDef : public TypeDef
+namespace BraneScript
 {
-public:
-    const char* name() const override;
-    uint32_t size() const override;
-    ValueType type() const override;
-};
+    std::vector<TypeDef*> getNativeTypes();
 
-class IntDef : public TypeDef
-{
-public:
-    const char* name() const override;
-    uint32_t size() const override;
-    ValueType type() const override;
-};
+    TypeDef* getNativeTypeDef(ValueType type);
 
-class FloatDef : public TypeDef
-{
-public:
-    const char* name() const override;
-    uint32_t size() const override;
-    ValueType type() const override;
-};
+    class BoolDef : public TypeDef
+    {
+    public:
+        const char* name() const override;
 
+        uint32_t size() const override;
+
+        ValueType type() const override;
+    };
+
+    class IntDef : public TypeDef
+    {
+    public:
+        const char* name() const override;
+
+        uint32_t size() const override;
+
+        ValueType type() const override;
+    };
+
+    class FloatDef : public TypeDef
+    {
+    public:
+        const char* name() const override;
+
+        uint32_t size() const override;
+
+        ValueType type() const override;
+    };
+}
 #endif //BRANESCRIPT_NATIVETYPES_H

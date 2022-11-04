@@ -3,21 +3,23 @@
 //
 
 #include "valueIndex.h"
-
-const char* valueTypeName(ValueType type)
+namespace BraneScript
 {
-    switch(type)
+    const char* valueTypeName(ValueType type)
     {
+        switch (type)
+        {
 
-        case Int32:
-            return "int";
-        case Int64:
-            return "long";
-        case Float32:
-            return "float";
-        case Float64:
-            return "double";
-        default:
-            return nullptr;
+            case Int32:
+                return "int";
+            case Int64:
+                return "long";
+            case Float32:
+                return "float";
+            case Float64:
+                return "double";
+            default:
+                return nullptr;
+        }
     }
 }

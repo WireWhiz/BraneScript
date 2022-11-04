@@ -8,16 +8,18 @@
 #include <memory>
 #include <vector>
 #include "asmjit/core/jitruntime.h"
-
-class Script;
-class IRScript;
-class ScriptRuntime
+namespace BraneScript
 {
-    asmjit::JitRuntime _runtime;
-    std::vector<std::unique_ptr<Script>> _scripts;
-public:
-    Script* assembleScript(IRScript* irScript);
-};
+    class Script;
+    class IRScript;
 
+    class ScriptRuntime
+    {
+        asmjit::JitRuntime _runtime;
+        std::vector<std::unique_ptr<Script>> _scripts;
+    public:
+        Script* assembleScript(IRScript* irScript);
+    };
+}
 
 #endif //BRANESCRIPT_SCRIPTRUNTIME_H

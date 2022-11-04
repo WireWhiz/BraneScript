@@ -5,12 +5,14 @@
 #ifndef BRANESCRIPT_BASETYPES_H
 #define BRANESCRIPT_BASETYPES_H
 
-enum BaseType
+namespace BraneScript
 {
-    Void = 0,
-    Int = 1,
-    Float = 2,
-    String = 3,
-};
-
+    enum BaseType
+    {
+        Void = 0,
+        Int = 1,
+        Float = 2,
+        String = 3,
+    };
+}
 #endif //BRANESCRIPT_BASETYPES_H

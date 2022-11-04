@@ -5,6 +5,8 @@
 #include "../scripting/scriptRuntime.h"
 #include "../scripting/script.h"
 
+using namespace BraneScript;
+
 void testFunction(const std::string& name, Script* script)
 {
     auto f = script->getFunction<bool>(name);

@@ -10,41 +10,51 @@
 #include <vector>
 #include <memory>
 
-class AotScope : public AotNode
+namespace BraneScript
 {
-    std::vector<std::unique_ptr<AotNode>> _operations;
-public:
-    explicit AotScope(std::vector<AotNode*> operations);
-    AotNode* optimize() override;
-    AotValue generateBytecode(CompilerCtx& ctx) const override;
-};
 
-class AotConditionBase : public AotNode
-{
-protected:
-    static void jumpOnConditionFalse(AotValue& condition, uint32_t markIndex, CompilerCtx& ctx);
-public:
-    AotConditionBase(TypeDef* resType, NodeType type);
-};
+    class AotScope : public AotNode
+    {
+        std::vector<std::unique_ptr<AotNode>> _operations;
+    public:
+        explicit AotScope(std::vector<AotNode*> operations);
 
-class AotIf : public AotConditionBase
-{
-    std::unique_ptr<AotNode> _condition;
-    std::unique_ptr<AotNode> _operation;
-public:
-    AotIf(AotNode* condition, AotNode* operation);
-    AotNode* optimize() override;
-    AotValue generateBytecode(CompilerCtx& ctx) const override;
-};
+        AotNode* optimize() override;
 
-class AotWhile : public AotConditionBase
-{
-    std::unique_ptr<AotNode> _condition;
-    std::unique_ptr<AotNode> _operation;
-public:
-    AotWhile(AotNode* condition, AotNode* operation);
-    AotNode* optimize() override;
-    AotValue generateBytecode(CompilerCtx& ctx) const override;
-};
+        AotValue generateBytecode(CompilerCtx& ctx) const override;
+    };
 
+    class AotConditionBase : public AotNode
+    {
+    protected:
+        static void jumpOnConditionFalse(AotValue& condition, uint32_t markIndex, CompilerCtx& ctx);
+
+    public:
+        AotConditionBase(TypeDef* resType, NodeType type);
+    };
+
+    class AotIf : public AotConditionBase
+    {
+        std::unique_ptr<AotNode> _condition;
+        std::unique_ptr<AotNode> _operation;
+    public:
+        AotIf(AotNode* condition, AotNode* operation);
+
+        AotNode* optimize() override;
+
+        AotValue generateBytecode(CompilerCtx& ctx) const override;
+    };
+
+    class AotWhile : public AotConditionBase
+    {
+        std::unique_ptr<AotNode> _condition;
+        std::unique_ptr<AotNode> _operation;
+    public:
+        AotWhile(AotNode* condition, AotNode* operation);
+
+        AotNode* optimize() override;
+
+        AotValue generateBytecode(CompilerCtx& ctx) const override;
+    };
+}
 #endif //BRANESCRIPT_AOTFLOWNODES_H

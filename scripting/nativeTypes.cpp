@@ -3,76 +3,79 @@
 //
 
 #include "nativeTypes.h"
-
-std::vector<TypeDef*> nativeTypes({new BoolDef(), new IntDef(), new FloatDef()});
-std::vector<TypeDef*> getNativeTypes()
+namespace BraneScript
 {
-    return nativeTypes;
-};
+    std::vector<TypeDef*> nativeTypes({new BoolDef(), new IntDef(), new FloatDef()});
 
-
-TypeDef* getNativeTypeDef(ValueType type)
-{
-    switch(type)
+    std::vector<TypeDef*> getNativeTypes()
     {
-        case Bool:
-            return nativeTypes[0];
-        case Int32:
-            return nativeTypes[1];
-        case Int64:
-            break;
-        case Float32:
-            return nativeTypes[2];
-        case Float64:
-            break;
-        case Ptr:
-            break;
+        return nativeTypes;
+    };
+
+
+    TypeDef* getNativeTypeDef(ValueType type)
+    {
+        switch (type)
+        {
+            case Bool:
+                return nativeTypes[0];
+            case Int32:
+                return nativeTypes[1];
+            case Int64:
+                break;
+            case Float32:
+                return nativeTypes[2];
+            case Float64:
+                break;
+            case Ptr:
+                break;
+        }
+        return nullptr;
+    };
+
+
+    const char* BoolDef::name() const
+    {
+        return "bool";
     }
-    return nullptr;
-};
 
+    uint32_t BoolDef::size() const
+    {
+        return sizeof(bool);
+    }
 
-const char* BoolDef::name() const
-{
-    return "bool";
-}
+    ValueType BoolDef::type() const
+    {
+        return Bool;
+    }
 
-uint32_t BoolDef::size() const
-{
-    return sizeof(bool);
-}
+    const char* IntDef::name() const
+    {
+        return "int";
+    }
 
-ValueType BoolDef::type() const
-{
-    return Bool;
-}
+    uint32_t IntDef::size() const
+    {
+        return sizeof(int32_t);
+    }
 
-const char* IntDef::name() const
-{
-    return "int";
-}
+    ValueType IntDef::type() const
+    {
+        return Int32;
+    }
 
-uint32_t IntDef::size() const
-{
-    return sizeof(int32_t);
-}
+    const char* FloatDef::name() const
+    {
+        return "float";
+    }
 
-ValueType IntDef::type() const
-{
-    return Int32;
-}
+    uint32_t FloatDef::size() const
+    {
+        return sizeof(float);
+    }
 
-const char* FloatDef::name() const
-{
-    return "float";
-}
-
-uint32_t FloatDef::size() const
-{
-    return sizeof(float);
-}
-
-ValueType FloatDef::type() const
-{
-    return Float32;
+    ValueType FloatDef::type() const
+    {
+        return Float32;
+    }
 }

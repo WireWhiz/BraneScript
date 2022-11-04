@@ -9,18 +9,19 @@
 #include <string>
 #include "baseTypes.h"
 #include "scriptFunction.h"
-
-struct IRScript
+namespace BraneScript
 {
-    struct LinkedFunction
+    struct IRScript
     {
-        std::string name;
-        std::vector<BaseType> arguments;
+        struct LinkedFunction
+        {
+            std::string name;
+            std::vector<BaseType> arguments;
+        };
+
+        std::vector<ScriptFunction> localFunctions;
+        std::vector<LinkedFunction> linkedFunctions;
     };
 
-    std::vector<ScriptFunction> localFunctions;
-    std::vector<LinkedFunction> linkedFunctions;
-};
-
-
+}
 #endif //BRANESCRIPT_IRSCRIPT_H
