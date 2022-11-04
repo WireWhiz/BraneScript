@@ -4,6 +4,24 @@
 #include "scripting/scriptRuntime.h"
 #include "scripting/script.h"
 
+ int countLoop(int target)
+ {
+     int counter = 0;
+     while(counter < target)
+         ++counter;
+     return counter;
+ }
+
+ using CounterFunction = int (*)(int);
+ void testLoop(CounterFunction func, int target)
+{
+    auto startTime = std::chrono::high_resolution_clock::now();
+    auto result = func(target);
+    auto endTime = std::chrono::high_resolution_clock::now();
+    std::cout << "Counter with target " << target << " returned " << result << std::endl;
+    auto nanoseconds = std::chrono::duration_cast<std::chrono::nanoseconds>(endTime - startTime).count();
+    std::cout << "Function took " << nanoseconds << " nanoseconds or " << (double)nanoseconds / 1000000.0 << " milliseconds" << std::endl;
+}
 
 int main(const int argc, const char** argv)
 {
@@ -29,7 +47,11 @@ int main(int target) {
     ScriptRuntime rt;
     Script* testScript = rt.assembleScript(ir);
 
+    std::cout << "native c++" << std::endl;
+    testLoop(&countLoop, 1000000);
+    std::cout << "Brane Script" << std::endl;
     auto testFunction = testScript->getFunction<int, int>("main");
-    std::cout << "Counter with target 3000 returned " << testFunction(3000) << std::endl;
+    testLoop(testFunction, 1000000);
+
     return 0;
 }
