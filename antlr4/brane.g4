@@ -2,6 +2,7 @@ grammar brane;
 
 NEWLINE : [\r\n]+ -> skip;
 COMMENT : '//'(.*?)[\r\n(EOF)] -> skip;
+BLOCK_COMMENT : '/*'.*?'*/' -> skip;
 SPACE   : (' '|'\t') -> skip;
 
 INT     : [0-9]+;
