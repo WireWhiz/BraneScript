@@ -9,22 +9,15 @@
 #include <unordered_map>
 #include <string>
 #include <asmjit/core/codeholder.h>
+#include "functionReference.h"
+
 namespace BraneScript
 {
     class Script
     {
     public:
-        std::vector<void*> functions;
+        std::vector<FunctionReference> functions;
         std::unordered_map<std::string, size_t> functionNames;
-
-        template<typename Ret, typename... Args>
-        using FunctionHandle = Ret (__cdecl*)(Args...);
-
-        template<typename Ret, typename... Args>
-        FunctionHandle<Ret, Args...> getFunction(size_t index)
-        {
-            return (FunctionHandle<Ret, Args...>)functions[index];
-        }
 
         template<typename Ret, typename... Args>
         FunctionHandle<Ret, Args...> getFunction(const std::string& name)
@@ -32,7 +25,7 @@ namespace BraneScript
             auto f = functionNames.find(name);
             if (f == functionNames.end())
                 return nullptr;
-            return (FunctionHandle<Ret, Args...>)functions[f->second];
+            return functions[f->second].getOverride<Ret, Args...>();
         }
     };
 }

@@ -30,7 +30,7 @@ namespace BraneScript
     asmjit::TypeId strToType(const std::string& str)
     {
         if (str == "void") return asmjit::TypeId::kVoid;
-        if (str == "bool") return asmjit::TypeId::kInt8;
+        if (str == "bool") return asmjit::TypeId::kUInt8;
         if (str == "int") return asmjit::TypeId::kInt32;
         if (str == "float") return asmjit::TypeId::kFloat32;
         if (str == "uint") return asmjit::TypeId::kUInt32;
@@ -126,7 +126,7 @@ namespace BraneScript
             switch (value.valueType)
             {
                 case ValueType::Bool:
-                    registers.push_back(cc.newInt8());
+                    registers.push_back(cc.newUInt8());
                     break;
                 case ValueType::Int32:
                     registers.push_back(cc.newInt32());
@@ -156,6 +156,7 @@ namespace BraneScript
 
     Script* ScriptRuntime::assembleScript(IRScript* irScript)
     {
+        assert(irScript);
         auto* script = new Script();
         JitErrorHandler errorHandler;;
         for (auto& func: irScript->localFunctions)
@@ -171,7 +172,13 @@ namespace BraneScript
                     asmjit::DiagnosticOptions::kValidateAssembler | asmjit::DiagnosticOptions::kRADebugAll);
             cc.addEncodingOptions(asmjit::EncodingOptions::kOptimizedAlign);
 
-            printf("Assembling function: %s\n", ctx.currentFunction->name.c_str());
+            std::string functionArgs;
+            for (size_t i = 0; i + 1 < ctx.currentFunction->arguments.size(); ++i)
+                functionArgs += ctx.currentFunction->arguments[i] + ",";
+            if(!ctx.currentFunction->arguments.empty())
+                functionArgs += *--ctx.currentFunction->arguments.end();
+
+            printf("Assembling function: %s(%s)\n", ctx.currentFunction->name.c_str(), functionArgs.c_str());
 
             asmjit::FuncSignatureBuilder sigBuilder;
             std::vector<asmjit::TypeId> argTypes;
@@ -190,6 +197,9 @@ namespace BraneScript
             {
                 switch (argTypes[i])
                 {
+                    case asmjit::TypeId::kUInt8:
+                        ctx.registers.push_back(cc.newGpb());
+                        break;
                     case asmjit::TypeId::kInt32:
                         ctx.registers.push_back(cc.newInt32());
                         break;
@@ -712,8 +722,16 @@ namespace BraneScript
             void* fPtr = nullptr;
             _runtime.add(&fPtr, &ch);
 
-            script->functionNames.insert({func.name, script->functions.size()});
-            script->functions.push_back(fPtr);
+            if(!script->functionNames.count(func.name))
+            {
+                script->functionNames.insert({func.name, script->functions.size()});
+                FunctionReference fRef;
+                fRef.name = func.name;
+                script->functions.push_back(fRef);
+            }
+
+            auto& fRef = script->functions[script->functionNames[func.name]];
+            fRef.overrides.insert({functionArgs, fPtr});
         }
 
 

@@ -11,7 +11,7 @@ using namespace BraneScript;
     for(auto& argPair : argList)                                \
         EXPECT_EQ(function(argPair.first, argPair.second), argPair.first operator argPair.second) << "Operation args: " << argPair.first << ", " << argPair.second << std::endl;
 
-TEST(OperatorTests, Operators)
+TEST(BraneScript, Operators)
 {
     std::string testString = R"(
 
@@ -79,10 +79,12 @@ TEST(OperatorTests, Operators)
 
     ScriptRuntime rt;
     Script* testScript = rt.assembleScript(ir);
+    checkCompileErrors(compiler);
+    ASSERT_TRUE(testScript);
 
     std::vector<std::pair<int32_t, int32_t>>     intTestArgs =   {{0, 1},{1, 1},{2, 3}, {3, 3}, {123451, 12332169}, {0, -1}, {-1234123, 12341612}};
     std::vector<std::pair<float, float>>         floatTestArgs = {{0.0f, 1.0f},{1.0f, 1.0f},{2.4f, 3.2f}, {3.0f, 3.0f}, {123451.0f, 12332169.0f}, {0.0f, -1.0f}, {-1234123.126414f, 12341612.4123f}};
-    std::vector<std::pair<int32_t, float>>       intFloatTestArgs = {{0.0f, 1.0f},{1.0f, 1.0f},{2.0f, 3.0f}, {3.0f, 3.0f}, {123451.0f, 12332169.0f}, {0.0f, -1.0f}, {-1234123.0f, 12341612.0f}};
+    std::vector<std::pair<int32_t, float>>       intFloatTestArgs = {{0, 1.0f},{1, 1.0f},{2, 3.0f}, {3, 3.0f}, {123451, 12332169.0f}, {0, -1.0f}, {-1234123, 12341612.0f}};
 
     //Addition/subtraction
     auto testIntAdd = testScript->getFunction<int, int, int>("testIntAdd");

@@ -14,7 +14,7 @@ void testFunction(const std::string& name, Script* script)
     EXPECT_TRUE(f()) << "Testing function: " << name;
 }
 
-TEST(FlowStatementTests, FlowStatements)
+TEST(BraneScript, FlowStatements)
 {
     std::string testString = R"(
     bool testConstTrueIf()
@@ -59,9 +59,11 @@ TEST(FlowStatementTests, FlowStatements)
 
     Compiler compiler;
     auto* ir = compiler.compile(testString);
+    checkCompileErrors(compiler);
 
     ScriptRuntime rt;
     Script* testScript = rt.assembleScript(ir);
+    ASSERT_TRUE(testScript);
 
     testFunction("testConstTrueIf", testScript);
     testFunction("testConstFalseIf", testScript);

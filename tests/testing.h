@@ -7,5 +7,10 @@
 
 #include <gtest/gtest.h>
 
+namespace BraneScript
+{
+    class Compiler;
+    void checkCompileErrors(Compiler& c);
+}
 
 #endif //BRANESCRIPT_TESTING_H
