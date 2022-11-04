@@ -23,8 +23,8 @@ progSegment : function
             ;
 
 declaration : type=ID id=ID;
-argumentList: declaration (',' declaration)*;
-function    : type=ID id=ID '(' arguments=argumentList? ')' '{' statements=statement* '}';
+argumentList: (declaration (',' declaration)*)?;
+function    : type=ID id=ID '(' arguments=argumentList ')' '{' statements=statement* '}';
 
 preprocessor: '#include' content=.*? NEWLINE                                #include;
 

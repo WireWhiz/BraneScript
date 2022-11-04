@@ -43,10 +43,8 @@ void AotConditionBase::jumpOnConditionFalse(AotValue& condition, uint32_t markIn
         case ValueStorageType_Mem:
             condition = ctx.castReg(condition);
         case ValueStorageType_Reg:
-        {
-            ctx.function->appendCode(ScriptFunction::TEST0, condition.valueIndex);
+            ctx.function->appendCode(ScriptFunction::TEST, condition.valueIndex);
             ctx.function->appendCode(ScriptFunction::JE, markIndex);
-        }
             break;
         case ValueStorageType_EqualRes:
             ctx.function->appendCode(ScriptFunction::JNE, markIndex);

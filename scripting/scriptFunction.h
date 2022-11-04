@@ -29,7 +29,7 @@ public:
         SETGE,
 
         CMP,
-        TEST0,
+        TEST,
         MARK,
         JMP,
         JE,

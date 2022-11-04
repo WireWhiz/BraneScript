@@ -305,14 +305,14 @@ Script* ScriptRuntime::assembleScript(IRScript* irScript)
                     }
                     break;
                 }
-                case ScriptFunction::TEST0:
+                case ScriptFunction::TEST:
                 {
                     auto a = ctx.readCode<ValueIndex>();
-                    printf("TEST0 ");
+                    printf("TEST\n");
                     switch(getValueRegType(a))
                     {
                         case ValueRegType::gp:
-                            cc.test(ctx.getReg<Gp>(a), 0);
+                            cc.test(ctx.getReg<Gp>(a), ctx.getReg<Gp>(a));
                             break;
                         default:
                             assert(false);
