@@ -86,6 +86,10 @@ namespace BraneScript
 
         std::any visitComparison(braneParser::ComparisonContext* context) override;
 
+        std::any visitArgumentPack(braneParser::ArgumentPackContext *context) override;
+
+        std::any visitFunctionCall(braneParser::FunctionCallContext *context) override;
+
         bool localValueExists(const std::string& name);
 
         void registerLocalValue(std::string name, const std::string& type, bool constant);

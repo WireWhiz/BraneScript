@@ -10,12 +10,12 @@ namespace BraneScript
 {
     enum ValueType : uint8_t
     {
-        Bool = 0,
-        Int32 = 1,
-        Int64 = 2,
-        Float32 = 3,
-        Float64 = 4,
-        Ptr = 5
+        Bool = 1,
+        Int32 = 2,
+        Int64 = 3,
+        Float32 = 4,
+        Float64 = 5,
+        Ptr = 6
 
     };
 

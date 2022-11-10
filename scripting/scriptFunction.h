@@ -51,6 +51,15 @@ namespace BraneScript
         }
 
         template<typename T>
+        void appendCode(T value)
+        {
+            static_assert(!std::is_same<T, AotNode>());
+            size_t index = code.size();
+            code.resize(code.size() + sizeof(T));
+            *(T*)(code.data() + index) = value;
+        }
+
+        template<typename T>
         T readCode(size_t& index)
         {
             T value = *(T*)&code[index];

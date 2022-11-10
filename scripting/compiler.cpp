@@ -12,9 +12,9 @@
 
 namespace BraneScript
 {
+#define RETURN_NULL return (AotNode*)nullptr
 #define PROPAGATE_NULL(node) \
-    if(!node) return (AotNode*)nullptr;
-
+    if(!node) return (AotNode*)nullptr
 
     class LexerErrorListener : public antlr4::BaseErrorListener
     {
@@ -225,34 +225,39 @@ namespace BraneScript
     std::any Compiler::visitFunction(braneParser::FunctionContext* ctx)
     {
         ScriptFunction* previousFunction = _ctx->function;
-        _ctx->setFunction(new ScriptFunction());
+
+        _ctx->script->localFunctions.push_back({});
+        _ctx->setFunction(&*--_ctx->script->localFunctions.end());
 
         //TODO: TypeAssert()
         _ctx->function->returnType = ctx->type->getText();
         if (!getType(_ctx->function->returnType))
         {
             throwError(ctx->type, "Unknown return type");
-            delete _ctx->function;
             return {};
         }
 
         _ctx->function->name = ctx->id->getText();
+        _ctx->function->name += "(";
         pushScope();
         for (auto argument: ctx->arguments->declaration())
         {
+            if(*--_ctx->function->name.end() != '(')
+                _ctx->function->name += ',';
             std::string type = argument->type->getText();
             if (!getType(type))
             {
                 throwError(argument->type, "Unknown argument type");
-                delete _ctx->function;
                 return {};
             }
+            _ctx->function->name += type;
             _ctx->function->arguments.push_back(type);
 
             AotValue value = _ctx->newReg(type, false);
             _ctx->lValues.insert({_lValueIndex, value});
             registerLocalValue(argument->id->getText(), type, false);
         }
+        _ctx->function->name += ")";
 
         bool previousReturnVal = _ctx->returnCalled;
         _ctx->returnCalled = false;
@@ -282,8 +287,6 @@ namespace BraneScript
         _ctx->returnCalled = previousReturnVal;
         popScope();
 
-        _ctx->script->localFunctions.push_back(std::move(*_ctx->function));
-        delete _ctx->function;
         _ctx->function = previousFunction;
         return {};
     }
@@ -305,7 +308,13 @@ namespace BraneScript
     std::any Compiler::visitReturnVal(braneParser::ReturnValContext* ctx)
     {
         auto retVal = std::any_cast<AotNode*>(visit(ctx->expression()));
-        if (retVal->resType()->name() != _ctx->function->returnType)
+        PROPAGATE_NULL(retVal);
+        if(!retVal->resType())
+        {
+            throwError(ctx->expression()->start, "can't cast from void to " + _ctx->function->returnType);
+            RETURN_NULL;
+        }
+        if (retVal->resType()->name() != _ctx->function->returnType) //TODO check if a cast here is actually possible
             retVal = new AotCastNode(retVal, _types.at(_ctx->function->returnType));
         _ctx->returnCalled = true;
         return (AotNode*)new AotReturnValueNode(retVal);
@@ -401,6 +410,49 @@ namespace BraneScript
     std::any Compiler::visitExprStatement(braneParser::ExprStatementContext* context)
     {
         return visit(context->expression());
+    }
+
+    std::any Compiler::visitArgumentPack(braneParser::ArgumentPackContext* context)
+    {
+        std::vector<AotNode*> arguments;
+        for(auto& arg : context->expression())
+            arguments.push_back(std::any_cast<AotNode*>(visit(arg)));
+        return std::move(arguments);
+    }
+
+    std::any Compiler::visitFunctionCall(braneParser::FunctionCallContext* context)
+    {
+        std::string functionName = context->ID()->getText();
+        std::vector<AotNode*> arguments = std::any_cast<std::vector<AotNode*>>(visit(context->argumentPack()));
+        functionName += "(";
+        for(auto* arg : arguments)
+        {
+            PROPAGATE_NULL(arg);
+            TypeDef* argType = arg->resType();
+            if(!argType)
+            {
+                throwError(context->getStart()->getLine(), context->getStart()->getChannel(), "", "Tried to pass void argument into function");
+                RETURN_NULL;
+            }
+            if(*--functionName.end() != '(')
+                functionName += ',';
+            functionName += argType->name();
+        }
+        functionName += ")";
+
+        uint32_t fIndex = 0;
+        for(auto& func : _ctx->script->localFunctions)
+        {
+            if(functionName == func.name)
+            {
+                TypeDef* retType = getType(func.returnType);
+                return (AotNode*)new FunctionCall(fIndex, retType, arguments);
+            }
+            ++fIndex;
+        }
+
+        throwError(context->getStart(), "Could not find function with signature " + functionName);
+        RETURN_NULL;
     }
 
     void Compiler::throwError(const std::string& message)

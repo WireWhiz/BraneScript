@@ -10,42 +10,48 @@
 namespace BraneScript
 {
 
+
     enum Operand : uint8_t
     {
-        RET,  //Exit function
-        RETV, // (uin32_t value) Return int32 value
-        LOADC,  // (uint32_t value, uint32_t constantIndex) load constant defined by byte array into the value
+        // Waiting until we are near feature complete to manually set enum values
+        RET,    //Exit function
+        RETV,   // (ValueIndex value) Return int32 value
+        LOADC,  // (ValueIndex value, uint32_t constantIndex) load constant defined by byte array into the value
+        LINKL,  // (uint8_t nameSize, chararray) add library to function search
+        LINKF,  // (uint8_t nameSize, chararray) link to external function, name in format of name(type, type, type, ...)
 
-        SETE,
-        SETNE,
-        SETA,
-        SETG,
-        SETAE,
-        SETGE,
+        SETE,  // (ValueIndex) set to 0 or 1 based on condition
+        SETNE, // (ValueIndex) set to 0 or 1 based on condition
+        SETA,  // (ValueIndex) set to 0 or 1 based on condition
+        SETG,  // (ValueIndex) set to 0 or 1 based on condition
+        SETAE, // (ValueIndex) set to 0 or 1 based on condition
+        SETGE, // (ValueIndex) set to 0 or 1 based on condition
 
-        CMP,
-        TEST,
-        MARK,
-        JMP,
-        JE,
-        JNE,
-        JA,
-        JB,
-        JG,
-        JL,
-        JAE,
-        JBE,
-        JGE,
-        JLE,
+        CMP,  // Compare
+        TEST, // Test if 0
+        MARK, // Mark jump endpoint
+        JMP,  // (uint32_t markIndex) jump to mark
+        JE,   // (uint32_t markIndex) jump to mark on condition
+        JNE,  // (uint32_t markIndex) jump to mark on condition
+        JA,   // (uint32_t markIndex) jump to mark on condition
+        JB,   // (uint32_t markIndex) jump to mark on condition
+        JG,   // (uint32_t markIndex) jump to mark on condition
+        JL,   // (uint32_t markIndex) jump to mark on condition
+        JAE,  // (uint32_t markIndex) jump to mark on condition
+        JBE,  // (uint32_t markIndex) jump to mark on condition
+        JGE,  // (uint32_t markIndex) jump to mark on condition
+        JLE,  // (uint32_t markIndex) jump to mark on condition
+
+        CALL,  // (uint32_t function, ValueIndex returnValue, ValueIndex...) call to another function within the script
 
         MOV,   // (uin32_t value,  uin32_t value) move value to another value.
 
-        ADD,   // (uin32_t value,  uin32_t value) add values.
-        SUB,   // (uin32_t value,  uin32_t value) subtract values.
-        INC,   // (uin32_t value)  increment value.
-        DEC,   // (uint32_t value) decrement value.
-        MUL,   // (uin32_t value,  uin32_t value) multiply values.
-        DIV,   // (uin32_t value,  uin32_t value) divide values.
+        INC,   // (ValueIndex value)  increment value.
+        DEC,   // (ValueIndex value)  decrement value.
+        ADD,   // (ValueIndex value, ValueIndex value) add values.
+        SUB,   // (ValueIndex value, ValueIndex value) subtract values.
+        MUL,   // (ValueIndex value, ValueIndex value) multiply values.
+        DIV,   // (ValueIndex value, ValueIndex value) divide values.
     };
 }
 #endif //BRANESCRIPT_OPERANDS_H

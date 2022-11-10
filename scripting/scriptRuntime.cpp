@@ -172,13 +172,7 @@ namespace BraneScript
                     asmjit::DiagnosticOptions::kValidateAssembler | asmjit::DiagnosticOptions::kRADebugAll);
             cc.addEncodingOptions(asmjit::EncodingOptions::kOptimizedAlign);
 
-            std::string functionArgs;
-            for (size_t i = 0; i + 1 < ctx.currentFunction->arguments.size(); ++i)
-                functionArgs += ctx.currentFunction->arguments[i] + ",";
-            if(!ctx.currentFunction->arguments.empty())
-                functionArgs += *--ctx.currentFunction->arguments.end();
-
-            printf("Assembling function: %s(%s)\n", ctx.currentFunction->name.c_str(), functionArgs.c_str());
+            printf("Assembling function: %s\n", ctx.currentFunction->name.c_str());
 
             asmjit::FuncSignatureBuilder sigBuilder;
             std::vector<asmjit::TypeId> argTypes;
@@ -408,6 +402,39 @@ namespace BraneScript
                         auto markIndex = ctx.readCode<uint32_t>();
                         printf("JLE mark%u\n", markIndex);
                         cc.jle(ctx.getLabel(markIndex, cc));
+                        break;
+                    }
+                    case CALL:
+                    {
+                        auto fIndex = ctx.readCode<uint32_t>();
+
+                        auto& function = irScript->localFunctions[fIndex];
+                        assert(fIndex < irScript->localFunctions.size());
+                        asmjit::FuncSignatureBuilder sb;
+                        sb.setCallConvId(asmjit::CallConvId::kCDecl);
+
+                        sb.setRet(strToType(function.returnType));
+                        for(auto& arg : function.arguments)
+                            sb.addArg(strToType(arg));
+
+                        asmjit::InvokeNode* in;
+                        assert(fIndex <= script->functions.size());
+                        if(fIndex < script->functions.size())
+                            cc.invoke(&in, script->functions[fIndex], sb);
+                        else
+                            cc.invoke(&in, f->label(), sb);
+
+                        if(function.returnType != "void")
+                        {
+                            auto retVal = ctx.readCode<ValueIndex>();
+                            ctx.verifyValue(retVal, cc);
+                            in->setRet(0, ctx.getReg<Reg>(retVal));
+                        }
+                        for(uint32_t i = 0; i < function.arguments.size(); ++i)
+                        {
+                            auto argVal = ctx.readCode<ValueIndex>();
+                            in->setArg(i, ctx.getReg<Reg>(argVal));
+                        }
                         break;
                     }
                     case MOV:
@@ -722,16 +749,8 @@ namespace BraneScript
             void* fPtr = nullptr;
             _runtime.add(&fPtr, &ch);
 
-            if(!script->functionNames.count(func.name))
-            {
-                script->functionNames.insert({func.name, script->functions.size()});
-                FunctionReference fRef;
-                fRef.name = func.name;
-                script->functions.push_back(fRef);
-            }
-
-            auto& fRef = script->functions[script->functionNames[func.name]];
-            fRef.overrides.insert({functionArgs, fPtr});
+            script->functionNames.insert({func.name, script->functions.size()});
+            script->functions.push_back(fPtr);
         }
 
 

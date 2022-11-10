@@ -25,6 +25,7 @@ progSegment : function
 
 declaration : type=ID id=ID;
 argumentList: (declaration (',' declaration)*)?;
+argumentPack: (expression (',' expression)*)?;
 function    : type=ID id=ID '(' arguments=argumentList ')' '{' statements=statement* '}';
 
 preprocessor: '#include' content=.*? NEWLINE                                #include;
@@ -42,6 +43,7 @@ expression  : INT                                                           #con
             | STRING                                                        #constString
             | ('true'|'false')                                              #constBool
             | declaration                                                   #decl
+            | ID '(' argumentPack ')'                                       #functionCall
             | ID                                                            #id
             | left=expression op=(MUL | DIV) right=expression               #muldiv
             | left=expression op=(ADD | SUB) right=expression               #addsub

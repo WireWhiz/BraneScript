@@ -56,5 +56,15 @@ namespace BraneScript
 
         AotValue generateBytecode(CompilerCtx& ctx) const override;
     };
+
+    class FunctionCall : public AotNode
+    {
+        uint32_t _functionIndex;
+        std::vector<std::unique_ptr<AotNode>> _arguments;
+    public:
+        FunctionCall(uint32_t functionIndex, TypeDef* returnType, const std::vector<AotNode*>& arguments);
+        AotNode* optimize() override;
+        AotValue generateBytecode(CompilerCtx& ctx) const override;
+    };
 }
 #endif //BRANESCRIPT_AOTFLOWNODES_H

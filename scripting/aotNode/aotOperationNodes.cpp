@@ -150,8 +150,7 @@ namespace BraneScript
         return left;
     }
 
-    AotSubNode::AotSubNode(AotNode* a, AotNode* b) : AotDualArgNode(a, b, dominantArgType(a->resType(), b->resType()),
-                                                                    Sub)
+    AotSubNode::AotSubNode(AotNode* a, AotNode* b) : AotDualArgNode(a, b, dominantArgType(a->resType(), b->resType()), Sub)
     {
         if (argA->resType() != _resType)
             argA = std::unique_ptr<AotNode>(new AotCastNode(argA.release(), _resType));
@@ -199,9 +198,8 @@ namespace BraneScript
 
     AotValue AotSubNode::generateBytecode(CompilerCtx& ctx) const
     {
-        AotValue left = argA->generateBytecode(ctx);
+        AotValue left = ctx.castTemp(argA->generateBytecode(ctx));
         AotValue right = argB->generateBytecode(ctx);
-        left = ctx.castTemp(left);
         ctx.function->appendCode(SUB, left.valueIndex, right.valueIndex);
         return left;
     }
@@ -238,10 +236,8 @@ namespace BraneScript
 
     AotValue AotDivNode::generateBytecode(CompilerCtx& ctx) const
     {
-        AotValue left = argA->generateBytecode(ctx);
-        AotValue right = argB->generateBytecode(ctx);
-        left = ctx.castTemp(left);
-        right = ctx.castReg(right);
+        AotValue left = ctx.castTemp(argA->generateBytecode(ctx));
+        AotValue right = ctx.castReg(argB->generateBytecode(ctx));
         ctx.function->appendCode(DIV, left.valueIndex, right.valueIndex);
         return left;
     }
@@ -253,8 +249,7 @@ namespace BraneScript
 
     AotValue AotReturnValueNode::generateBytecode(CompilerCtx& ctx) const
     {
-        auto value = arg->generateBytecode(ctx);
-        value = ctx.castReg(value);
+        auto value = ctx.castReg(arg->generateBytecode(ctx));
         ctx.function->appendCode(RETV, value.valueIndex);
 
         AotValue voidValue;
@@ -275,11 +270,8 @@ namespace BraneScript
 
     AotValue AotCompareNode::generateBytecode(CompilerCtx& ctx) const
     {
-
-
-        auto a = argA->generateBytecode(ctx);
+        auto a = ctx.castReg(argA->generateBytecode(ctx));
         auto b = argB->generateBytecode(ctx);
-        a = ctx.castReg(a);
 
         AotValue result;
         bool sign = a.def->type() == Int32 || a.def->type() == Int64;
@@ -314,8 +306,7 @@ namespace BraneScript
 
     AotValue AotAssignNode::generateBytecode(CompilerCtx& ctx) const
     {
-        auto rValue = argB->generateBytecode(ctx);
-        rValue = ctx.castValue(rValue);
+        auto rValue = ctx.castValue(argB->generateBytecode(ctx));
         auto lValue = argA->generateBytecode(ctx);
 
         ctx.function->appendCode(MOV, lValue.valueIndex, rValue.valueIndex);

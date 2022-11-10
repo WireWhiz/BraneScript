@@ -16,16 +16,21 @@ namespace BraneScript
     class Script
     {
     public:
-        std::vector<FunctionReference> functions;
+        std::vector<void*> functions;
         std::unordered_map<std::string, size_t> functionNames;
 
         template<typename Ret, typename... Args>
         FunctionHandle<Ret, Args...> getFunction(const std::string& name)
         {
-            auto f = functionNames.find(name);
+            std::string arguments;
+            if constexpr(sizeof...(Args))
+                arguments = "(" + argsToString<Args...>() + ")";
+            else
+                arguments = "()";
+            auto f = functionNames.find(name + arguments);
             if (f == functionNames.end())
                 return nullptr;
-            return functions[f->second].getOverride<Ret, Args...>();
+            return (FunctionHandle<Ret, Args...>)functions[f->second];
         }
     };
 }

@@ -88,24 +88,24 @@ TEST(BraneScript, Operators)
 
     //Addition/subtraction
     auto testIntAdd = testScript->getFunction<int, int, int>("testIntAdd");
-    EXPECT_TRUE(testIntAdd);
+    ASSERT_TRUE(testIntAdd);
     TEST_DUAL_ARG_OPERATOR(+, testIntAdd, intTestArgs);
     auto testIntSub = testScript->getFunction<int, int, int>("testIntSub");
-    EXPECT_TRUE(testIntSub);
+    ASSERT_TRUE(testIntSub);
     TEST_DUAL_ARG_OPERATOR(-, testIntSub, intTestArgs);
 
     auto testFloatAdd = testScript->getFunction<float, float, float>("testFloatAdd");
-    EXPECT_TRUE(testFloatAdd);
+    ASSERT_TRUE(testFloatAdd);
     TEST_DUAL_ARG_OPERATOR(+, testFloatAdd, floatTestArgs);
     auto testFloatSub = testScript->getFunction<float, float, float>("testFloatSub");
-    EXPECT_TRUE(testFloatSub);
+    ASSERT_TRUE(testFloatSub);
     TEST_DUAL_ARG_OPERATOR(-, testFloatSub, floatTestArgs);
 
     auto testIntFloatAdd = testScript->getFunction<float, int, float>("testIntFloatAdd");
-    EXPECT_TRUE(testIntFloatAdd);
+    ASSERT_TRUE(testIntFloatAdd);
     TEST_DUAL_ARG_OPERATOR(+, testIntFloatAdd, intFloatTestArgs);
     auto testIntFloatSub = testScript->getFunction<float, int, float>("testIntFloatSub");
-    EXPECT_TRUE(testIntFloatSub);
+    ASSERT_TRUE(testIntFloatSub);
     TEST_DUAL_ARG_OPERATOR(-, testIntFloatSub, intFloatTestArgs);
 
     //Multiplication/division

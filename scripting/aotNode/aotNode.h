@@ -44,6 +44,7 @@ namespace BraneScript
             Scope,
             If,
             While,
+            Call,
             Assign,
             Add,
             Sub,
