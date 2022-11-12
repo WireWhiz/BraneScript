@@ -20,14 +20,15 @@
 namespace BraneScript
 {
     class TypeDef;
-
     class CompilerCtx;
+    class Linker;
 
     class Compiler : public braneBaseVisitor
     {
     private:
         const std::string* _currentFile = nullptr;
         std::unique_ptr<CompilerCtx> _ctx;
+        Linker* _linker = nullptr;
         std::vector<std::string> _errors;
 
         std::unordered_map<std::string, TypeDef*> _types;
@@ -90,6 +91,8 @@ namespace BraneScript
 
         std::any visitFunctionCall(braneParser::FunctionCallContext *context) override;
 
+        std::any visitLink(braneParser::LinkContext *context) override;
+
         bool localValueExists(const std::string& name);
 
         void registerLocalValue(std::string name, const std::string& type, bool constant);
@@ -112,10 +115,13 @@ namespace BraneScript
 
         bool contextValid();
 
+        static std::string removePars(const std::string& str);
+
     public:
 
         Compiler();
 
+        void setLinker(Linker* linker);
         IRScript* compile(const std::string& script);
 
         const std::vector<std::string>& errors() const;
@@ -138,6 +144,8 @@ namespace BraneScript
         ScriptFunction* function = nullptr;
         bool returnCalled = false;
         std::map<uint16_t, AotValue> lValues;
+
+        std::unordered_map<std::string, uint32_t> libraryAliases;
 
         CompilerCtx(Compiler& c, IRScript* s);
 

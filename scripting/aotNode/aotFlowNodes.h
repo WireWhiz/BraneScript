@@ -9,6 +9,7 @@
 
 #include <vector>
 #include <memory>
+#include <string>
 
 namespace BraneScript
 {
@@ -57,12 +58,23 @@ namespace BraneScript
         AotValue generateBytecode(CompilerCtx& ctx) const override;
     };
 
-    class FunctionCall : public AotNode
+    class AotFunctionCall : public AotNode
     {
         uint32_t _functionIndex;
         std::vector<std::unique_ptr<AotNode>> _arguments;
     public:
-        FunctionCall(uint32_t functionIndex, TypeDef* returnType, const std::vector<AotNode*>& arguments);
+        AotFunctionCall(uint32_t functionIndex, TypeDef* returnType, const std::vector<AotNode*>& arguments);
+        AotNode* optimize() override;
+        AotValue generateBytecode(CompilerCtx& ctx) const override;
+    };
+
+    class AotExternalFunctionCall : public AotNode
+    {
+        uint32_t _library;
+        std::string _name;
+        std::vector<std::unique_ptr<AotNode>> _arguments;
+    public:
+        AotExternalFunctionCall(uint32_t library, std::string name, TypeDef* returnType, const std::vector<AotNode*>& arguments);
         AotNode* optimize() override;
         AotValue generateBytecode(CompilerCtx& ctx) const override;
     };

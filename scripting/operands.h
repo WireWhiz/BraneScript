@@ -17,8 +17,7 @@ namespace BraneScript
         RET,    //Exit function
         RETV,   // (ValueIndex value) Return int32 value
         LOADC,  // (ValueIndex value, uint32_t constantIndex) load constant defined by byte array into the value
-        LINKL,  // (uint8_t nameSize, chararray) add library to function search
-        LINKF,  // (uint8_t nameSize, chararray) link to external function, name in format of name(type, type, type, ...)
+        LINKL,  // (uint8_t nameSize, chararray name) add library to function search
 
         SETE,  // (ValueIndex) set to 0 or 1 based on condition
         SETNE, // (ValueIndex) set to 0 or 1 based on condition
@@ -42,7 +41,8 @@ namespace BraneScript
         JGE,  // (uint32_t markIndex) jump to mark on condition
         JLE,  // (uint32_t markIndex) jump to mark on condition
 
-        CALL,  // (uint32_t function, ValueIndex returnValue, ValueIndex...) call to another function within the script
+        CALL,   // (uint32_t function, ValueIndex returnValue, ValueIndex...) call to another function within the script
+        EXCALL, // (uint32_t library, uint8_t declSize, chararray decl, uint8_t argFlags, ValueIndex...) call to a library function
 
         MOV,   // (uin32_t value,  uin32_t value) move value to another value.
 

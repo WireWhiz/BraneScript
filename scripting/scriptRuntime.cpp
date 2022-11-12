@@ -7,6 +7,8 @@
 #include "irScript.h"
 #include "valueIndex.h"
 #include "asmjit/core/globals.h"
+#include "library.h"
+#include "linker.h"
 
 #include "asmjit/asmjit.h"
 #include <cstdio>
@@ -27,7 +29,22 @@ namespace BraneScript
         }
     };
 
-    asmjit::TypeId strToType(const std::string& str)
+    asmjit::TypeId valueToASMType(const ValueIndex& value)
+    {
+        switch (value.valueType)
+        {
+            case ValueType::Bool:
+                return asmjit::TypeId::kUInt8;
+            case ValueType::Int32:
+                return asmjit::TypeId::kInt32;
+            case ValueType::Float32:
+                return asmjit::TypeId::kFloat32;
+            default:
+                throw std::runtime_error("Unimplemented type");
+        }
+    }
+
+    asmjit::TypeId strToASMType(const std::string& str)
     {
         if (str == "void") return asmjit::TypeId::kVoid;
         if (str == "bool") return asmjit::TypeId::kUInt8;
@@ -112,6 +129,11 @@ namespace BraneScript
             return currentFunction->readCode<T>(iptr);
         }
 
+        inline std::string readString()
+        {
+            return currentFunction->readString(iptr);
+        }
+
         bool endOfCode() const
         {
             return iptr >= currentFunction->code.size();
@@ -157,8 +179,21 @@ namespace BraneScript
     Script* ScriptRuntime::assembleScript(IRScript* irScript)
     {
         assert(irScript);
-        auto* script = new Script();
-        JitErrorHandler errorHandler;;
+        auto script = std::make_unique<Script>();
+        std::vector<Library*> linkedLibraries;
+        for(auto& lib : irScript->linkedLibraries)
+        {
+            assert(_linker);
+            auto libPtr = _linker->getLibrary(lib);
+            if(!libPtr)
+            {
+                //TODO error system for script runtime;
+                assert(false);
+                return nullptr;
+            }
+            linkedLibraries.push_back(libPtr);
+        }
+        JitErrorHandler errorHandler;
         for (auto& func: irScript->localFunctions)
         {
             AssemblyCtx ctx;
@@ -179,11 +214,11 @@ namespace BraneScript
             sigBuilder.setCallConvId(asmjit::CallConvId::kCDecl);
             for (auto& arg: func.arguments)
             {
-                auto type = strToType(arg);
+                auto type = strToASMType(arg);
                 sigBuilder.addArg(type);
                 argTypes.push_back(type);
             }
-            auto retType = strToType(func.returnType);
+            auto retType = strToASMType(func.returnType);
             sigBuilder.setRet(retType);
             auto* f = cc.addFunc(sigBuilder);
 
@@ -413,9 +448,9 @@ namespace BraneScript
                         asmjit::FuncSignatureBuilder sb;
                         sb.setCallConvId(asmjit::CallConvId::kCDecl);
 
-                        sb.setRet(strToType(function.returnType));
+                        sb.setRet(strToASMType(function.returnType));
                         for(auto& arg : function.arguments)
-                            sb.addArg(strToType(arg));
+                            sb.addArg(strToASMType(arg));
 
                         asmjit::InvokeNode* in;
                         assert(fIndex <= script->functions.size());
@@ -435,6 +470,49 @@ namespace BraneScript
                             auto argVal = ctx.readCode<ValueIndex>();
                             in->setArg(i, ctx.getReg<Reg>(argVal));
                         }
+                        break;
+                    }
+                    case EXCALL:
+                    {
+                        auto libIndex = ctx.readCode<uint32_t>();
+                        assert(libIndex < linkedLibraries.size());
+                        auto& library = *linkedLibraries[libIndex];
+
+                        std::string funcDecl = ctx.readString();
+                        auto argFlags = ctx.readCode<uint8_t>();
+                        bool hasRet = argFlags & (1 << 7);
+                        uint8_t argCount = argFlags & ~(1 << 7);
+
+                        std::vector<ValueIndex> values;
+                        values.reserve(argCount + (uint8_t)hasRet);
+                        if(hasRet)
+                            values.push_back(ctx.readCode<ValueIndex>());
+                        for(uint8_t i = 0; i < argCount; ++i)
+                            values.push_back(ctx.readCode<ValueIndex>());
+
+                        auto* function = library.getFunction(funcDecl);
+                        assert(function);
+
+                        asmjit::FuncSignatureBuilder sb;
+                        sb.setCallConvId(asmjit::CallConvId::kCDecl);
+
+                        if(hasRet)
+                            sb.setRet(valueToASMType(values[0]));
+                        else
+                            sb.setRet(asmjit::TypeId::kVoid);
+                        for(uint8_t arg = hasRet; arg < values.size(); ++arg)
+                            sb.addArg(valueToASMType(values[arg]));
+
+                        asmjit::InvokeNode* in;
+                        cc.invoke(&in, function, sb);
+
+                        if(hasRet)
+                        {
+                            ctx.verifyValue(values[0], cc);
+                            in->setRet(0, ctx.getReg<Reg>(values[0]));
+                        }
+                        for(uint8_t arg = hasRet; arg < values.size(); ++arg)
+                            in->setArg(arg, ctx.getReg<Reg>(values[arg]));
                         break;
                     }
                     case MOV:
@@ -753,7 +831,14 @@ namespace BraneScript
             script->functions.push_back(fPtr);
         }
 
+        auto scriptPtr = script.get();
+        _scripts.push_back(std::move(script));
+        return scriptPtr;
+    }
 
-        return script;
+    void ScriptRuntime::setLinker(Linker* linker)
+    {
+        assert(linker);
+        _linker = linker;
     }
 }

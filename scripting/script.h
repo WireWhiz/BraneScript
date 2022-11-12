@@ -9,7 +9,7 @@
 #include <unordered_map>
 #include <string>
 #include <asmjit/core/codeholder.h>
-#include "functionReference.h"
+#include "functionHandle.h"
 
 namespace BraneScript
 {

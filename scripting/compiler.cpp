@@ -9,6 +9,8 @@
 #include "aotNode/aotOperationNodes.h"
 #include "aotNode/aotValueNodes.h"
 #include "aotNode/aotFlowNodes.h"
+#include "linker.h"
+#include "library.h"
 
 namespace BraneScript
 {
@@ -231,7 +233,7 @@ namespace BraneScript
 
         //TODO: TypeAssert()
         _ctx->function->returnType = ctx->type->getText();
-        if (!getType(_ctx->function->returnType))
+        if (!getType(_ctx->function->returnType) && _ctx->function->returnType != "void")
         {
             throwError(ctx->type, "Unknown return type");
             return {};
@@ -422,7 +424,7 @@ namespace BraneScript
 
     std::any Compiler::visitFunctionCall(braneParser::FunctionCallContext* context)
     {
-        std::string functionName = context->ID()->getText();
+        std::string functionName = context->name->getText();
         std::vector<AotNode*> arguments = std::any_cast<std::vector<AotNode*>>(visit(context->argumentPack()));
         functionName += "(";
         for(auto* arg : arguments)
@@ -440,19 +442,56 @@ namespace BraneScript
         }
         functionName += ")";
 
+        if(context->namespace_)
+        {
+            std::string space = context->namespace_->getText();
+            if(!_ctx->libraryAliases.count(space))
+            {
+                throwError(context->namespace_, "Library not found!");
+                RETURN_NULL;
+            }
+
+            auto* library = _linker->getLibrary(_ctx->script->linkedLibraries[_ctx->libraryAliases[space]]);
+
+            auto retType = getType(library->getFunctionReturnT(functionName));
+            uint32_t libIndex = _ctx->libraryAliases.at(space);
+            return (AotNode*)new AotExternalFunctionCall(libIndex, functionName, retType, arguments);
+        }
+
         uint32_t fIndex = 0;
         for(auto& func : _ctx->script->localFunctions)
         {
             if(functionName == func.name)
             {
                 TypeDef* retType = getType(func.returnType);
-                return (AotNode*)new FunctionCall(fIndex, retType, arguments);
+                return (AotNode*)new AotFunctionCall(fIndex, retType, arguments);
             }
             ++fIndex;
         }
 
         throwError(context->getStart(), "Could not find function with signature " + functionName);
         RETURN_NULL;
+    }
+
+    std::any Compiler::visitLink(braneParser::LinkContext* context)
+    {
+        std::string libraryName = removePars(context->library->getText());
+        if(!_linker)
+        {
+            throwError("You must set a linker to be able to link libraries");
+            return {};
+        }
+        if(!_linker->getLibrary(libraryName))
+        {
+            throwError("Library \"" + libraryName + "\" not found");
+            return {};
+        }
+        _ctx->script->linkedLibraries.push_back(libraryName);
+        if(context->alias)
+            _ctx->libraryAliases.insert({removePars(context->alias->getText()), _ctx->libraryAliases.size()});
+        else
+            _ctx->libraryAliases.insert({libraryName, _ctx->libraryAliases.size()});
+        return {};
     }
 
     void Compiler::throwError(const std::string& message)
@@ -495,6 +534,18 @@ namespace BraneScript
                 return true;
         }
         return false;
+    }
+
+    void Compiler::setLinker(Linker* linker)
+    {
+        assert(linker);
+        _linker = linker;
+    }
+
+    std::string Compiler::removePars(const std::string& str)
+    {
+        assert(str.size() >= 2);
+        return str.substr(1, str.size() - 2);
     }
 
     CompilerCtx::CompilerCtx(Compiler& c, IRScript* s) : compiler(c), script(s)

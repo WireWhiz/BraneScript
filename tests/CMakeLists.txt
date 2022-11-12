@@ -12,7 +12,7 @@ endif()
 
 enable_testing()
 
-add_executable(bs_tests operatorTests.cpp testing.cpp flowStatementTests.cpp overrideTests.cpp recursionTest.cpp)
+add_executable(bs_tests operatorTests.cpp testing.cpp flowStatementTests.cpp overrideTests.cpp recursionTest.cpp libraryTests.cpp objectTests.cpp)
 target_link_libraries(bs_tests PUBLIC gtest_main scripting)
 
 include(GoogleTest)

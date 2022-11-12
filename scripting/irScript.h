@@ -19,6 +19,7 @@ namespace BraneScript
             std::vector<BaseType> arguments;
         };
 
+        std::vector<std::string> linkedLibraries;
         std::vector<ScriptFunction> localFunctions;
         std::vector<LinkedFunction> linkedFunctions;
     };

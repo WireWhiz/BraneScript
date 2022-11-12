@@ -25,6 +25,7 @@ namespace BraneScript
         std::string name;
 
         void appendCode(Operand op);
+        void appendCode(const std::string& string);
 
         template<typename A>
         void appendCode(Operand op, A a)
@@ -66,6 +67,8 @@ namespace BraneScript
             index += sizeof(T);
             return value;
         }
+
+        std::string readString(size_t& index);
     };
 }
 

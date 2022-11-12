@@ -11,6 +11,6 @@ add_library(scripting STATIC
         aotNode/aotValueNodes.cpp
         aotNode/aotFlowNodes.cpp
         library.cpp
-        operands.h functionReference.cpp functionReference.h)
+        operands.h functionHandle.cpp functionHandle.h linker.cpp linker.h)
 target_link_libraries(scripting PUBLIC antlr4 asmjit)
 target_compile_definitions(scripting PUBLIC ASMJIT_EMBED)

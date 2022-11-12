@@ -12,13 +12,16 @@ namespace BraneScript
 {
     class Script;
     class IRScript;
+    class Linker;
 
     class ScriptRuntime
     {
         asmjit::JitRuntime _runtime;
         std::vector<std::unique_ptr<Script>> _scripts;
+        Linker* _linker;
     public:
         Script* assembleScript(IRScript* irScript);
+        void setLinker(Linker* linker);
     };
 }
 

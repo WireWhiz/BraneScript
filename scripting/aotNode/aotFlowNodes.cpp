@@ -5,6 +5,9 @@
 #include "aotFlowNodes.h"
 
 #include "../compiler.h"
+
+#include "../functionHandle.h"
+
 namespace BraneScript
 {
     AotScope::AotScope(std::vector<AotNode*> operations) : AotNode(nullptr, Scope)
@@ -129,7 +132,7 @@ namespace BraneScript
         return {};
     }
 
-    FunctionCall::FunctionCall(uint32_t functionIndex, TypeDef* returnType, const std::vector<AotNode*>& arguments) : AotNode(returnType, Call)
+    AotFunctionCall::AotFunctionCall(uint32_t functionIndex, TypeDef* returnType, const std::vector<AotNode*>& arguments) : AotNode(returnType, Call)
     {
         _functionIndex = functionIndex;
         _arguments.reserve(arguments.size());
@@ -137,7 +140,7 @@ namespace BraneScript
             _arguments.push_back(std::unique_ptr<AotNode>(node));
     }
 
-    AotNode* FunctionCall::optimize()
+    AotNode* AotFunctionCall::optimize()
     {
         for (auto& arg : _arguments)
         {
@@ -148,9 +151,8 @@ namespace BraneScript
         return this;
     }
 
-    AotValue FunctionCall::generateBytecode(CompilerCtx& ctx) const
+    AotValue AotFunctionCall::generateBytecode(CompilerCtx& ctx) const
     {
-
         AotValue returnValue;
 
         std::vector<AotValue> args;
@@ -160,6 +162,52 @@ namespace BraneScript
             returnValue = ctx.newReg(_resType, 0);
 
         ctx.function->appendCode(Operand::CALL, _functionIndex);
+        if(_resType)
+            ctx.function->appendCode(returnValue.valueIndex);
+        for(auto& a : args)
+            ctx.function->appendCode(a.valueIndex);
+
+        return returnValue;
+    }
+
+    AotExternalFunctionCall::AotExternalFunctionCall(uint32_t library, std::string name, TypeDef* returnType, const std::vector<AotNode*>& arguments) : _library(library), _name(std::move(name)), AotNode(returnType, Call)
+    {
+        _arguments.reserve(arguments.size());
+        for (AotNode* node: arguments)
+            _arguments.push_back(std::unique_ptr<AotNode>(node));
+    }
+
+    AotNode* AotExternalFunctionCall::optimize()
+    {
+        for (auto& arg : _arguments)
+        {
+            auto* result = arg->optimize();
+            if(arg.get() != result)
+                arg = std::unique_ptr<AotNode>(result);
+        }
+        return this;
+    }
+
+    AotValue AotExternalFunctionCall::generateBytecode(CompilerCtx& ctx) const
+    {
+        AotValue returnValue;
+
+        std::vector<AotValue> args;
+        for(auto& arg : _arguments)
+            args.push_back(ctx.castReg(arg->generateBytecode(ctx)));
+        if(_resType)
+            returnValue = ctx.newReg(_resType, 0);
+
+        ctx.function->appendCode(Operand::EXCALL, _library);
+        ctx.function->appendCode(_name);
+        assert(args.size() < 128);
+        uint8_t argFlags = args.size();
+        if(_resType)
+            argFlags |= (1 << 7);
+        else
+            argFlags &= ~(1 << 7);
+        ctx.function->appendCode(argFlags);
+
         if(_resType)
             ctx.function->appendCode(returnValue.valueIndex);
         for(auto& a : args)

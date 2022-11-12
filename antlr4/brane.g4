@@ -20,6 +20,7 @@ program     : (progSegment+ EOF | EOF);
 
 progSegment : function
             | preprocessor NEWLINE
+            | link
             //Possibly globals here as well
             ;
 
@@ -29,6 +30,7 @@ argumentPack: (expression (',' expression)*)?;
 function    : type=ID id=ID '(' arguments=argumentList ')' '{' statements=statement* '}';
 
 preprocessor: '#include' content=.*? NEWLINE                                #include;
+link        : 'link' library=STRING ('as' alias=STRING)? ';';
 
 statement   : expression ';'                                                #exprStatement
             | '{' statement* '}'                                            #scope
@@ -43,7 +45,7 @@ expression  : INT                                                           #con
             | STRING                                                        #constString
             | ('true'|'false')                                              #constBool
             | declaration                                                   #decl
-            | ID '(' argumentPack ')'                                       #functionCall
+            | (namespace=ID '.')? name=ID '(' argumentPack ')'              #functionCall
             | ID                                                            #id
             | left=expression op=(MUL | DIV) right=expression               #muldiv
             | left=expression op=(ADD | SUB) right=expression               #addsub
