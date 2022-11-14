@@ -27,8 +27,6 @@ namespace BraneScript
                 return nativeTypes[2];
             case Float64:
                 break;
-            case Ptr:
-                break;
         }
         return nullptr;
     };

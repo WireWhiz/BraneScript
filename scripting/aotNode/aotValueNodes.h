@@ -7,6 +7,8 @@
 
 #include <any>
 #include <string>
+#include <memory>
+
 #include "aotNode.h"
 namespace BraneScript
 {
@@ -39,10 +41,45 @@ namespace BraneScript
 
     class AotValueNode : public AotNode
     {
-        uint16_t _lValueIndex;
+        uint16_t _lValueID;
         bool _constant;
     public:
         AotValueNode(uint16_t lValueIndex, TypeDef* type, bool constant);
+
+        AotNode* optimize() override;
+
+        AotValue generateBytecode(CompilerCtx& ctx) const override;
+    };
+
+    class AotDerefNode : public AotNode
+    {
+        std::unique_ptr<AotNode> _value;
+        uint32_t _offset;
+
+    public:
+        AotDerefNode(AotNode* value, TypeDef* type, uint32_t offset);
+
+        AotNode* optimize() override;
+
+        AotValue generateBytecode(CompilerCtx& ctx) const override;
+    };
+
+    class StructDef;
+    class AotNewNode : public AotNode
+    {
+    public:
+        AotNewNode(StructDef* structType);
+
+        AotNode* optimize() override;
+
+        AotValue generateBytecode(CompilerCtx& ctx) const override;
+    };
+
+    class AotDeleteNode : public AotNode
+    {
+        std::unique_ptr<AotNode> _ptr;
+    public:
+        AotDeleteNode(AotNode* ptr);
 
         AotNode* optimize() override;
 

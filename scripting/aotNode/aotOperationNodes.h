@@ -7,6 +7,7 @@
 
 #include "aotNode.h"
 #include <memory>
+#include <vector>
 namespace BraneScript
 {
     class AotSingleArgNode : public AotNode
@@ -36,10 +37,18 @@ namespace BraneScript
         AotNode* releaseNonConstArg();
     };
 
+    class AotReturnNode : public AotNode
+    {
+    public:
+        AotReturnNode();
+        AotNode* optimize() override;
+        AotValue generateBytecode(CompilerCtx& ctx) const override;
+    };
+
     class AotReturnValueNode : public AotSingleArgNode
     {
     public:
-        explicit AotReturnValueNode(AotNode* arg);
+        AotReturnValueNode(AotNode* arg);
 
         AotValue generateBytecode(CompilerCtx& ctx) const override;
     };
@@ -103,10 +112,10 @@ namespace BraneScript
     public:
         enum Mode
         {
-            Equal = ValueStorageType_EqualRes,
-            NotEqual = ValueStorageType_NotEqualRes,
-            Greater = ValueStorageType_GreaterRes,
-            GreaterEqual = ValueStorageType_GreaterEqualRes
+            Equal = AotValue::EqualRes,
+            NotEqual = AotValue::NotEqualRes,
+            Greater = AotValue::GreaterRes,
+            GreaterEqual = AotValue::GreaterEqualRes
         };
     private:
         Mode _mode;

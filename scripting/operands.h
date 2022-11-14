@@ -17,7 +17,9 @@ namespace BraneScript
         RET,    //Exit function
         RETV,   // (ValueIndex value) Return int32 value
         LOADC,  // (ValueIndex value, uint32_t constantIndex) load constant defined by byte array into the value
-        LINKL,  // (uint8_t nameSize, chararray name) add library to function search
+
+        ALLOC,   // (ValueIndex ptr, uint32_t size) allocate struct
+        FREE,    // (ValueIndex ptr) increment ptr count
 
         SETE,  // (ValueIndex) set to 0 or 1 based on condition
         SETNE, // (ValueIndex) set to 0 or 1 based on condition
@@ -42,9 +44,10 @@ namespace BraneScript
         JLE,  // (uint32_t markIndex) jump to mark on condition
 
         CALL,   // (uint32_t function, ValueIndex returnValue, ValueIndex...) call to another function within the script
-        EXCALL, // (uint32_t library, uint8_t declSize, chararray decl, uint8_t argFlags, ValueIndex...) call to a library function
+        EXCALL, // (uint32_t library, uint8_t declSize, chararray decl, uint8_t argFlags, ValueIndex...) call to a library function TODO switch to use irScript var index instead of string
 
-        MOV,   // (uin32_t value,  uin32_t value) move value to another value.
+        MOV,   // (ValueIndex value, ValueIndex value) move value to another value.
+        MOVI,  // (ValueIndex value, T value) move an immediate value into a register.
 
         INC,   // (ValueIndex value)  increment value.
         DEC,   // (ValueIndex value)  decrement value.

@@ -76,10 +76,11 @@ TEST(BraneScript, Operators)
 
     Compiler compiler;
     auto* ir = compiler.compile(testString);
+    checkCompileErrors(compiler);
+    ASSERT_TRUE(ir);
 
     ScriptRuntime rt;
     Script* testScript = rt.assembleScript(ir);
-    checkCompileErrors(compiler);
     ASSERT_TRUE(testScript);
 
     std::vector<std::pair<int32_t, int32_t>>     intTestArgs =   {{0, 1},{1, 1},{2, 3}, {3, 3}, {123451, 12332169}, {0, -1}, {-1234123, 12341612}};

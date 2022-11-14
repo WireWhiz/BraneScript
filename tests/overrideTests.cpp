@@ -32,6 +32,7 @@ TEST(BraneScript, Overrides)
     Compiler compiler;
     auto* ir = compiler.compile(testString);
     checkCompileErrors(compiler);
+    ASSERT_TRUE(ir);
 
     ScriptRuntime rt;
     Script* testScript = rt.assembleScript(ir);

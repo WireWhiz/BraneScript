@@ -242,6 +242,22 @@ namespace BraneScript
         return left;
     }
 
+    AotReturnNode::AotReturnNode() : AotNode(nullptr, Return)
+    {
+
+    }
+
+    AotNode* AotReturnNode::optimize()
+    {
+        return this;
+    }
+
+    AotValue AotReturnNode::generateBytecode(CompilerCtx& ctx) const
+    {
+        ctx.function->appendCode(Operand::RET);
+        return {};
+    }
+
     AotReturnValueNode::AotReturnValueNode(AotNode* arg) : AotSingleArgNode(arg, arg->resType(), ReturnValue)
     {
 
@@ -279,14 +295,13 @@ namespace BraneScript
         {
             case Equal:
             case NotEqual:
-                result.valueIndex.storageType = (ValueStorageType)_mode;
+                result.compareType = (AotValue::CompareType)_mode;
                 break;
             case Greater:
-                result.valueIndex.storageType = sign ? ValueStorageType_GreaterRes : ValueStorageType_AboveRes;
+                result.compareType = sign ? AotValue::GreaterRes : AotValue::AboveRes;
                 break;
             case GreaterEqual:
-                result.valueIndex.storageType = sign ? ValueStorageType_GreaterEqualRes
-                                                     : ValueStorageType_AboveEqualRes;
+                result.compareType = sign ? AotValue::GreaterEqualRes : AotValue::AboveEqualRes;
                 break;
         }
 

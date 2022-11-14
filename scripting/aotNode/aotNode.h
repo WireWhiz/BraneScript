@@ -16,16 +16,29 @@ namespace BraneScript
     {
         enum : uint8_t
         {
-            Const = 1,
-            Constexpr = 1 << 1,
-            Temp = 1 << 2
+            Const      = 1,
+            Constexpr  = 1 << 1,
+            Temp       = 1 << 2
         };
+        enum CompareType : uint8_t
+        {
+            NoRes = 0,
+            EqualRes,
+            NotEqualRes,
+            AboveRes,
+            GreaterRes,
+            AboveEqualRes,
+            GreaterEqualRes
+        };
+
         uint8_t flags = 0;
+        CompareType compareType = NoRes;
         ValueIndex valueIndex = {};
         TypeDef* def = nullptr;
-
-        inline bool isVoid() const
-        { return def == nullptr; };
+        inline bool isCompare() const { return compareType != NoRes; };
+        inline bool isVoid() const { return def == nullptr; };
+        inline bool isTemp() const { return flags & Temp; };
+        inline bool isRef() const { return valueIndex.storageType == ValueStorageType_Ptr; };
     };
 
     class CompilerCtx;
@@ -37,6 +50,9 @@ namespace BraneScript
         {
             Const,
             Value,
+            New,
+            Free,
+            Deref,
             Cast,
             Compare,
             Return,

@@ -42,32 +42,36 @@ namespace BraneScript
 
     void AotConditionBase::jumpOnConditionFalse(AotValue& condition, uint32_t markIndex, CompilerCtx& ctx)
     {
-        switch (condition.valueIndex.storageType)
+        if(!condition.isCompare())
         {
-            case ValueStorageType_Mem:
+            if(condition.valueIndex.storageType == ValueStorageType_Const)
                 condition = ctx.castReg(condition);
-            case ValueStorageType_Reg:
-                ctx.function->appendCode(TEST, condition.valueIndex);
-                ctx.function->appendCode(JE, markIndex);
-                break;
-            case ValueStorageType_EqualRes:
+            ctx.function->appendCode(TEST, condition.valueIndex);
+            ctx.function->appendCode(JE, markIndex);
+            return;
+        }
+        switch (condition.compareType)
+        {
+            case AotValue::EqualRes:
                 ctx.function->appendCode(JNE, markIndex);
                 break;
-            case ValueStorageType_NotEqualRes:
+            case AotValue::NotEqualRes:
                 ctx.function->appendCode(JE, markIndex);
                 break;
-            case ValueStorageType_AboveRes:
+            case AotValue::AboveRes:
                 ctx.function->appendCode(JBE, markIndex);
                 break;
-            case ValueStorageType_GreaterRes:
+            case AotValue::GreaterRes:
                 ctx.function->appendCode(JLE, markIndex);
                 break;
-            case ValueStorageType_AboveEqualRes:
+            case AotValue::AboveEqualRes:
                 ctx.function->appendCode(JB, markIndex);
                 break;
-            case ValueStorageType_GreaterEqualRes:
+            case AotValue::GreaterEqualRes:
                 ctx.function->appendCode(JL, markIndex);
                 break;
+            default:
+                assert(false);
         }
     }
 

@@ -9,6 +9,7 @@
 #include "asmjit/core/globals.h"
 #include "library.h"
 #include "linker.h"
+#include "structDefinition.h"
 
 #include "asmjit/asmjit.h"
 #include <cstdio>
@@ -39,6 +40,8 @@ namespace BraneScript
                 return asmjit::TypeId::kInt32;
             case ValueType::Float32:
                 return asmjit::TypeId::kFloat32;
+            case ValueType::ObjectRef:
+                return asmjit::TypeId::kIntPtr;
             default:
                 throw std::runtime_error("Unimplemented type");
         }
@@ -51,7 +54,7 @@ namespace BraneScript
         if (str == "int") return asmjit::TypeId::kInt32;
         if (str == "float") return asmjit::TypeId::kFloat32;
         if (str == "uint") return asmjit::TypeId::kUInt32;
-        return asmjit::TypeId::kVoid;
+        return asmjit::TypeId::kIntPtr;
     }
 
     enum class ValueRegType : uint8_t
@@ -70,31 +73,44 @@ namespace BraneScript
         xmm_gp,
         xmm_mem,
         mem_gp,
-        mem_xmm
+        mem_xmm,
+        mem_mem
     };
 
     ValueRegType getValueRegType(const ValueIndex& value)
     {
-        if (value.storageType == ValueStorageType::ValueStorageType_Mem)
-            return ValueRegType::mem;
+        switch(value.storageType)
+        {
+            case ValueStorageType_Reg:
+                break; //goto next switch statement
+            case ValueStorageType_Ptr:
+                return ValueRegType::gp;
+            case ValueStorageType_DerefPtr:
+            case ValueStorageType_Const:
+                return ValueRegType::mem;
+            default:
+                assert(false);
+        }
         switch (value.valueType)
         {
             case Bool:
             case Int32:
             case Int64:
-            case Ptr:
                 return ValueRegType::gp;
             case Float32:
             case Float64:
                 return ValueRegType::xmm;
+            case ObjectRef:
+                return ValueRegType::mem;
         }
+        assert(false);
     }
 
     OperationType getOperationType(const ValueIndex& a, const ValueIndex& b)
     {
         const OperationType gpMap[] = {gp_gp, gp_xmm, gp_mem};
         const OperationType xmmMap[] = {xmm_gp, xmm_xmm, xmm_mem};
-        const OperationType memMap[] = {mem_gp, mem_xmm};
+        const OperationType memMap[] = {mem_gp, mem_xmm, mem_mem};
         const OperationType* typeMap;
         switch (getValueRegType(a))
         {
@@ -156,16 +172,34 @@ namespace BraneScript
                 case ValueType::Float32:
                     registers.push_back(cc.newXmmSs());
                     break;
+                case ValueType::ObjectRef:
+                    registers.push_back(cc.newIntPtr());
+                    break;
                 default:
                     throw std::runtime_error("Unimplemented type");
             }
         }
 
         template<class RT>
-        RT& getReg(ValueIndex value)
+        RT getReg(ValueIndex value)
         {
-            assert(value.index < registers.size());
-            return registers[value.index].as<RT>();
+            if constexpr (std::is_same<RT, Mem>())
+            {
+                if(value.storageType == ValueStorageType_Const)
+                {
+                    assert(value.index < constants.size());
+                    return constants[value.index];
+                }
+                //If this isn't a constant, it's safe to assume that it's a dereferenced pointer
+                assert(value.storageType == ValueStorageType_DerefPtr);
+                assert(value.index < registers.size());
+                return asmjit::x86::ptr(registers[value.index].as<Gp>(), value.offset);
+            }
+            else
+            {
+                assert(value.index < registers.size());
+                return registers[value.index].as<RT>();
+            }
         }
 
         asmjit::Label getLabel(uint32_t index, Compiler& cc)
@@ -175,6 +209,16 @@ namespace BraneScript
             return labels[index];
         }
     };
+
+    void* scriptAlloc(uint16_t size)
+    {
+        return new uint8_t[size];
+    }
+
+    void scriptDealoc(void* data)
+    {
+        delete[] data;
+    }
 
     Script* ScriptRuntime::assembleScript(IRScript* irScript)
     {
@@ -235,6 +279,9 @@ namespace BraneScript
                     case asmjit::TypeId::kFloat32:
                         ctx.registers.push_back(cc.newXmmSs());
                         break;
+                    case asmjit::TypeId::kIntPtr:
+                        ctx.registers.push_back(cc.newIntPtr());
+                        break;
                     default:
                         assert(false);
                 }
@@ -257,10 +304,33 @@ namespace BraneScript
                     case RETV:
                     {
                         auto valIndex = ctx.readCode<ValueIndex>();
-                        assert(valIndex.storageType == ValueStorageType_Reg);
+                        assert(valIndex.storageType == ValueStorageType_Reg || valIndex.storageType == ValueStorageType_Ptr);
                         printf("RETV r%hu\n", valIndex.index);
                         auto& ret = ctx.registers[valIndex.index];
                         cc.ret(ret);
+
+                        break;
+                    }
+                    case ALLOC:
+                    {
+                        auto valIndex = ctx.readCode<ValueIndex>();
+                        auto structSize = ctx.readCode<uint32_t>();
+                        asmjit::InvokeNode* in;
+                        cc.invoke(&in, &scriptAlloc, asmjit::FuncSignatureT<void*, uint32_t>());
+
+                        ctx.verifyValue(valIndex, cc);
+                        in->setRet(0, ctx.getReg<Gp>(valIndex));
+                        in->setArg(0, asmjit::Imm(structSize));
+                        break;
+                    }
+                    case FREE:
+                    {
+                        auto valIndex = ctx.readCode<ValueIndex>();
+                        asmjit::InvokeNode* in;
+                        cc.invoke(&in, &scriptDealoc, asmjit::FuncSignatureT<void, void*>());
+
+                        ctx.verifyValue(valIndex, cc);
+                        in->setArg(0, ctx.getReg<Gp>(valIndex));
                         break;
                     }
                     case LOADC:
@@ -519,9 +589,8 @@ namespace BraneScript
                     {
                         auto dest = ctx.readCode<ValueIndex>();
                         auto src = ctx.readCode<ValueIndex>();
-                        assert(dest.storageType == ValueStorageType_Reg);
-
                         ctx.verifyValue(dest, cc);
+
                         printf("MOV ");
                         switch (getOperationType(dest, src))
                         {
@@ -536,9 +605,17 @@ namespace BraneScript
                             case gp_mem:
                             {
                                 printf("gp%hu mem%hu\n", dest.index, src.index);
-                                auto srcMem = ctx.constants[src.index];
+                                auto srcMem = ctx.getReg<Mem>(src);
                                 auto destReg = ctx.getReg<Gp>(dest);
                                 cc.mov(destReg, srcMem);
+                            }
+                                break;
+                            case mem_gp:
+                            {
+                                printf("mem%hu gp%hu\n", dest.index, src.index);
+                                auto srcReg = ctx.getReg<Gp>(src);
+                                auto destMem = ctx.getReg<Mem>(dest);
+                                cc.mov(destMem, srcReg);
                             }
                                 break;
                             case gp_xmm:
@@ -569,12 +646,67 @@ namespace BraneScript
                             {
                                 printf("xmm%hu mem%hu\n", dest.index, src.index);
                                 auto destReg = ctx.getReg<Xmm>(dest);
-                                auto srcMem = ctx.constants[src.index];
+                                auto srcMem = ctx.getReg<Mem>(src);
                                 cc.movss(destReg, srcMem);
                             }
                                 break;
+                            case mem_xmm:
+                            {
+                                printf("mem%hu xmm%hu\n", dest.index, src.index);
+                                auto destMem = ctx.getReg<Mem>(dest);
+                                auto srcReg = ctx.getReg<Xmm>(src);
+                                cc.movss(destMem, srcReg);
+                                break;
+                            }
+                            case mem_mem:
+                            {
+                                auto destMem = ctx.getReg<Mem>(dest);
+                                auto srcMem = ctx.getReg<Mem>(src);
+                                Gp tempReg;
+                                switch(srcMem.size())
+                                {
+                                    case 1:
+                                        tempReg = cc.newGpb();
+                                        break;
+                                    case 4:
+                                        tempReg = cc.newGpd();
+                                        break;
+                                    case 8:
+                                        tempReg = cc.newGpq();
+                                        break;
+                                }
+                                cc.mov(tempReg, srcMem);
+                                cc.mov(destMem, tempReg);
+                                break;
+                            }
                             default:
                                 throw std::runtime_error("Invalid mov operands");
+                        }
+                        break;
+                    }
+                    case MOVI:
+                    {
+                        auto dest = ctx.readCode<ValueIndex>();
+                        ctx.verifyValue(dest, cc);
+
+                        printf("MOVI ");
+                        switch(dest.valueType)
+                        {
+
+                            case Bool:
+                                cc.mov(ctx.getReg<Gp>(dest), asmjit::imm(ctx.readCode<uint8_t>()));
+                                break;
+                            case Int32:
+                                cc.mov(ctx.getReg<Gp>(dest), asmjit::imm(ctx.readCode<int32_t>()));
+                                break;
+                            case Int64:
+                                cc.mov(ctx.getReg<Gp>(dest), asmjit::imm(ctx.readCode<int64_t>()));
+                                break;
+                            case ObjectRef:
+                                cc.mov(ctx.getReg<Gp>(dest), asmjit::imm(ctx.readCode<int32_t>()));
+                                break;
+                            default:
+                                assert(false);
                         }
                         break;
                     }
@@ -657,7 +789,7 @@ namespace BraneScript
                             {
                                 printf("gp%hu mem%hu\n", a.index, b.index);
                                 auto destReg = ctx.getReg<Gp>(a);
-                                auto srcMem = ctx.constants[b.index];
+                                auto srcMem = ctx.getReg<Mem>(b);
                                 cc.add(destReg, srcMem);
                             }
                                 break;
@@ -673,7 +805,7 @@ namespace BraneScript
                             {
                                 printf("xmm%hu mem%hu\n", a.index, b.index);
                                 auto destReg = ctx.getReg<Xmm>(a);
-                                auto srcReg = ctx.constants[b.index];
+                                auto srcReg = ctx.getReg<Mem>(b);
                                 cc.addss(destReg, srcReg);
                             }
                                 break;
@@ -701,7 +833,7 @@ namespace BraneScript
                             {
                                 printf("gp%hu mem%hu\n", a.index, b.index);
                                 auto destReg = ctx.getReg<Gp>(a);
-                                auto srcMem = ctx.constants[b.index];
+                                auto srcMem = ctx.getReg<Mem>(b);
                                 cc.sub(destReg, srcMem);
                             }
                                 break;
@@ -717,7 +849,7 @@ namespace BraneScript
                             {
                                 printf("xmm%hu mem%hu\n", a.index, b.index);
                                 auto destReg = ctx.getReg<Xmm>(a);
-                                auto srcMem = ctx.constants[b.index];
+                                auto srcMem = ctx.getReg<Mem>(b);
                                 cc.subss(destReg, srcMem);
                             }
                                 break;
@@ -745,7 +877,7 @@ namespace BraneScript
                             {
                                 printf("gp%hu mem%hu\n", a.index, b.index);
                                 auto destReg = ctx.getReg<Gp>(a);
-                                auto srcMem = ctx.constants[b.index];
+                                auto srcMem = ctx.getReg<Mem>(b);
                                 cc.imul(destReg, srcMem);
                             }
                                 break;
@@ -761,7 +893,7 @@ namespace BraneScript
                             {
                                 printf("xmm%hu mem%hu\n", a.index, b.index);
                                 auto destReg = ctx.getReg<Xmm>(a);
-                                auto srcMem = ctx.constants[b.index];
+                                auto srcMem = ctx.getReg<Mem>(b);
                                 cc.mulss(destReg, srcMem);
                             }
                                 break;
@@ -791,7 +923,7 @@ namespace BraneScript
                             {
                                 printf("gp%hu mem%hu\n", a.index, b.index);
                                 auto destReg = ctx.getReg<Gp>(a);
-                                auto srcMem = ctx.constants[b.index];
+                                auto srcMem = ctx.getReg<Mem>(b);
                                 auto remainder = cc.newInt32();
                                 cc.cdq(remainder, destReg);
                                 cc.idiv(remainder, destReg, srcMem);
@@ -809,7 +941,7 @@ namespace BraneScript
                             {
                                 printf("xmm%hu mem%hu\n", a.index, b.index);
                                 auto destReg = ctx.getReg<Xmm>(a);
-                                auto srcMem = ctx.constants[b.index];
+                                auto srcMem = ctx.getReg<Mem>(b);
                                 cc.divss(destReg, srcMem);
                             }
                                 break;

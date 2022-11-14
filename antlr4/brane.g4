@@ -21,6 +21,7 @@ program     : (progSegment+ EOF | EOF);
 progSegment : function
             | preprocessor NEWLINE
             | link
+            | structDef
             //Possibly globals here as well
             ;
 
@@ -31,6 +32,9 @@ function    : type=ID id=ID '(' arguments=argumentList ')' '{' statements=statem
 
 preprocessor: '#include' content=.*? NEWLINE                                #include;
 link        : 'link' library=STRING ('as' alias=STRING)? ';';
+
+structMembers : (declaration ';')*;
+structDef   : type=ID id=ID '{' members=structMembers '}';
 
 statement   : expression ';'                                                #exprStatement
             | '{' statement* '}'                                            #scope
@@ -45,8 +49,11 @@ expression  : INT                                                           #con
             | STRING                                                        #constString
             | ('true'|'false')                                              #constBool
             | declaration                                                   #decl
+            | 'new' type=ID                                                 #new
+            | 'delete' ptr=expression                                       #delete
             | (namespace=ID '.')? name=ID '(' argumentPack ')'              #functionCall
             | ID                                                            #id
+            | base=ID '.' member=ID                                         #memberAccess
             | left=expression op=(MUL | DIV) right=expression               #muldiv
             | left=expression op=(ADD | SUB) right=expression               #addsub
             | left=expression op=('==' | '!=' | '<' | '>' | '<=' | '>=') right=expression             #comparison

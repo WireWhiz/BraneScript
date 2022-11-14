@@ -15,28 +15,23 @@ namespace BraneScript
         Int64 = 3,
         Float32 = 4,
         Float64 = 5,
-        Ptr = 6
-
+        ObjectRef = 6
     };
-
-    const char* valueTypeName(ValueType type);
 
     enum ValueStorageType : uint8_t
     {
-        ValueStorageType_Reg = 0,
-        ValueStorageType_Mem = 1,
-        ValueStorageType_EqualRes = 2,
-        ValueStorageType_NotEqualRes = 3,
-        ValueStorageType_AboveRes = 4,
-        ValueStorageType_GreaterRes = 5,
-        ValueStorageType_AboveEqualRes = 6,
-        ValueStorageType_GreaterEqualRes = 7
+        ValueStorageType_Null = 0,
+        ValueStorageType_Reg = 1,
+        ValueStorageType_Const = 2,
+        ValueStorageType_Ptr = 3,
+        ValueStorageType_DerefPtr = 4
 
     };
 
     struct alignas(2) ValueIndex
     {
         uint16_t index;
+        uint16_t offset;
         ValueType valueType;
         ValueStorageType storageType;
     };

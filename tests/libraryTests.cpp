@@ -36,6 +36,7 @@ TEST(BraneScript, Libraries)
     compiler.setLinker(&linker);
     auto* ir = compiler.compile(testString);
     checkCompileErrors(compiler);
+    ASSERT_TRUE(ir);
 
     ScriptRuntime rt;
     rt.setLinker(&linker);

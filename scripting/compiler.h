@@ -20,6 +20,7 @@
 namespace BraneScript
 {
     class TypeDef;
+    class StructDef;
     class CompilerCtx;
     class Linker;
 
@@ -33,7 +34,7 @@ namespace BraneScript
 
         std::unordered_map<std::string, TypeDef*> _types;
 
-        uint16_t _lValueIndex = 0;
+        uint16_t _lValueIDCount = 0;
 
         struct Scope
         {
@@ -93,10 +94,15 @@ namespace BraneScript
 
         std::any visitLink(braneParser::LinkContext *context) override;
 
+        std::any visitMemberAccess(braneParser::MemberAccessContext *context) override;
+
+        std::any visitNew(braneParser::NewContext *context) override;
+
+        std::any visitDelete(braneParser::DeleteContext *context) override;
+
         bool localValueExists(const std::string& name);
 
-        void registerLocalValue(std::string name, const std::string& type, bool constant);
-
+        uint16_t registerLocalValue(std::string name, const std::string& type, bool constant);
         AotNode* getValueNode(const std::string& name);
 
         void pushScope();
@@ -128,7 +134,8 @@ namespace BraneScript
 
         void registerType(TypeDef* type);
 
-        TypeDef* getType(const std::string& typeName);
+        TypeDef* getType(const std::string& typeName) const;
+        StructDef* getStruct(const std::string& typeName) const;
 
         const std::unordered_map<std::string, TypeDef*>& types() const;
     };

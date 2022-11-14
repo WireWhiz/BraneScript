@@ -16,12 +16,13 @@ namespace BraneScript
         struct LinkedFunction
         {
             std::string name;
-            std::vector<BaseType> arguments;
+            uint16_t library;
         };
 
         std::vector<std::string> linkedLibraries;
         std::vector<ScriptFunction> localFunctions;
         std::vector<LinkedFunction> linkedFunctions;
+        std::vector<std::string> linkedTypes;
     };
 
 }

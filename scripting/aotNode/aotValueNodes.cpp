@@ -37,7 +37,7 @@ namespace BraneScript
             case Float64:
                 ctx.function->appendCode(LOADC, value.valueIndex, std::any_cast<double>(_value));
                 break;
-            case Ptr:
+            case ObjectRef:
                 assert(false);
                 break;
         }
@@ -146,7 +146,7 @@ namespace BraneScript
 
     AotValueNode::AotValueNode(uint16_t lValueIndex, TypeDef* type, bool constant) : AotNode(type, Value)
     {
-        _lValueIndex = lValueIndex;
+        _lValueID = lValueIndex;
         _constant = constant;
     }
 
@@ -158,10 +158,68 @@ namespace BraneScript
 
     AotValue AotValueNode::generateBytecode(CompilerCtx& ctx) const
     {
-        if (ctx.lValues.count(_lValueIndex))
-            return ctx.lValues.at(_lValueIndex);
+        if (ctx.lValues.count(_lValueID))
+            return ctx.lValues.at(_lValueID);
         AotValue value = ctx.newReg(_resType, _constant & AotValue::Const);
-        ctx.lValues.insert({_lValueIndex, value});
+        ctx.lValues.insert({_lValueID, value});
         return value;
+    }
+
+    AotDerefNode::AotDerefNode(AotNode* value, TypeDef* type, uint32_t offset) : AotNode(type, Deref), _value(value)
+    {
+        _offset = offset;
+    }
+
+    AotNode* AotDerefNode::optimize()
+    {
+        auto optArg = _value->optimize();
+        if (optArg != _value.get())
+            _value = std::unique_ptr<AotNode>(optArg);
+        return this;
+    }
+
+    AotValue AotDerefNode::generateBytecode(CompilerCtx& ctx) const
+    {
+        AotValue ptr = _value->generateBytecode(ctx);
+        assert(ptr.valueIndex.storageType == ValueStorageType_Ptr);
+        ptr.valueIndex.offset = _offset;
+        ptr.valueIndex.storageType = ValueStorageType_DerefPtr;
+        ptr.def = _resType;
+        return ptr;
+    }
+
+    AotNewNode::AotNewNode(StructDef* structType) : AotNode((TypeDef*)structType, New)
+    {
+
+    }
+
+    AotNode* AotNewNode::optimize()
+    {
+        return this;
+    }
+
+    AotValue AotNewNode::generateBytecode(CompilerCtx& ctx) const
+    {
+        auto ptr = ctx.newReg(_resType, 0);
+        ctx.function->appendCode(Operand::ALLOC, ptr.valueIndex, _resType->size());
+        return ptr;
+    }
+
+    AotDeleteNode::AotDeleteNode(AotNode* ptr) : AotNode(nullptr, Free), _ptr(ptr)
+    {
+    }
+
+    AotNode* AotDeleteNode::optimize()
+    {
+        return this;
+    }
+
+    AotValue AotDeleteNode::generateBytecode(CompilerCtx& ctx) const
+    {
+        auto ptr = _ptr->generateBytecode(ctx);
+        assert(ptr.valueIndex.storageType == ValueStorageType_Ptr);
+        ctx.function->appendCode(Operand::FREE, ptr.valueIndex);
+        ctx.function->appendCode(Operand::MOVI, ptr.valueIndex, (int32_t)0);
+        return {};
     }
 }
