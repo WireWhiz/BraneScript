@@ -15,6 +15,7 @@
 #include <cstdio>
 #include <stdexcept>
 #include <cassert>
+
 namespace BraneScript
 {
     using namespace asmjit::x86;
@@ -84,6 +85,7 @@ namespace BraneScript
             case ValueStorageType_Reg:
                 break; //goto next switch statement
             case ValueStorageType_Ptr:
+            case ValueStorageType_StackPtr:
                 return ValueRegType::gp;
             case ValueStorageType_DerefPtr:
             case ValueStorageType_Const:
@@ -212,18 +214,45 @@ namespace BraneScript
 
     void* scriptAlloc(uint16_t size)
     {
-        return new uint8_t[size];
+        return ::operator new(size);
     }
 
     void scriptDealoc(void* data)
     {
-        delete[] data;
+        ::operator delete(data);
     }
 
     Script* ScriptRuntime::assembleScript(IRScript* irScript)
     {
         assert(irScript);
         auto script = std::make_unique<Script>();
+
+        //Generate local struct typedefs
+        std::vector<std::unique_ptr<StructDef>> localStructs;
+        for(auto& s : irScript->localStructs)
+        {
+            assert(_linker);
+            auto def = std::make_unique<StructDef>(s.name);
+            for(auto& m : s.members)
+                def->addMember(m.type, _linker->getType(m.type));
+            if(s.packed)
+                def->packMembers();
+            else
+                def->padMembers();
+            localStructs.push_back(std::move(def));
+        }
+
+        //Link external struct typedefs
+        std::vector<StructDef*> linkedStructs;
+        for(auto& s : irScript->linkedStructs)
+        {
+            assert(_linker);
+            auto def = dynamic_cast<StructDef*>(_linker->getType(s));
+            assert(def);
+            linkedStructs.push_back(def);
+        }
+
+        //Find linked libraries
         std::vector<Library*> linkedLibraries;
         for(auto& lib : irScript->linkedLibraries)
         {
@@ -314,17 +343,69 @@ namespace BraneScript
                     case ALLOC:
                     {
                         auto valIndex = ctx.readCode<ValueIndex>();
-                        auto structSize = ctx.readCode<uint32_t>();
+                        assert(valIndex.storageType == ValueStorageType_StackPtr);
+                        auto structIndex = ctx.readCode<uint16_t>();
+                        assert(structIndex < localStructs.size());
+                        auto& structDef = localStructs[structIndex];
+                        printf("ALLOC gp%hu, %s\n", valIndex.index, structDef->name());
+
+                        ctx.verifyValue(valIndex, cc);
+                        auto stackMem = cc.newStack(structDef->size(), 4);
+                        cc.lea(ctx.getReg<Gp>(valIndex), stackMem);
+                        break;
+                    }
+                    case EXALLOC:
+                    {
+                        auto valIndex = ctx.readCode<ValueIndex>();
+                        assert(valIndex.storageType == ValueStorageType_StackPtr);
+                        auto structIndex = ctx.readCode<uint16_t>();
+                        assert(structIndex < linkedStructs.size());
+                        auto& structDef = linkedStructs[structIndex];
+                        printf("EXALLOC gp%hu, %s\n", valIndex.index, structDef->name());
+
+                        ctx.verifyValue(valIndex, cc);
+                        auto size = structDef->size();
+                        auto stackMem = cc.newStack(size, 4);
+                        cc.lea(ctx.getReg<Gp>(valIndex), stackMem);
+                        break;
+                    }
+                    case MALLOC:
+                    {
+                        auto valIndex = ctx.readCode<ValueIndex>();
+                        assert(valIndex.storageType == ValueStorageType_Ptr);
+                        auto structIndex = ctx.readCode<uint16_t>();
+                        assert(structIndex < localStructs.size());
+                        auto& structDef = localStructs[structIndex];
+                        printf("MALLOC gp%hu, %s\n", valIndex.index, structDef->name());
+
                         asmjit::InvokeNode* in;
-                        cc.invoke(&in, &scriptAlloc, asmjit::FuncSignatureT<void*, uint32_t>());
+                        cc.invoke(&in, &scriptAlloc, asmjit::FuncSignatureT<void*, uint16_t>());
 
                         ctx.verifyValue(valIndex, cc);
                         in->setRet(0, ctx.getReg<Gp>(valIndex));
-                        in->setArg(0, asmjit::Imm(structSize));
+                        in->setArg(0, asmjit::Imm((uint16_t)structDef->size()));
+                        break;
+                    }
+                    case EXMALLOC:
+                    {
+                        auto valIndex = ctx.readCode<ValueIndex>();
+                        assert(valIndex.storageType == ValueStorageType_Ptr);
+                        auto structIndex = ctx.readCode<uint16_t>();
+                        assert(structIndex < linkedStructs.size());
+                        auto& structDef = linkedStructs[structIndex];
+                        printf("EXMALLOC gp%hu, %s\n", valIndex.index, structDef->name());
+
+                        asmjit::InvokeNode* in;
+                        cc.invoke(&in, &scriptAlloc, asmjit::FuncSignatureT<void*, uint16_t>());
+
+                        ctx.verifyValue(valIndex, cc);
+                        in->setRet(0, ctx.getReg<Gp>(valIndex));
+                        in->setArg(0, asmjit::Imm((uint16_t)structDef->size()));
                         break;
                     }
                     case FREE:
                     {
+                        assert(false);
                         auto valIndex = ctx.readCode<ValueIndex>();
                         asmjit::InvokeNode* in;
                         cc.invoke(&in, &scriptDealoc, asmjit::FuncSignatureT<void, void*>());
@@ -662,18 +743,23 @@ namespace BraneScript
                             {
                                 auto destMem = ctx.getReg<Mem>(dest);
                                 auto srcMem = ctx.getReg<Mem>(src);
+                                printf("mem%hu mem%hu\n", dest.index, src.index);
                                 Gp tempReg;
-                                switch(srcMem.size())
+                                switch(src.valueType)
                                 {
-                                    case 1:
+                                    case Bool:
                                         tempReg = cc.newGpb();
                                         break;
-                                    case 4:
+                                    case Int32:
+                                    case Float32:
                                         tempReg = cc.newGpd();
                                         break;
-                                    case 8:
+                                    case Int64:
+                                    case Float64:
                                         tempReg = cc.newGpq();
                                         break;
+                                    default:
+                                        assert(false);
                                 }
                                 cc.mov(tempReg, srcMem);
                                 cc.mov(destMem, tempReg);

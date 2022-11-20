@@ -3,6 +3,7 @@
 #include "../scripting/compiler.h"
 #include "../scripting/scriptRuntime.h"
 #include "../scripting/script.h"
+#include "../scripting/linker.h"
 
 using namespace BraneScript;
 
@@ -26,8 +27,8 @@ TEST(BraneScript, Recursion)
         return x * pow(x, n - 1);
     }
 )";
-
-    Compiler compiler;
+    Linker l;
+    Compiler compiler(&l);
     auto* ir = compiler.compile(testString);
     checkCompileErrors(compiler);
     ASSERT_TRUE(ir);

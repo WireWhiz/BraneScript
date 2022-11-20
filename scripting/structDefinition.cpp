@@ -13,17 +13,17 @@ namespace BraneScript
 
     void StructDef::addMember(std::string name, TypeDef* type)
     {
-        _members.push_back({std::move(name), _size, type});
+        _members.push_back({std::move(name), (uint16_t)_size, type});
     }
 
     void StructDef::padMembers()
     {
         _size = 0;
-        uint32_t largestItem = 0;
+        uint16_t largestItem = 0;
         for (auto& m: _members)
         {
             const auto* t = m.type;
-            auto mSize = std::min(t->size(), 8u);
+            auto mSize = std::min<uint16_t>(t->size(), 8);
             auto padding = _size % mSize;
             if(padding)
                 _size += mSize - padding;
@@ -64,7 +64,7 @@ namespace BraneScript
         return _name.c_str();
     }
 
-    uint32_t StructDef::size() const
+    uint16_t StructDef::size() const
     {
         return _size;
     }

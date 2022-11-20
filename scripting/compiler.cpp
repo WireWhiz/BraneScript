@@ -68,12 +68,6 @@ namespace BraneScript
         }
     };
 
-    Compiler::Compiler()
-    {
-        for (auto type: getNativeTypes())
-            registerType(type);
-    }
-
     IRScript* Compiler::compile(const std::string& script)
     {
         _currentFile = &script;
@@ -144,7 +138,7 @@ namespace BraneScript
 
     std::any Compiler::visitConstFloat(braneParser::ConstFloatContext* context)
     {
-        return (AotNode*)new AotConst(std::stof(context->FLOAT()->getText()), _types.at("float"));
+        return (AotNode*)new AotConst(std::stof(context->FLOAT()->getText()), getType("float"));
     }
 
     std::any Compiler::visitAddsub(braneParser::AddsubContext* context)
@@ -177,7 +171,7 @@ namespace BraneScript
 
     std::any Compiler::visitConstInt(braneParser::ConstIntContext* context)
     {
-        return (AotNode*)new AotConst((int32_t)std::stoi(context->getText()), _types.at("int"));
+        return (AotNode*)new AotConst((int32_t)std::stoi(context->getText()), getType("int"));
     }
 
     std::any Compiler::visitId(braneParser::IdContext* context)
@@ -227,18 +221,22 @@ namespace BraneScript
     {
         auto name = context->id->getText();
         auto type = getType(context->type->getText());
-        if (!type)
+        if(!type)
         {
             throwError(context->type, "Undefined type");
             return (AotNode*)nullptr;
         }
-        if (localValueExists(name))
+        if(localValueExists(name))
         {
             throwError(context->id, "Identifier is already in use");
             return (AotNode*)nullptr;
         }
-        auto index = registerLocalValue(name, context->type->getText(), false);
-
+        if(context->isRef && type->type() != ObjectRef)
+        {
+            throwError(context->isRef, "Only types of struct can be marked as references");
+            return (AotNode*)nullptr;
+        }
+        registerLocalValue(name, context->type->getText(), context->isConst, context->isRef);
         return getValueNode(name);
     }
 
@@ -324,7 +322,7 @@ namespace BraneScript
     std::any Compiler::visitCast(braneParser::CastContext* ctx)
     {
         return (AotNode*)new AotCastNode(std::any_cast<AotNode*>(visit(ctx->expression())),
-                                         _types.at(ctx->ID()->getText()));
+                                         getType(ctx->ID()->getText()));
     }
 
     std::any Compiler::visitReturnVoid(braneParser::ReturnVoidContext* ctx)
@@ -345,25 +343,17 @@ namespace BraneScript
             RETURN_NULL;
         }
         if (retVal->resType()->name() != _ctx->function->returnType) //TODO check if a cast here is actually possible
-            retVal = new AotCastNode(retVal, _types.at(_ctx->function->returnType));
+            retVal = new AotCastNode(retVal, getType(_ctx->function->returnType));
         _ctx->returnCalled = true;
         return (AotNode*)new AotReturnValueNode(retVal);
     }
 
-    void Compiler::registerType(TypeDef* type)
+    uint16_t Compiler::registerLocalValue(std::string name, const std::string& type, bool constant, bool ref)
     {
-        _types.insert({type->name(), type});
-    }
-
-    const std::unordered_map<std::string, TypeDef*>& Compiler::types() const
-    {
-        return _types;
-    }
-
-    uint16_t Compiler::registerLocalValue(std::string name, const std::string& type, bool constant)
-    {
+        TypeDef* typeDef = getType(type);
+        assert(typeDef);
         uint16_t index = _lValueIDCount++;
-        _scopes.back().localValues.emplace(std::move(name), AotValueNode(index, _types.at(type), constant));
+        _scopes.back().localValues.emplace(std::move(name), AotValueNode(index, typeDef, constant, ref));
         return index;
     }
 
@@ -391,9 +381,9 @@ namespace BraneScript
     std::any Compiler::visitConstBool(braneParser::ConstBoolContext* ctx)
     {
         if (ctx->getText() == "true")
-            return (AotNode*)new AotConst(true, _types.at("bool"));
+            return (AotNode*)new AotConst(true, getType("bool"));
         else
-            return (AotNode*)new AotConst(false, _types.at("bool"));
+            return (AotNode*)new AotConst(false, getType("bool"));
     }
 
     std::any Compiler::visitIf(braneParser::IfContext* ctx)
@@ -518,9 +508,9 @@ namespace BraneScript
         }
         _ctx->script->linkedLibraries.push_back(libraryName);
         if(context->alias)
-            _ctx->libraryAliases.insert({removePars(context->alias->getText()), _ctx->libraryAliases.size()});
+            _ctx->libraryAliases.insert({removePars(context->alias->getText()), (uint32_t)_ctx->libraryAliases.size()});
         else
-            _ctx->libraryAliases.insert({libraryName, _ctx->libraryAliases.size()});
+            _ctx->libraryAliases.insert({libraryName, (uint32_t)_ctx->libraryAliases.size()});
         return {};
     }
 
@@ -550,6 +540,53 @@ namespace BraneScript
         return (AotNode*)new AotDeleteNode(ptr);
     }
 
+    std::any Compiler::visitStructMembers(braneParser::StructMembersContext* context)
+    {
+        std::vector<StructMember> members;
+        for(auto& decl : context->declaration())
+        {
+            StructMember m;
+            auto type = getType(decl->type->getText());
+            if(!type)
+            {
+                throwError(decl->type, "Could not create struct member with undefined type");
+                continue;
+            }
+            m.name = decl->id->getText();
+            m.type = type;
+            members.push_back(std::move(m));
+        }
+        return members;
+    }
+
+    std::any Compiler::visitStructDef(braneParser::StructDefContext* context)
+    {
+        auto members = std::any_cast<std::vector<StructMember>>(visit(context->members));
+        if(!contextValid())
+            return {};
+        auto newDef = new StructDef(context->id->getText());
+
+        for(auto& m : members)
+            newDef->addMember(std::move(m.name), m.type);
+        if(context->packed)
+            newDef->packMembers();
+        else
+            newDef->padMembers();
+        _privateTypes.insert({newDef->name(), newDef});
+        _ctx->localStructIndices.emplace(newDef, (uint16_t)_ctx->localStructDefs.size());
+        _ctx->localStructDefs.push_back(std::unique_ptr<StructDef>(newDef));
+
+        //We need to store a copy of this info in the ir script for the runtime
+        IRScript::IRStructDef irDef;
+        irDef.name = newDef->name();
+        irDef.packed = context->packed;
+
+        for(auto& m : newDef->members())
+            irDef.members.push_back({m.name, m.offset, m.type->name()});
+        _ctx->script->localStructs.push_back(irDef);
+        return {};
+    }
+
     void Compiler::throwError(const std::string& message)
     {
         _errors.push_back(message);
@@ -577,16 +614,9 @@ namespace BraneScript
 
     TypeDef* Compiler::getType(const std::string& typeName) const
     {
-        if (!_types.count(typeName))
-            return nullptr;
-        return _types.at(typeName);
-    }
-
-    StructDef* Compiler::getStruct(const std::string& typeName) const
-    {
-        if (!_types.count(typeName))
-            return nullptr;
-        return dynamic_cast<StructDef*>(_types.at(typeName));
+        if(_privateTypes.count(typeName))
+            return _privateTypes.at(typeName);
+        return _linker->getType(typeName);
     }
 
     bool Compiler::localValueExists(const std::string& name)
@@ -599,16 +629,15 @@ namespace BraneScript
         return false;
     }
 
-    void Compiler::setLinker(Linker* linker)
-    {
-        assert(linker);
-        _linker = linker;
-    }
-
     std::string Compiler::removePars(const std::string& str)
     {
         assert(str.size() >= 2);
         return str.substr(1, str.size() - 2);
+    }
+
+    Compiler::Compiler(Linker* linker)
+    {
+        _linker = linker;
     }
 
     CompilerCtx::CompilerCtx(Compiler& c, IRScript* s) : compiler(c), script(s)
@@ -618,9 +647,7 @@ namespace BraneScript
 
     AotValue CompilerCtx::newReg(const std::string& type, uint8_t flags)
     {
-        TypeDef* t = nullptr;
-        if (compiler.types().count(type))
-            t = compiler.types().at(type);
+        TypeDef* t = compiler.getType(type);
         return newReg(t, flags);
     }
 
@@ -649,9 +676,10 @@ namespace BraneScript
                 assert(false);
                 break;
             case ValueStorageType_Ptr:
+            case ValueStorageType_StackPtr:
+            case ValueStorageType_DerefPtr:
             case ValueStorageType_Reg:
             case ValueStorageType_Const:
-            case ValueStorageType_DerefPtr:
                 return value;
         }
         return value;
@@ -681,7 +709,7 @@ namespace BraneScript
 
     AotValue CompilerCtx::castReg(const AotValue& value)
     {
-        if (value.valueIndex.storageType == ValueStorageType_Reg || value.valueIndex.storageType == ValueStorageType_Ptr)
+        if (value.valueIndex.storageType == ValueStorageType_Reg || value.valueIndex.storageType == ValueStorageType_Ptr  || value.valueIndex.storageType == ValueStorageType_StackPtr)
             return value;
         AotValue regValue = newReg(value.def, AotValue::Temp | (AotValue::Constexpr & value.flags));
         if(!value.isCompare())

@@ -18,8 +18,11 @@ namespace BraneScript
         RETV,   // (ValueIndex value) Return int32 value
         LOADC,  // (ValueIndex value, uint32_t constantIndex) load constant defined by byte array into the value
 
-        ALLOC,   // (ValueIndex ptr, uint32_t size) allocate struct
-        FREE,    // (ValueIndex ptr) increment ptr count
+        ALLOC,     // (ValueIndex ptr, uint16_t structDef) allocate local struct on the stack
+        EXALLOC,   // (ValueIndex ptr, uint16_t structDef) allocate external struct on the stack
+        MALLOC,    // (ValueIndex ptr, uint16_t structDef) allocate local struct on the heap
+        EXMALLOC,  // (ValueIndex ptr, uint16_t structDef) allocate external struct on the heap
+        FREE,      // (ValueIndex ptr, uint16_t structDef) deallocate struct
 
         SETE,  // (ValueIndex) set to 0 or 1 based on condition
         SETNE, // (ValueIndex) set to 0 or 1 based on condition

@@ -5,6 +5,7 @@
 #include "../scripting/script.h"
 #include "../scripting/structDefinition.h"
 #include "../scripting/nativeTypes.h"
+#include "../scripting/linker.h"
 
 using namespace BraneScript;
 
@@ -13,6 +14,13 @@ struct TestStruct1
     bool c;
     float a;
     int b;
+};
+
+struct TestStruct2
+{
+    int a;
+    bool b;
+    float c;
 };
 
 TEST(BraneScript, Objects)
@@ -33,12 +41,36 @@ TEST(BraneScript, Objects)
 
     TestStruct1 createStruct()
     {
-        TestStruct1 output = new TestStruct1;
-        output.a = 6.9f;
-        output.b = 420;
-        output.c = false;
+        TestStruct1 output;
+        ref TestStruct1 o = output;
+        o.a = 6.9f;
+        o.b = 420;
+        o.c = false;
+        TestStruct1 notOut = output;
+        notOut.a = 43;
         return output;
     }
+
+    struct TestStruct2
+    {
+        int a;
+        bool b;
+        float c;
+    }
+
+    TestStruct2 testScriptStruct()
+    {
+        TestStruct2 output;
+        output.a = 5;
+        output.b = true;
+        output.c = 3.2f;
+        return output;
+    }
+
+    /*void modStruct(ref TestStruct2 r)
+    {
+          r.c = 4.2f;
+    }*/
 )";
     StructDef testStruct1Def("TestStruct1");
     testStruct1Def.addMember("c", getNativeTypeDef(ValueType::Bool));
@@ -50,13 +82,16 @@ TEST(BraneScript, Objects)
     EXPECT_EQ(testStruct1Def.members()[1].offset, offsetof(TestStruct1, a));
     EXPECT_EQ(testStruct1Def.members()[2].offset, offsetof(TestStruct1, b));
 
-    Compiler compiler;
-    compiler.registerType(&testStruct1Def);
+    Linker l;
+    l.addType(&testStruct1Def);
+
+    Compiler compiler(&l);
     auto* ir = compiler.compile(testString);
     checkCompileErrors(compiler);
     ASSERT_TRUE(ir);
 
     ScriptRuntime rt;
+    rt.setLinker(&l);
     Script* testScript = rt.assembleScript(ir);
     ASSERT_TRUE(testScript);
 
@@ -81,5 +116,17 @@ TEST(BraneScript, Objects)
     EXPECT_EQ(createdStruct->a, 6.9f);
     EXPECT_EQ(createdStruct->b, 420);
     EXPECT_EQ(createdStruct->c, false);
-    delete[] createdStruct;
+    delete createdStruct;
+
+    auto testScriptStruct = (FunctionHandle<TestStruct2*>)testScript->functions[4];
+    ASSERT_TRUE(testScriptStruct);
+    TestStruct2* ts2 = testScriptStruct();
+    ASSERT_TRUE(ts2);
+    EXPECT_EQ(ts2->a, 5);
+    EXPECT_EQ(ts2->b, true);
+    EXPECT_EQ(ts2->c, 3.2f);
+    delete ts2;
+
+
+
 }

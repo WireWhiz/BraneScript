@@ -4,6 +4,9 @@
 
 #include "linker.h"
 #include "library.h"
+#include "typeDef.h"
+#include "nativeTypes.h"
+
 namespace BraneScript
 {
     Library* Linker::getLibrary(const std::string& name) const
@@ -24,5 +27,23 @@ namespace BraneScript
     {
         assert(libraries.count(name));
         libraries.erase(name);
+    }
+
+    TypeDef* Linker::getType(const std::string& name)
+    {
+        if(globalTypes.count(name))
+            return globalTypes.at(name);
+        return nullptr;
+    }
+
+    Linker::Linker()
+    {
+        for(auto& t : getNativeTypes())
+            globalTypes.emplace(t->name(), t);
+    }
+
+    void Linker::addType(TypeDef* type)
+    {
+        globalTypes.insert({type->name(), type});
     }
 }

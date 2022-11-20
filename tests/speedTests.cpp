@@ -4,6 +4,7 @@
 #include "../scripting/compiler.h"
 #include "../scripting/scriptRuntime.h"
 #include "../scripting/script.h"
+#include "../scripting/linker.h"
 
 using namespace BraneScript;
 
@@ -34,8 +35,6 @@ float fFib(float n)
 
 TEST(BraneScript, Speed)
 {
-    ASSERT_EQ(iFib(6), 8);
-    ASSERT_EQ(fFib(6), 8.0f);
 
     std::string testString = R"(
     int iFib(int n)
@@ -51,8 +50,8 @@ TEST(BraneScript, Speed)
         return fFib(n-1) + fFib(n-2);
     }
 )";
-
-    Compiler compiler;
+    Linker l;
+    Compiler compiler(&l);
     auto* ir = compiler.compile(testString);
     checkCompileErrors(compiler);
     ASSERT_TRUE(ir);
@@ -63,18 +62,22 @@ TEST(BraneScript, Speed)
 
     auto scIFib = testScript->getFunction<int, int>("iFib");
     ASSERT_TRUE(scIFib);
-    ASSERT_EQ(scIFib(6), 8);
 
     auto scFFib = testScript->getFunction<float, float>("fFib");
     ASSERT_TRUE(scFFib);
-    ASSERT_EQ(scFFib(6), 8.0f);
 
+    ASSERT_EQ(iFib(6), 8);
+    ASSERT_EQ(fFib(6), 8.0f);
+    ASSERT_EQ(scIFib(6), 8);
+    ASSERT_EQ(scFFib(6), 8.0f);
 
     size_t c = 2000;
     int n = 30;
-    std::cout << "Testing with n = " << n << ", " << c << " times" << std::endl;
+    /*std::cout << "Testing with n = " << n << ", " << c << " times" << std::endl;
     std::cout << "native int fib: " << speedTestFib(iFib, n, c) << " milliseconds" << std::endl;
     std::cout << "native float fib: " << speedTestFib(fFib, n, c) << " milliseconds" << std::endl;
     std::cout << "script int fib: " << speedTestFib(scIFib, n, c) << " milliseconds" << std::endl;
-    std::cout << "script float fib: " << speedTestFib(scFFib, n, c) << " milliseconds" << std::endl;
+    std::cout << "script float fib: " << speedTestFib(scFFib, n, c) << " milliseconds" << std::endl;*/
+
+
 }

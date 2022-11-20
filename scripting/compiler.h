@@ -16,6 +16,7 @@
 #include "irScript.h"
 #include "aotNode/aotNode.h"
 #include "aotNode/aotValueNodes.h"
+#include "structDefinition.h"
 
 namespace BraneScript
 {
@@ -32,7 +33,7 @@ namespace BraneScript
         Linker* _linker = nullptr;
         std::vector<std::string> _errors;
 
-        std::unordered_map<std::string, TypeDef*> _types;
+        std::unordered_map<std::string, TypeDef*> _privateTypes;
 
         uint16_t _lValueIDCount = 0;
 
@@ -100,9 +101,13 @@ namespace BraneScript
 
         std::any visitDelete(braneParser::DeleteContext *context) override;
 
+        std::any visitStructMembers(braneParser::StructMembersContext *context) override;
+
+        std::any visitStructDef(braneParser::StructDefContext *context) override;
+
         bool localValueExists(const std::string& name);
 
-        uint16_t registerLocalValue(std::string name, const std::string& type, bool constant);
+        uint16_t registerLocalValue(std::string name, const std::string& type, bool constant, bool ref=false);
         AotNode* getValueNode(const std::string& name);
 
         void pushScope();
@@ -124,20 +129,13 @@ namespace BraneScript
         static std::string removePars(const std::string& str);
 
     public:
+        Compiler(Linker* linker);
 
-        Compiler();
-
-        void setLinker(Linker* linker);
         IRScript* compile(const std::string& script);
 
         const std::vector<std::string>& errors() const;
 
-        void registerType(TypeDef* type);
-
         TypeDef* getType(const std::string& typeName) const;
-        StructDef* getStruct(const std::string& typeName) const;
-
-        const std::unordered_map<std::string, TypeDef*>& types() const;
     };
 
     struct CompilerCtx
@@ -151,6 +149,8 @@ namespace BraneScript
         ScriptFunction* function = nullptr;
         bool returnCalled = false;
         std::map<uint16_t, AotValue> lValues;
+        std::vector<std::unique_ptr<StructDef>> localStructDefs;
+        std::unordered_map<StructDef*, uint16_t> localStructIndices;
 
         std::unordered_map<std::string, uint32_t> libraryAliases;
 

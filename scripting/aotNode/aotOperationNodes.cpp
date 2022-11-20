@@ -266,6 +266,41 @@ namespace BraneScript
     AotValue AotReturnValueNode::generateBytecode(CompilerCtx& ctx) const
     {
         auto value = ctx.castReg(arg->generateBytecode(ctx));
+
+        if(value.valueIndex.storageType == ValueStorageType_StackPtr)
+        {
+            //This is where a move/copy constructor would go
+            auto* sDef = static_cast<StructDef*>(value.def);
+            auto ptr = ctx.newReg(value.def, 0);
+            if(ctx.localStructIndices.count(sDef))
+                ctx.function->appendCode(Operand::MALLOC, ptr.valueIndex, ctx.localStructIndices.at(sDef));
+            else
+            {
+                uint16_t sIndex = 0;
+                for(auto& sName : ctx.script->linkedStructs)
+                {
+                    if(sName == sDef->name())
+                        break;
+                    ++sIndex;
+                }
+                if(sIndex == ctx.script->linkedStructs.size())
+                    ctx.script->linkedStructs.push_back(sDef->name());
+                ctx.function->appendCode(Operand::EXMALLOC, ptr.valueIndex, sIndex);
+            }
+            for(auto& m : sDef->members())
+            {
+                ValueIndex valA = value.valueIndex;
+                valA.offset = m.offset;
+                valA.storageType = ValueStorageType_DerefPtr;
+                valA.valueType = m.type->type();
+                ValueIndex valB = ptr.valueIndex;
+                valB.offset = m.offset;
+                valB.storageType = ValueStorageType_DerefPtr;
+                ctx.function->appendCode(MOV, valB, valA);
+            }
+            value = ptr;
+        }
+
         ctx.function->appendCode(RETV, value.valueIndex);
 
         AotValue voidValue;
@@ -324,7 +359,26 @@ namespace BraneScript
         auto rValue = ctx.castValue(argB->generateBytecode(ctx));
         auto lValue = argA->generateBytecode(ctx);
 
-        ctx.function->appendCode(MOV, lValue.valueIndex, rValue.valueIndex);
+        if(lValue.valueIndex.storageType == ValueStorageType_StackPtr && (rValue.valueIndex.storageType == ValueStorageType_Ptr || rValue.valueIndex.storageType == ValueStorageType_StackPtr))
+        {
+            //This is where a move/copy constructor would go
+            auto* sDef = static_cast<StructDef*>(rValue.def);
+            for(auto& m : sDef->members())
+            {
+                ValueIndex valA = lValue.valueIndex;
+                valA.offset = m.offset;
+                valA.storageType = ValueStorageType_DerefPtr;
+                ValueIndex valB = rValue.valueIndex;
+                valB.offset = m.offset;
+                valB.storageType = ValueStorageType_DerefPtr;
+                valB.valueType = m.type->type();
+                ctx.function->appendCode(MOV, valA, valB);
+            }
+            if(rValue.valueIndex.storageType == ValueStorageType_Ptr && rValue.flags & AotValue::Temp)
+                ctx.function->appendCode(FREE, rValue.valueIndex);
+        }
+        else
+            ctx.function->appendCode(MOV, lValue.valueIndex, rValue.valueIndex);
 
         return lValue;
     };

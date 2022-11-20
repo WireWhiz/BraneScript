@@ -18,7 +18,7 @@ namespace BraneScript
     public:
         const char* name() const override;
 
-        uint32_t size() const override;
+        uint16_t size() const override;
 
         ValueType type() const override;
     };
@@ -28,7 +28,7 @@ namespace BraneScript
     public:
         const char* name() const override;
 
-        uint32_t size() const override;
+        uint16_t size() const override;
 
         ValueType type() const override;
     };
@@ -38,7 +38,7 @@ namespace BraneScript
     public:
         const char* name() const override;
 
-        uint32_t size() const override;
+        uint16_t size() const override;
 
         ValueType type() const override;
     };

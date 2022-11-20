@@ -11,16 +11,36 @@
 #include "scriptFunction.h"
 namespace BraneScript
 {
+
+
     struct IRScript
     {
+        std::string namespace_;
+        std::vector<ScriptFunction> localFunctions;
+
+        struct IRStructDef
+        {
+            struct Member
+            {
+                std::string name;
+                uint16_t offset;
+                std::string type;
+            };
+            std::string name;
+            std::vector<Member> members;
+            bool packed = false;
+        };
+        std::vector<IRStructDef> localStructs;
+        std::vector<std::string> linkedStructs;
+
         struct LinkedFunction
         {
             std::string name;
             uint16_t library;
         };
 
+
         std::vector<std::string> linkedLibraries;
-        std::vector<ScriptFunction> localFunctions;
         std::vector<LinkedFunction> linkedFunctions;
         std::vector<std::string> linkedTypes;
     };

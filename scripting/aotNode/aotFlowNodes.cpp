@@ -163,7 +163,7 @@ namespace BraneScript
         for(auto& arg : _arguments)
             args.push_back(ctx.castReg(arg->generateBytecode(ctx)));
         if(_resType)
-            returnValue = ctx.newReg(_resType, 0);
+            returnValue = ctx.newReg(_resType, AotValue::Temp);
 
         ctx.function->appendCode(Operand::CALL, _functionIndex);
         if(_resType)
@@ -200,7 +200,7 @@ namespace BraneScript
         for(auto& arg : _arguments)
             args.push_back(ctx.castReg(arg->generateBytecode(ctx)));
         if(_resType)
-            returnValue = ctx.newReg(_resType, 0);
+            returnValue = ctx.newReg(_resType, AotValue::Temp);
 
         ctx.function->appendCode(Operand::EXCALL, _library);
         ctx.function->appendCode(_name);

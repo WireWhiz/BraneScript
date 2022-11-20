@@ -25,7 +25,7 @@ progSegment : function
             //Possibly globals here as well
             ;
 
-declaration : type=ID id=ID;
+declaration : isConst='const'? isRef='ref'? type=ID id=ID;
 argumentList: (declaration (',' declaration)*)?;
 argumentPack: (expression (',' expression)*)?;
 function    : type=ID id=ID '(' arguments=argumentList ')' '{' statements=statement* '}';
@@ -34,7 +34,7 @@ preprocessor: '#include' content=.*? NEWLINE                                #inc
 link        : 'link' library=STRING ('as' alias=STRING)? ';';
 
 structMembers : (declaration ';')*;
-structDef   : type=ID id=ID '{' members=structMembers '}';
+structDef     : packed='packed'? 'struct' id=ID '{' members=structMembers '}';
 
 statement   : expression ';'                                                #exprStatement
             | '{' statement* '}'                                            #scope

@@ -43,8 +43,9 @@ namespace BraneScript
     {
         uint16_t _lValueID;
         bool _constant;
+        bool _ref;
     public:
-        AotValueNode(uint16_t lValueIndex, TypeDef* type, bool constant);
+        AotValueNode(uint16_t lValueIndex, TypeDef* type, bool constant, bool ref);
 
         AotNode* optimize() override;
 

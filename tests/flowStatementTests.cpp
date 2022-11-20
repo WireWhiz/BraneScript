@@ -4,6 +4,7 @@
 #include "../scripting/compiler.h"
 #include "../scripting/scriptRuntime.h"
 #include "../scripting/script.h"
+#include "../scripting/linker.h"
 
 using namespace BraneScript;
 
@@ -57,7 +58,8 @@ TEST(BraneScript, FlowStatements)
     }
 )";
 
-    Compiler compiler;
+    Linker l;
+    Compiler compiler(&l);
     auto* ir = compiler.compile(testString);
     checkCompileErrors(compiler);
 

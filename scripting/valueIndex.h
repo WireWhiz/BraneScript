@@ -24,7 +24,8 @@ namespace BraneScript
         ValueStorageType_Reg = 1,
         ValueStorageType_Const = 2,
         ValueStorageType_Ptr = 3,
-        ValueStorageType_DerefPtr = 4
+        ValueStorageType_StackPtr = 4,
+        ValueStorageType_DerefPtr = 5
 
     };
 

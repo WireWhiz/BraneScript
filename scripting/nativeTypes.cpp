@@ -37,7 +37,7 @@ namespace BraneScript
         return "bool";
     }
 
-    uint32_t BoolDef::size() const
+    uint16_t BoolDef::size() const
     {
         return sizeof(bool);
     }
@@ -52,7 +52,7 @@ namespace BraneScript
         return "int";
     }
 
-    uint32_t IntDef::size() const
+    uint16_t IntDef::size() const
     {
         return sizeof(int32_t);
     }
@@ -67,7 +67,7 @@ namespace BraneScript
         return "float";
     }
 
-    uint32_t FloatDef::size() const
+    uint16_t FloatDef::size() const
     {
         return sizeof(float);
     }

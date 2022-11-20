@@ -13,7 +13,7 @@ namespace BraneScript
     struct StructMember
     {
         std::string name;
-        uint32_t offset;
+        uint16_t offset;
         TypeDef* type;
     };
 
@@ -21,7 +21,7 @@ namespace BraneScript
     {
         std::string _name;
         std::vector<StructMember> _members;
-        uint32_t _size;
+        uint16_t _size;
     public:
         StructDef(std::string name);
         /**
@@ -45,7 +45,7 @@ namespace BraneScript
         const std::vector<StructMember>& members() const;
 
         const char* name() const override;
-        uint32_t size() const override;
+        uint16_t size() const override;
         ValueType type() const override;
     };
 }

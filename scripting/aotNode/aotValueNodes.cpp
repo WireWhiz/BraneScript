@@ -144,10 +144,12 @@ namespace BraneScript
         return nullptr;
     }
 
-    AotValueNode::AotValueNode(uint16_t lValueIndex, TypeDef* type, bool constant) : AotNode(type, Value)
+    AotValueNode::AotValueNode(uint16_t lValueIndex, TypeDef* type, bool constant, bool ref) : AotNode(type, Value)
     {
+        assert(type);
         _lValueID = lValueIndex;
         _constant = constant;
+        _ref = ref;
     }
 
     AotNode* AotValueNode::optimize()
@@ -161,7 +163,39 @@ namespace BraneScript
         if (ctx.lValues.count(_lValueID))
             return ctx.lValues.at(_lValueID);
         AotValue value = ctx.newReg(_resType, _constant & AotValue::Const);
+
+        if(_resType->type() != ObjectRef)
+        {
+            ctx.lValues.insert({_lValueID, value});
+            return value;
+        }
+        if(_ref)
+        {
+            ctx.lValues.insert({_lValueID, value});
+            ctx.function->appendCode(Operand::MOVI, value.valueIndex, (uint32_t)0);
+            return value;
+        }
+
+        value.valueIndex.storageType = ValueStorageType_StackPtr;
         ctx.lValues.insert({_lValueID, value});
+
+        auto s = dynamic_cast<StructDef*>(_resType);
+
+        if(ctx.localStructIndices.count(s))
+            ctx.function->appendCode(Operand::ALLOC, value.valueIndex, ctx.localStructIndices.at(s));
+        else
+        {
+            uint16_t sIndex = 0;
+            for(auto& sName : ctx.script->linkedStructs)
+            {
+                if(sName == s->name())
+                    break;
+                ++sIndex;
+            }
+            if(sIndex == ctx.script->linkedStructs.size())
+                ctx.script->linkedStructs.push_back(s->name());
+            ctx.function->appendCode(Operand::EXALLOC, value.valueIndex, sIndex);
+        }
         return value;
     }
 
@@ -181,7 +215,7 @@ namespace BraneScript
     AotValue AotDerefNode::generateBytecode(CompilerCtx& ctx) const
     {
         AotValue ptr = _value->generateBytecode(ctx);
-        assert(ptr.valueIndex.storageType == ValueStorageType_Ptr);
+        assert(ptr.valueIndex.storageType == ValueStorageType_Ptr || ptr.valueIndex.storageType == ValueStorageType_StackPtr);
         ptr.valueIndex.offset = _offset;
         ptr.valueIndex.storageType = ValueStorageType_DerefPtr;
         ptr.def = _resType;

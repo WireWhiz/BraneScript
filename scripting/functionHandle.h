@@ -11,6 +11,8 @@
 
 namespace BraneScript
 {
+#define BS_DELETE(struct) delete[] (uint8_t*)struct
+
 #define BS_API_CALL __cdecl
 
     template<typename Ret, typename... Args>

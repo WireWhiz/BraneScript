@@ -32,8 +32,7 @@ TEST(BraneScript, Libraries)
     Linker linker;
     linker.addLibrary(&testLib);
 
-    Compiler compiler;
-    compiler.setLinker(&linker);
+    Compiler compiler(&linker);
     auto* ir = compiler.compile(testString);
     checkCompileErrors(compiler);
     ASSERT_TRUE(ir);
