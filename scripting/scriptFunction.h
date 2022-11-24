@@ -20,7 +20,14 @@ namespace BraneScript
 
 
         std::vector<uint8_t> code;
-        std::vector<std::string> arguments;
+
+        struct ArgInfo
+        {
+            std::string type;
+            bool isConst = false;
+            bool isRef = false;
+        };
+        std::vector<ArgInfo> arguments;
         std::string returnType = "void";
         std::string name;
 

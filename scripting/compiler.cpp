@@ -278,8 +278,13 @@ namespace BraneScript
                 throwError(argument->type, "Unknown argument type");
                 return {};
             }
+            if(argument->isConst)
+                _ctx->function->name += "const ";
+            if(argument->isRef)
+                _ctx->function->name += "ref ";
+
             _ctx->function->name += type;
-            _ctx->function->arguments.push_back(type);
+            _ctx->function->arguments.push_back({type, (bool)argument->isConst, (bool)argument->isRef});
 
             AotValue value = _ctx->newReg(type, false);
             _ctx->lValues.insert({_lValueIDCount, value});

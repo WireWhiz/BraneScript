@@ -287,7 +287,11 @@ namespace BraneScript
             sigBuilder.setCallConvId(asmjit::CallConvId::kCDecl);
             for (auto& arg: func.arguments)
             {
-                auto type = strToASMType(arg);
+                asmjit::TypeId type;
+                if(!arg.isRef)
+                    type = strToASMType(arg.type);
+                else
+                    type = asmjit::TypeId::kIntPtr;
                 sigBuilder.addArg(type);
                 argTypes.push_back(type);
             }
@@ -601,7 +605,7 @@ namespace BraneScript
 
                         sb.setRet(strToASMType(function.returnType));
                         for(auto& arg : function.arguments)
-                            sb.addArg(strToASMType(arg));
+                            sb.addArg(strToASMType(arg.type));
 
                         asmjit::InvokeNode* in;
                         assert(fIndex <= script->functions.size());

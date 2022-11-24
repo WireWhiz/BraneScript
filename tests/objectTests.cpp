@@ -26,15 +26,15 @@ struct TestStruct2
 TEST(BraneScript, Objects)
 {
     std::string testString = R"(
-    float getMember1(TestStruct1 s)
+    float getMember1(ref TestStruct1 s)
     {
         return s.a;
     }
-    int getMember2(TestStruct1 s)
+    int getMember2(ref TestStruct1 s)
     {
         return s.b;
     }
-    bool getMember3(TestStruct1 s)
+    bool getMember3(ref TestStruct1 s)
     {
         return s.c;
     }

@@ -11,12 +11,42 @@
 
 namespace BraneScript
 {
-#define BS_DELETE(struct) delete[] (uint8_t*)struct
+    class Linker;
 
 #define BS_API_CALL __cdecl
 
     template<typename Ret, typename... Args>
     using FunctionHandle = Ret (BS_API_CALL*)(Args...);
+
+    /**
+     * @brief Class for extracting data about arguments from a function definition.
+     *
+     * Format to be used: name(type,const type,const ref type,ref type)
+     */
+    class FuncDef
+    {
+        std::string _def;
+        uint16_t _nameEnd;
+        enum ArgFlags
+        {
+            ArgFlags_Const = 1,
+            ArgFlags_Ref = 1 << 1
+        };
+        struct ArgData
+        {
+            uint16_t tStart = 0;
+            uint16_t tEnd = 0;
+            uint8_t  flags = 0;
+        };
+        std::vector<ArgData> _argIndices;
+    public:
+        FuncDef(std::string def);
+        size_t argCount() const;
+        std::string_view name() const;
+        std::string_view argType(size_t index) const;
+        bool argIsConst(size_t index) const;
+        bool argIsRef(size_t index) const;
+    };
 
     template<typename T>
     std::string typeName()
@@ -44,8 +74,6 @@ namespace BraneScript
         else
             return name;
     }
-
-    std::vector<std::string> extractArgs(const std::string& funcDecl);
 }
 
 
