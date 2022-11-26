@@ -15,7 +15,7 @@ namespace BraneScript
         Int64 = 3,
         Float32 = 4,
         Float64 = 5,
-        ObjectRef = 6
+        Struct = 6
     };
 
     enum ValueStorageType : uint8_t
@@ -24,12 +24,11 @@ namespace BraneScript
         ValueStorageType_Reg = 1,
         ValueStorageType_Const = 2,
         ValueStorageType_Ptr = 3,
-        ValueStorageType_StackPtr = 4,
         ValueStorageType_DerefPtr = 5
 
     };
 
-    struct alignas(2) ValueIndex
+    struct alignas(2) Value
     {
         uint16_t index;
         uint16_t offset;

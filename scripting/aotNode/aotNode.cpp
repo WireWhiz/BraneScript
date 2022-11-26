@@ -3,8 +3,11 @@
 //
 
 #include "aotNode.h"
-#include "../scriptFunction.h"
+#include "../irFunction.h"
 #include "../typeDef.h"
+#include <cassert>
+#include "../compiler.h"
+
 namespace BraneScript
 {
     AotNode::NodeType AotNode::type() const
@@ -24,6 +27,7 @@ namespace BraneScript
 
     TypeDef* AotNode::dominantArgType(TypeDef* a, TypeDef* b)
     {
+        assert(a && b);
         if (a->type() == Float64)
             return a;
         if (b->type() == Float64)
@@ -37,5 +41,34 @@ namespace BraneScript
         if (b->type() == Int32)
             return b;
         return nullptr;
+    }
+
+    Value AotValue::value(CompilerCtx& ctx)
+    {
+        assert(storageType != ValueStorageType_Null);
+        assert(compareType == CompareType::NoRes);
+        Value value{};
+        value.valueType = def->type();
+        value.storageType = storageType;
+        switch(storageType)
+        {
+            case ValueStorageType_Ptr:
+            case ValueStorageType_Reg:
+                if(valueIndex == (uint16_t)-1)
+                    valueIndex = ctx.regIndex++;
+                    break;
+            case ValueStorageType_Const:
+                if(valueIndex == (uint16_t)-1)
+                    valueIndex = ctx.memIndex++;
+                break;
+            case ValueStorageType_DerefPtr:
+                assert(valueIndex != (uint16_t)-1);
+                value.offset = ptrOffset;
+                break;
+            default:
+                assert(false);
+        }
+        value.index = valueIndex;
+        return value;
     }
 }

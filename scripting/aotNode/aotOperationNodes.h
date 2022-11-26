@@ -42,7 +42,7 @@ namespace BraneScript
     public:
         AotReturnNode();
         AotNode* optimize() override;
-        AotValue generateBytecode(CompilerCtx& ctx) const override;
+        AotValue* generateBytecode(CompilerCtx& ctx) const override;
     };
 
     class AotReturnValueNode : public AotSingleArgNode
@@ -50,7 +50,7 @@ namespace BraneScript
     public:
         AotReturnValueNode(AotNode* arg);
 
-        AotValue generateBytecode(CompilerCtx& ctx) const override;
+        AotValue* generateBytecode(CompilerCtx& ctx) const override;
     };
 
     class AotCastNode : public AotSingleArgNode
@@ -60,7 +60,7 @@ namespace BraneScript
 
         AotNode* optimize() override;
 
-        AotValue generateBytecode(CompilerCtx& ctx) const override;
+        AotValue* generateBytecode(CompilerCtx& ctx) const override;
     };
 
     class AotAssignNode : public AotDualArgNode
@@ -68,7 +68,7 @@ namespace BraneScript
     public:
         AotAssignNode(AotNode* lvalue, AotNode* rvalue);
 
-        AotValue generateBytecode(CompilerCtx& ctx) const override;
+        AotValue* generateBytecode(CompilerCtx& ctx) const override;
     };
 
     class AotAddNode : public AotDualArgNode
@@ -78,7 +78,7 @@ namespace BraneScript
 
         AotNode* optimize() override;
 
-        AotValue generateBytecode(CompilerCtx& ctx) const override;
+        AotValue* generateBytecode(CompilerCtx& ctx) const override;
     };
 
     class AotSubNode : public AotDualArgNode
@@ -88,7 +88,7 @@ namespace BraneScript
 
         AotNode* optimize() override;
 
-        AotValue generateBytecode(CompilerCtx& ctx) const override;
+        AotValue* generateBytecode(CompilerCtx& ctx) const override;
     };
 
     class AotMulNode : public AotDualArgNode
@@ -96,7 +96,7 @@ namespace BraneScript
     public:
         AotMulNode(AotNode* argA, AotNode* argB);
 
-        AotValue generateBytecode(CompilerCtx& ctx) const override;
+        AotValue* generateBytecode(CompilerCtx& ctx) const override;
     };
 
     class AotDivNode : public AotDualArgNode
@@ -104,7 +104,7 @@ namespace BraneScript
     public:
         AotDivNode(AotNode* argA, AotNode* argB);
 
-        AotValue generateBytecode(CompilerCtx& ctx) const override;
+        AotValue* generateBytecode(CompilerCtx& ctx) const override;
     };
 
     class AotCompareNode : public AotDualArgNode
@@ -123,7 +123,7 @@ namespace BraneScript
 
         AotCompareNode(Mode mode, AotNode* a, AotNode* b);
 
-        AotValue generateBytecode(CompilerCtx& ctx) const override;
+        AotValue* generateBytecode(CompilerCtx& ctx) const override;
     };
 }
 #endif //BRANESCRIPT_AOTOPERATIONNODES_H

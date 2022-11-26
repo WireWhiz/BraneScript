@@ -25,15 +25,17 @@ progSegment : function
             //Possibly globals here as well
             ;
 
-declaration : isConst='const'? isRef='ref'? type=ID id=ID;
+type        : isConst='const'? isRef='ref'? id=ID;
+declaration : type id=ID;
 argumentList: (declaration (',' declaration)*)?;
 argumentPack: (expression (',' expression)*)?;
-function    : type=ID id=ID '(' arguments=argumentList ')' '{' statements=statement* '}';
+function    : type id=ID '(' arguments=argumentList ')' '{' statements=statement* '}';
 
 preprocessor: '#include' content=.*? NEWLINE                                #include;
 link        : 'link' library=STRING ('as' alias=STRING)? ';';
 
-structMembers : (declaration ';')*;
+structMember  : (var=declaration ';' | func=function);
+structMembers : structMember*;
 structDef     : packed='packed'? 'struct' id=ID '{' members=structMembers '}';
 
 statement   : expression ';'                                                #exprStatement
@@ -49,7 +51,6 @@ expression  : INT                                                           #con
             | STRING                                                        #constString
             | ('true'|'false')                                              #constBool
             | declaration                                                   #decl
-            | 'new' type=ID                                                 #new
             | 'delete' ptr=expression                                       #delete
             | (namespace=ID '.')? name=ID '(' argumentPack ')'              #functionCall
             | ID                                                            #id

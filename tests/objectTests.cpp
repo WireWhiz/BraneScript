@@ -67,10 +67,10 @@ TEST(BraneScript, Objects)
         return output;
     }
 
-    /*void modStruct(ref TestStruct2 r)
+    void modStruct(ref TestStruct2 r)
     {
           r.c = 4.2f;
-    }*/
+    }
 )";
     StructDef testStruct1Def("TestStruct1");
     testStruct1Def.addMember("c", getNativeTypeDef(ValueType::Bool));
@@ -125,8 +125,16 @@ TEST(BraneScript, Objects)
     EXPECT_EQ(ts2->a, 5);
     EXPECT_EQ(ts2->b, true);
     EXPECT_EQ(ts2->c, 3.2f);
+
+    auto modStruct = (FunctionHandle<void, TestStruct2*>)testScript->functions[5];
+    ASSERT_TRUE(testScriptStruct);
+    modStruct(ts2);
+    EXPECT_EQ(ts2->a, 5);
+    EXPECT_EQ(ts2->b, true);
+    EXPECT_EQ(ts2->c, 4.2f);
     delete ts2;
 
-
-
+#ifndef NDEBUG
+    EXPECT_EQ(scriptMallocDiff, 2);
+#endif
 }

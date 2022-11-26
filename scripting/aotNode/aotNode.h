@@ -11,6 +11,7 @@
 namespace BraneScript
 {
     class TypeDef;
+    class CompilerCtx;
 
     struct AotValue
     {
@@ -18,7 +19,11 @@ namespace BraneScript
         {
             Const      = 1,
             Constexpr  = 1 << 1,
-            Temp       = 1 << 2
+            Temp       = 1 << 2,
+            StackRef   = 1 << 3,
+            ExternalRef    = 1 << 4,
+            Initialized    = 1 << 5,
+
         };
         enum CompareType : uint8_t
         {
@@ -33,12 +38,18 @@ namespace BraneScript
 
         uint8_t flags = 0;
         CompareType compareType = NoRes;
-        ValueIndex valueIndex = {};
+        ValueStorageType storageType = ValueStorageType_Null;
         TypeDef* def = nullptr;
-        inline bool isCompare() const { return compareType != NoRes; };
-        inline bool isVoid() const { return def == nullptr; };
-        inline bool isTemp() const { return flags & Temp; };
-        inline bool isRef() const { return valueIndex.storageType == ValueStorageType_Ptr; };
+        uint16_t compileIndex = 0;
+        uint16_t valueIndex = (uint16_t)-1;
+        uint16_t ptrOffset = 0;
+        Value value(CompilerCtx& ctx);
+        inline bool isCompare() const { return compareType != NoRes; }
+        inline bool isVoid() const { return def == nullptr; }
+        inline bool isTemp() const { return flags & Temp; }
+        inline bool isRef() const { return flags & (StackRef | ExternalRef); }
+        inline bool isStackRef() const { return flags & StackRef; }
+        inline bool isExternalRef() const { return flags & ExternalRef; }
     };
 
     class CompilerCtx;
@@ -46,7 +57,7 @@ namespace BraneScript
     class AotNode
     {
     protected:
-        enum NodeType
+        enum class NodeType
         {
             Const,
             Value,
@@ -76,10 +87,11 @@ namespace BraneScript
         explicit AotNode(TypeDef* resType, NodeType type);
 
         virtual ~AotNode() = default;
+        AotNode(const AotNode&) = default;
 
         virtual AotNode* optimize() = 0;
 
-        virtual AotValue generateBytecode(CompilerCtx& ctx) const = 0;
+        virtual AotValue* generateBytecode(CompilerCtx& ctx) const = 0;
 
         template<class T>
         T* as()

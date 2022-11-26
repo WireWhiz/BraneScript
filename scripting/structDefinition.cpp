@@ -13,14 +13,14 @@ namespace BraneScript
 
     void StructDef::addMember(std::string name, TypeDef* type)
     {
-        _members.push_back({std::move(name), (uint16_t)_size, type});
+        _variables.push_back({std::move(name), (uint16_t)_size, type});
     }
 
     void StructDef::padMembers()
     {
         _size = 0;
         uint16_t largestItem = 0;
-        for (auto& m: _members)
+        for (auto& m: _variables)
         {
             const auto* t = m.type;
             auto mSize = std::min<uint16_t>(t->size(), 8);
@@ -38,7 +38,7 @@ namespace BraneScript
     void StructDef::packMembers()
     {
         _size = 0;
-        for (auto& m: _members)
+        for (auto& m: _variables)
         {
             const auto* t = m.type;
             m.offset = _size;
@@ -46,17 +46,17 @@ namespace BraneScript
         }
     }
 
-    const StructMember* StructDef::getMember(const std::string& name) const
+    const StructVar* StructDef::getMember(const std::string& name) const
     {
-        for (const auto& m: _members)
+        for (const auto& m: _variables)
             if (name == m.name)
                 return &m;
         return nullptr;
     }
 
-    const std::vector<StructMember>& StructDef::members() const
+    const std::vector<StructVar>& StructDef::members() const
     {
-        return _members;
+        return _variables;
     }
 
     const char* StructDef::name() const
@@ -71,6 +71,6 @@ namespace BraneScript
 
     ValueType StructDef::type() const
     {
-        return ObjectRef;
+        return Struct;
     }
 }

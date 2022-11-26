@@ -8,7 +8,7 @@
 #include <vector>
 #include <string>
 #include "baseTypes.h"
-#include "scriptFunction.h"
+#include "irFunction.h"
 namespace BraneScript
 {
 
@@ -16,7 +16,7 @@ namespace BraneScript
     struct IRScript
     {
         std::string namespace_;
-        std::vector<ScriptFunction> localFunctions;
+        std::vector<IRFunction> localFunctions;
 
         struct IRStructDef
         {
@@ -28,6 +28,7 @@ namespace BraneScript
             };
             std::string name;
             std::vector<Member> members;
+            uint16_t functions;
             bool packed = false;
         };
         std::vector<IRStructDef> localStructs;

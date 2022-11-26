@@ -48,4 +48,8 @@ TEST(BraneScript, Libraries)
     scriptSetRef(5);
 
     EXPECT_EQ(refValue, 5);
+
+#ifndef NDEBUG
+    EXPECT_EQ(scriptMallocDiff, 0);
+#endif
 }

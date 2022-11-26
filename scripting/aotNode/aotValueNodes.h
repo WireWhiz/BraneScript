@@ -10,6 +10,7 @@
 #include <memory>
 
 #include "aotNode.h"
+#include "../typeInfo.h"
 namespace BraneScript
 {
     class AotConst : public AotNode
@@ -20,7 +21,7 @@ namespace BraneScript
 
         AotNode* optimize() override;
 
-        AotValue generateBytecode(CompilerCtx& ctx) const override;
+        AotValue* generateBytecode(CompilerCtx& ctx) const override;
 
         const std::any& value() const;
 
@@ -41,15 +42,19 @@ namespace BraneScript
 
     class AotValueNode : public AotNode
     {
-        uint16_t _lValueID;
-        bool _constant;
-        bool _ref;
+        struct ValueContext {
+            TypeInfo info;
+            AotValue* value = nullptr;
+        };
+        std::shared_ptr<ValueContext> _ctx;
     public:
-        AotValueNode(uint16_t lValueIndex, TypeDef* type, bool constant, bool ref);
+        AotValueNode(TypeDef* type, TypeInfo info);
+        AotValueNode(TypeDef* type, AotValue* value, TypeInfo info);
+        AotValueNode(const AotValueNode&);
 
         AotNode* optimize() override;
 
-        AotValue generateBytecode(CompilerCtx& ctx) const override;
+        AotValue* generateBytecode(CompilerCtx& ctx) const override;
     };
 
     class AotDerefNode : public AotNode
@@ -62,7 +67,7 @@ namespace BraneScript
 
         AotNode* optimize() override;
 
-        AotValue generateBytecode(CompilerCtx& ctx) const override;
+        AotValue* generateBytecode(CompilerCtx& ctx) const override;
     };
 
     class StructDef;
@@ -73,7 +78,7 @@ namespace BraneScript
 
         AotNode* optimize() override;
 
-        AotValue generateBytecode(CompilerCtx& ctx) const override;
+        AotValue* generateBytecode(CompilerCtx& ctx) const override;
     };
 
     class AotDeleteNode : public AotNode
@@ -84,7 +89,7 @@ namespace BraneScript
 
         AotNode* optimize() override;
 
-        AotValue generateBytecode(CompilerCtx& ctx) const override;
+        AotValue* generateBytecode(CompilerCtx& ctx) const override;
     };
 
 }

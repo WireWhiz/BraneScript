@@ -8,7 +8,7 @@
 
 namespace BraneScript
 {
-    AotConst::AotConst(std::any value, TypeDef* resType) : AotNode(resType, Const), _value(std::move(value))
+    AotConst::AotConst(std::any value, TypeDef* resType) : AotNode(resType, NodeType::Const), _value(std::move(value))
     {
     }
 
@@ -17,30 +17,31 @@ namespace BraneScript
         return this;
     }
 
-    AotValue AotConst::generateBytecode(CompilerCtx& ctx) const
+    AotValue* AotConst::generateBytecode(CompilerCtx& ctx) const
     {
         auto value = ctx.newConst(_resType->type());
         switch (_resType->type())
         {
             case Bool:
-                ctx.function->appendCode(LOADC, value.valueIndex, (uint8_t)std::any_cast<bool>(_value));
+                ctx.function->appendCode(LOADC, value->value(ctx), (uint8_t)std::any_cast<bool>(_value));
                 break;
             case Int32:
-                ctx.function->appendCode(LOADC, value.valueIndex, std::any_cast<int32_t>(_value));
+                ctx.function->appendCode(LOADC, value->value(ctx), std::any_cast<int32_t>(_value));
                 break;
             case Int64:
-                ctx.function->appendCode(LOADC, value.valueIndex, std::any_cast<int64_t>(_value));
+                ctx.function->appendCode(LOADC, value->value(ctx), std::any_cast<int64_t>(_value));
                 break;
             case Float32:
-                ctx.function->appendCode(LOADC, value.valueIndex, std::any_cast<float>(_value));
+                ctx.function->appendCode(LOADC, value->value(ctx), std::any_cast<float>(_value));
                 break;
             case Float64:
-                ctx.function->appendCode(LOADC, value.valueIndex, std::any_cast<double>(_value));
+                ctx.function->appendCode(LOADC, value->value(ctx), std::any_cast<double>(_value));
                 break;
-            case ObjectRef:
+            case Struct:
                 assert(false);
                 break;
         }
+        value->flags |= AotValue::Initialized;
         return value;
     }
 
@@ -144,62 +145,80 @@ namespace BraneScript
         return nullptr;
     }
 
-    AotValueNode::AotValueNode(uint16_t lValueIndex, TypeDef* type, bool constant, bool ref) : AotNode(type, Value)
+    AotValueNode::AotValueNode(TypeDef* type, TypeInfo info) : AotNode(type, NodeType::Value)
     {
-        assert(type);
-        _lValueID = lValueIndex;
-        _constant = constant;
-        _ref = ref;
+        _ctx = std::shared_ptr<ValueContext>(new ValueContext{std::move(info)});
+    }
+
+    AotValueNode::AotValueNode(TypeDef* type, AotValue* value, TypeInfo info) : AotNode(type, NodeType::Value)
+    {
+        _ctx = std::shared_ptr<ValueContext>(new ValueContext{std::move(info), value});
+    }
+
+    AotValueNode::AotValueNode(const AotValueNode& o) : _ctx(o._ctx), AotNode(*this)
+    {
+        _type = o._type;
+        _resType = o._resType;
     }
 
     AotNode* AotValueNode::optimize()
     {
-        //TODO if is const just return const node
+        //TODO if is const expression just return const node
         return this;
     }
 
-    AotValue AotValueNode::generateBytecode(CompilerCtx& ctx) const
+    AotValue* AotValueNode::generateBytecode(CompilerCtx& ctx) const
     {
-        if (ctx.lValues.count(_lValueID))
-            return ctx.lValues.at(_lValueID);
-        AotValue value = ctx.newReg(_resType, _constant & AotValue::Const);
+        if (_ctx->value)
+            return _ctx->value;
 
-        if(_resType->type() != ObjectRef)
+        uint8_t flags = 0;
+        if(_ctx->info.isConst)
+            flags |= AotValue::Const;
+        if(_ctx->info.isRef|| _resType->type() == ValueType::Struct)
         {
-            ctx.lValues.insert({_lValueID, value});
-            return value;
+            if(_ctx->info.stackRef)
+                flags |= AotValue::StackRef;
+            else
+                flags |= AotValue::ExternalRef;
         }
-        if(_ref)
+        _ctx->value = ctx.newReg(_resType, flags);
+        if(!_ctx->info.isRef && _resType->type() != ValueType::Struct)
+            return _ctx->value;
+
+        if(!_ctx->info.stackRef)
         {
-            ctx.lValues.insert({_lValueID, value});
-            ctx.function->appendCode(Operand::MOVI, value.valueIndex, (uint32_t)0);
-            return value;
+            ctx.function->appendCode(Operand::MOVI, _ctx->value->value(ctx), (uint32_t)0);
         }
-
-        value.valueIndex.storageType = ValueStorageType_StackPtr;
-        ctx.lValues.insert({_lValueID, value});
-
-        auto s = dynamic_cast<StructDef*>(_resType);
-
-        if(ctx.localStructIndices.count(s))
-            ctx.function->appendCode(Operand::ALLOC, value.valueIndex, ctx.localStructIndices.at(s));
         else
         {
-            uint16_t sIndex = 0;
-            for(auto& sName : ctx.script->linkedStructs)
+            auto s = dynamic_cast<StructDef*>(_resType);
+
+            if(ctx.localStructIndices.count(s))
             {
-                if(sName == s->name())
-                    break;
-                ++sIndex;
+                ctx.function->appendCode(Operand::ALLOC, _ctx->value->value(ctx), ctx.localStructIndices.at(s));
             }
-            if(sIndex == ctx.script->linkedStructs.size())
-                ctx.script->linkedStructs.push_back(s->name());
-            ctx.function->appendCode(Operand::EXALLOC, value.valueIndex, sIndex);
+            else
+            {
+                uint16_t sIndex = 0;
+                for(auto& sName : ctx.script->linkedStructs)
+                {
+                    if(sName == s->name())
+                        break;
+                    ++sIndex;
+                }
+                if(sIndex == ctx.script->linkedStructs.size())
+                    ctx.script->linkedStructs.emplace_back(s->name());
+                ctx.function->appendCode(Operand::EXALLOC, _ctx->value->value(ctx), sIndex);
+            }
+            _ctx->value->flags |= AotValue::Initialized;
         }
-        return value;
+
+
+        return _ctx->value;
     }
 
-    AotDerefNode::AotDerefNode(AotNode* value, TypeDef* type, uint32_t offset) : AotNode(type, Deref), _value(value)
+    AotDerefNode::AotDerefNode(AotNode* value, TypeDef* type, uint32_t offset) : AotNode(type, NodeType::Deref), _value(value)
     {
         _offset = offset;
     }
@@ -212,17 +231,13 @@ namespace BraneScript
         return this;
     }
 
-    AotValue AotDerefNode::generateBytecode(CompilerCtx& ctx) const
+    AotValue* AotDerefNode::generateBytecode(CompilerCtx& ctx) const
     {
-        AotValue ptr = _value->generateBytecode(ctx);
-        assert(ptr.valueIndex.storageType == ValueStorageType_Ptr || ptr.valueIndex.storageType == ValueStorageType_StackPtr);
-        ptr.valueIndex.offset = _offset;
-        ptr.valueIndex.storageType = ValueStorageType_DerefPtr;
-        ptr.def = _resType;
-        return ptr;
+        AotValue* ptr = _value->generateBytecode(ctx);
+        return ctx.derefPtr(ptr, _resType, _offset);
     }
 
-    AotNewNode::AotNewNode(StructDef* structType) : AotNode((TypeDef*)structType, New)
+    AotNewNode::AotNewNode(StructDef* structType) : AotNode((TypeDef*)structType, NodeType::New)
     {
 
     }
@@ -232,14 +247,14 @@ namespace BraneScript
         return this;
     }
 
-    AotValue AotNewNode::generateBytecode(CompilerCtx& ctx) const
+    AotValue* AotNewNode::generateBytecode(CompilerCtx& ctx) const
     {
         auto ptr = ctx.newReg(_resType, 0);
-        ctx.function->appendCode(Operand::ALLOC, ptr.valueIndex, _resType->size());
+        ctx.function->appendCode(Operand::ALLOC, ptr->value(ctx), _resType->size());
         return ptr;
     }
 
-    AotDeleteNode::AotDeleteNode(AotNode* ptr) : AotNode(nullptr, Free), _ptr(ptr)
+    AotDeleteNode::AotDeleteNode(AotNode* ptr) : AotNode(nullptr, NodeType::Free), _ptr(ptr)
     {
     }
 
@@ -248,12 +263,12 @@ namespace BraneScript
         return this;
     }
 
-    AotValue AotDeleteNode::generateBytecode(CompilerCtx& ctx) const
+    AotValue* AotDeleteNode::generateBytecode(CompilerCtx& ctx) const
     {
         auto ptr = _ptr->generateBytecode(ctx);
-        assert(ptr.valueIndex.storageType == ValueStorageType_Ptr);
-        ctx.function->appendCode(Operand::FREE, ptr.valueIndex);
-        ctx.function->appendCode(Operand::MOVI, ptr.valueIndex, (int32_t)0);
+        assert(ptr->storageType == ValueStorageType_Ptr);
+        ctx.function->appendCode(Operand::FREE, ptr->value(ctx));
+        ctx.function->appendCode(Operand::MOVI, ptr->value(ctx), (int32_t)0);
         return {};
     }
 }

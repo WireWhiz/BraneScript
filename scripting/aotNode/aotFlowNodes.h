@@ -22,13 +22,13 @@ namespace BraneScript
 
         AotNode* optimize() override;
 
-        AotValue generateBytecode(CompilerCtx& ctx) const override;
+        AotValue* generateBytecode(CompilerCtx& ctx) const override;
     };
 
     class AotConditionBase : public AotNode
     {
     protected:
-        static void jumpOnConditionFalse(AotValue& condition, uint32_t markIndex, CompilerCtx& ctx);
+        static void jumpOnConditionFalse(AotValue* condition, uint32_t markIndex, CompilerCtx& ctx);
 
     public:
         AotConditionBase(TypeDef* resType, NodeType type);
@@ -43,7 +43,7 @@ namespace BraneScript
 
         AotNode* optimize() override;
 
-        AotValue generateBytecode(CompilerCtx& ctx) const override;
+        AotValue* generateBytecode(CompilerCtx& ctx) const override;
     };
 
     class AotWhile : public AotConditionBase
@@ -55,7 +55,7 @@ namespace BraneScript
 
         AotNode* optimize() override;
 
-        AotValue generateBytecode(CompilerCtx& ctx) const override;
+        AotValue* generateBytecode(CompilerCtx& ctx) const override;
     };
 
     class AotFunctionCall : public AotNode
@@ -65,7 +65,7 @@ namespace BraneScript
     public:
         AotFunctionCall(uint32_t functionIndex, TypeDef* returnType, const std::vector<AotNode*>& arguments);
         AotNode* optimize() override;
-        AotValue generateBytecode(CompilerCtx& ctx) const override;
+        AotValue* generateBytecode(CompilerCtx& ctx) const override;
     };
 
     class AotExternalFunctionCall : public AotNode
@@ -76,7 +76,7 @@ namespace BraneScript
     public:
         AotExternalFunctionCall(uint32_t library, std::string name, TypeDef* returnType, const std::vector<AotNode*>& arguments);
         AotNode* optimize() override;
-        AotValue generateBytecode(CompilerCtx& ctx) const override;
+        AotValue* generateBytecode(CompilerCtx& ctx) const override;
     };
 }
 #endif //BRANESCRIPT_AOTFLOWNODES_H

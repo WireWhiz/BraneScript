@@ -10,7 +10,7 @@
 
 namespace BraneScript
 {
-    AotScope::AotScope(std::vector<AotNode*> operations) : AotNode(nullptr, Scope)
+    AotScope::AotScope(std::vector<AotNode*> operations) : AotNode(nullptr, NodeType::Scope)
     {
         _operations.reserve(operations.size());
         for (AotNode* node: operations)
@@ -28,7 +28,7 @@ namespace BraneScript
         return this;
     }
 
-    AotValue AotScope::generateBytecode(CompilerCtx& ctx) const
+    AotValue* AotScope::generateBytecode(CompilerCtx& ctx) const
     {
         for (auto& op: _operations)
             op->generateBytecode(ctx);
@@ -40,17 +40,17 @@ namespace BraneScript
 
     }
 
-    void AotConditionBase::jumpOnConditionFalse(AotValue& condition, uint32_t markIndex, CompilerCtx& ctx)
+    void AotConditionBase::jumpOnConditionFalse(AotValue* condition, uint32_t markIndex, CompilerCtx& ctx)
     {
-        if(!condition.isCompare())
+        if(!condition->isCompare())
         {
-            if(condition.valueIndex.storageType == ValueStorageType_Const)
+            if(condition->storageType == ValueStorageType_Const)
                 condition = ctx.castReg(condition);
-            ctx.function->appendCode(TEST, condition.valueIndex);
+            ctx.function->appendCode(TEST, condition->value(ctx));
             ctx.function->appendCode(JE, markIndex);
             return;
         }
-        switch (condition.compareType)
+        switch (condition->compareType)
         {
             case AotValue::EqualRes:
                 ctx.function->appendCode(JNE, markIndex);
@@ -76,7 +76,7 @@ namespace BraneScript
     }
 
     AotIf::AotIf(AotNode* condition, AotNode* operation) : _condition(condition), _operation(operation),
-                                                           AotConditionBase(nullptr, If)
+                                                           AotConditionBase(nullptr, NodeType::If)
     {
 
     }
@@ -92,10 +92,10 @@ namespace BraneScript
         return this;
     }
 
-    AotValue AotIf::generateBytecode(CompilerCtx& ctx) const
+    AotValue* AotIf::generateBytecode(CompilerCtx& ctx) const
     {
         uint32_t markIndex = ctx.newMark();
-        AotValue condition = _condition->generateBytecode(ctx);
+        AotValue* condition = _condition->generateBytecode(ctx);
         jumpOnConditionFalse(condition, markIndex, ctx);
 
         _operation->generateBytecode(ctx);
@@ -105,7 +105,7 @@ namespace BraneScript
     }
 
     AotWhile::AotWhile(AotNode* condition, AotNode* operation) : _condition(condition), _operation(operation),
-                                                                 AotConditionBase(nullptr, If)
+                                                                 AotConditionBase(nullptr, NodeType::If)
     {
     }
 
@@ -120,13 +120,13 @@ namespace BraneScript
         return this;
     }
 
-    AotValue AotWhile::generateBytecode(CompilerCtx& ctx) const
+    AotValue* AotWhile::generateBytecode(CompilerCtx& ctx) const
     {
         uint32_t beginMark = ctx.newMark();
         uint32_t exitMark = ctx.newMark();
         ctx.function->appendCode(MARK, beginMark);
 
-        AotValue condition = _condition->generateBytecode(ctx);
+        AotValue* condition = _condition->generateBytecode(ctx);
         jumpOnConditionFalse(condition, exitMark, ctx);
 
         _operation->generateBytecode(ctx);
@@ -136,7 +136,7 @@ namespace BraneScript
         return {};
     }
 
-    AotFunctionCall::AotFunctionCall(uint32_t functionIndex, TypeDef* returnType, const std::vector<AotNode*>& arguments) : AotNode(returnType, Call)
+    AotFunctionCall::AotFunctionCall(uint32_t functionIndex, TypeDef* returnType, const std::vector<AotNode*>& arguments) : AotNode(returnType, NodeType::Call)
     {
         _functionIndex = functionIndex;
         _arguments.reserve(arguments.size());
@@ -155,11 +155,11 @@ namespace BraneScript
         return this;
     }
 
-    AotValue AotFunctionCall::generateBytecode(CompilerCtx& ctx) const
+    AotValue* AotFunctionCall::generateBytecode(CompilerCtx& ctx) const
     {
-        AotValue returnValue;
+        AotValue* returnValue = nullptr;
 
-        std::vector<AotValue> args;
+        std::vector<AotValue*> args;
         for(auto& arg : _arguments)
             args.push_back(ctx.castReg(arg->generateBytecode(ctx)));
         if(_resType)
@@ -167,14 +167,14 @@ namespace BraneScript
 
         ctx.function->appendCode(Operand::CALL, _functionIndex);
         if(_resType)
-            ctx.function->appendCode(returnValue.valueIndex);
+            ctx.function->appendCode(returnValue->value(ctx));
         for(auto& a : args)
-            ctx.function->appendCode(a.valueIndex);
+            ctx.function->appendCode(a->value(ctx));
 
         return returnValue;
     }
 
-    AotExternalFunctionCall::AotExternalFunctionCall(uint32_t library, std::string name, TypeDef* returnType, const std::vector<AotNode*>& arguments) : _library(library), _name(std::move(name)), AotNode(returnType, Call)
+    AotExternalFunctionCall::AotExternalFunctionCall(uint32_t library, std::string name, TypeDef* returnType, const std::vector<AotNode*>& arguments) : _library(library), _name(std::move(name)), AotNode(returnType, NodeType::Call)
     {
         _arguments.reserve(arguments.size());
         for (AotNode* node: arguments)
@@ -192,11 +192,11 @@ namespace BraneScript
         return this;
     }
 
-    AotValue AotExternalFunctionCall::generateBytecode(CompilerCtx& ctx) const
+    AotValue* AotExternalFunctionCall::generateBytecode(CompilerCtx& ctx) const
     {
-        AotValue returnValue;
+        AotValue* returnValue = nullptr;
 
-        std::vector<AotValue> args;
+        std::vector<AotValue*> args;
         for(auto& arg : _arguments)
             args.push_back(ctx.castReg(arg->generateBytecode(ctx)));
         if(_resType)
@@ -213,9 +213,9 @@ namespace BraneScript
         ctx.function->appendCode(argFlags);
 
         if(_resType)
-            ctx.function->appendCode(returnValue.valueIndex);
+            ctx.function->appendCode(returnValue->value(ctx));
         for(auto& a : args)
-            ctx.function->appendCode(a.valueIndex);
+            ctx.function->appendCode(a->value(ctx));
 
         return returnValue;
     }

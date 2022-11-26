@@ -10,17 +10,19 @@
 
 namespace BraneScript
 {
-    struct StructMember
+    struct StructVar
     {
         std::string name;
-        uint16_t offset;
-        TypeDef* type;
+        uint16_t offset = 0;
+        TypeDef* type = nullptr;
+        bool ref = false;
     };
 
     class StructDef : public TypeDef
     {
         std::string _name;
-        std::vector<StructMember> _members;
+        std::vector<StructVar> _variables;
+        std::vector<std::string> _functions;
         uint16_t _size;
     public:
         StructDef(std::string name);
@@ -41,8 +43,8 @@ namespace BraneScript
          */
         void packMembers();
 
-        const StructMember* getMember(const std::string& name) const;
-        const std::vector<StructMember>& members() const;
+        const StructVar* getMember(const std::string& name) const;
+        const std::vector<StructVar>& members() const;
 
         const char* name() const override;
         uint16_t size() const override;

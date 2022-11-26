@@ -15,6 +15,10 @@ namespace BraneScript
     class Linker;
     class StructDef;
 
+#ifndef NDEBUG
+    extern int scriptMallocDiff;
+#endif
+
     class ScriptRuntime
     {
         asmjit::JitRuntime _runtime;

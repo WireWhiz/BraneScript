@@ -31,7 +31,7 @@ namespace BraneScript
         }
     };
 
-    asmjit::TypeId valueToASMType(const ValueIndex& value)
+    asmjit::TypeId valueToASMType(const Value& value)
     {
         switch (value.valueType)
         {
@@ -41,7 +41,7 @@ namespace BraneScript
                 return asmjit::TypeId::kInt32;
             case ValueType::Float32:
                 return asmjit::TypeId::kFloat32;
-            case ValueType::ObjectRef:
+            case ValueType::Struct:
                 return asmjit::TypeId::kIntPtr;
             default:
                 throw std::runtime_error("Unimplemented type");
@@ -78,14 +78,13 @@ namespace BraneScript
         mem_mem
     };
 
-    ValueRegType getValueRegType(const ValueIndex& value)
+    ValueRegType getValueRegType(const Value& value)
     {
         switch(value.storageType)
         {
             case ValueStorageType_Reg:
                 break; //goto next switch statement
             case ValueStorageType_Ptr:
-            case ValueStorageType_StackPtr:
                 return ValueRegType::gp;
             case ValueStorageType_DerefPtr:
             case ValueStorageType_Const:
@@ -102,13 +101,13 @@ namespace BraneScript
             case Float32:
             case Float64:
                 return ValueRegType::xmm;
-            case ObjectRef:
+            case Struct:
                 return ValueRegType::mem;
         }
         assert(false);
     }
 
-    OperationType getOperationType(const ValueIndex& a, const ValueIndex& b)
+    OperationType getOperationType(const Value& a, const Value& b)
     {
         const OperationType gpMap[] = {gp_gp, gp_xmm, gp_mem};
         const OperationType xmmMap[] = {xmm_gp, xmm_xmm, xmm_mem};
@@ -135,7 +134,7 @@ namespace BraneScript
     {
         size_t iptr = 0;
 
-        ScriptFunction* currentFunction = nullptr;
+        IRFunction* currentFunction = nullptr;
 
         std::vector<asmjit::x86::Reg> registers;
         std::vector<asmjit::x86::Mem> constants;
@@ -157,7 +156,7 @@ namespace BraneScript
             return iptr >= currentFunction->code.size();
         }
 
-        void verifyValue(ValueIndex value, Compiler& cc)
+        void verifyValue(Value value, Compiler& cc)
         {
             if (value.index < registers.size())
                 return;
@@ -174,7 +173,7 @@ namespace BraneScript
                 case ValueType::Float32:
                     registers.push_back(cc.newXmmSs());
                     break;
-                case ValueType::ObjectRef:
+                case ValueType::Struct:
                     registers.push_back(cc.newIntPtr());
                     break;
                 default:
@@ -183,7 +182,7 @@ namespace BraneScript
         }
 
         template<class RT>
-        RT getReg(ValueIndex value)
+        RT getReg(Value value)
         {
             if constexpr (std::is_same<RT, Mem>())
             {
@@ -212,13 +211,23 @@ namespace BraneScript
         }
     };
 
+#ifndef NDEBUG
+    int scriptMallocDiff = 0;
+#endif
+
     void* scriptAlloc(uint16_t size)
     {
+#ifndef NDEBUG
+        scriptMallocDiff++;
+#endif
         return ::operator new(size);
     }
 
     void scriptDealoc(void* data)
     {
+#ifndef NDEBUG
+        scriptMallocDiff--;
+#endif
         ::operator delete(data);
     }
 
@@ -295,7 +304,7 @@ namespace BraneScript
                 sigBuilder.addArg(type);
                 argTypes.push_back(type);
             }
-            auto retType = strToASMType(func.returnType);
+            auto retType = strToASMType(func.returnType.type);
             sigBuilder.setRet(retType);
             auto* f = cc.addFunc(sigBuilder);
 
@@ -330,13 +339,13 @@ namespace BraneScript
                 {
                     case RET:
                         printf("RET\n");
-                        if (func.returnType != "void")
+                        if (func.returnType.type != "void")
                             throw std::runtime_error("cannot return nothing from non-void functions");
                         cc.ret();
                         break;
                     case RETV:
                     {
-                        auto valIndex = ctx.readCode<ValueIndex>();
+                        auto valIndex = ctx.readCode<Value>();
                         assert(valIndex.storageType == ValueStorageType_Reg || valIndex.storageType == ValueStorageType_Ptr);
                         printf("RETV r%hu\n", valIndex.index);
                         auto& ret = ctx.registers[valIndex.index];
@@ -346,8 +355,8 @@ namespace BraneScript
                     }
                     case ALLOC:
                     {
-                        auto valIndex = ctx.readCode<ValueIndex>();
-                        assert(valIndex.storageType == ValueStorageType_StackPtr);
+                        auto valIndex = ctx.readCode<Value>();
+                        assert(valIndex.storageType == ValueStorageType_Ptr);
                         auto structIndex = ctx.readCode<uint16_t>();
                         assert(structIndex < localStructs.size());
                         auto& structDef = localStructs[structIndex];
@@ -360,8 +369,8 @@ namespace BraneScript
                     }
                     case EXALLOC:
                     {
-                        auto valIndex = ctx.readCode<ValueIndex>();
-                        assert(valIndex.storageType == ValueStorageType_StackPtr);
+                        auto valIndex = ctx.readCode<Value>();
+                        assert(valIndex.storageType == ValueStorageType_Ptr);
                         auto structIndex = ctx.readCode<uint16_t>();
                         assert(structIndex < linkedStructs.size());
                         auto& structDef = linkedStructs[structIndex];
@@ -375,7 +384,7 @@ namespace BraneScript
                     }
                     case MALLOC:
                     {
-                        auto valIndex = ctx.readCode<ValueIndex>();
+                        auto valIndex = ctx.readCode<Value>();
                         assert(valIndex.storageType == ValueStorageType_Ptr);
                         auto structIndex = ctx.readCode<uint16_t>();
                         assert(structIndex < localStructs.size());
@@ -392,7 +401,7 @@ namespace BraneScript
                     }
                     case EXMALLOC:
                     {
-                        auto valIndex = ctx.readCode<ValueIndex>();
+                        auto valIndex = ctx.readCode<Value>();
                         assert(valIndex.storageType == ValueStorageType_Ptr);
                         auto structIndex = ctx.readCode<uint16_t>();
                         assert(structIndex < linkedStructs.size());
@@ -410,7 +419,7 @@ namespace BraneScript
                     case FREE:
                     {
                         assert(false);
-                        auto valIndex = ctx.readCode<ValueIndex>();
+                        auto valIndex = ctx.readCode<Value>();
                         asmjit::InvokeNode* in;
                         cc.invoke(&in, &scriptDealoc, asmjit::FuncSignatureT<void, void*>());
 
@@ -420,7 +429,7 @@ namespace BraneScript
                     }
                     case LOADC:
                     {
-                        ValueIndex constant = ctx.readCode<ValueIndex>();
+                        Value constant = ctx.readCode<Value>();
                         printf("LOADC mem%hu ", constant.index);
                         assert(ctx.constants.size() == constant.index);
                         switch (constant.valueType)
@@ -461,8 +470,8 @@ namespace BraneScript
                     }
                     case CMP:
                     {
-                        auto a = ctx.readCode<ValueIndex>();
-                        auto b = ctx.readCode<ValueIndex>();
+                        auto a = ctx.readCode<Value>();
+                        auto b = ctx.readCode<Value>();
                         printf("CMP ");
                         switch (getOperationType(a, b))
                         {
@@ -505,11 +514,12 @@ namespace BraneScript
                     }
                     case TEST:
                     {
-                        auto a = ctx.readCode<ValueIndex>();
-                        printf("TEST\n");
+                        auto a = ctx.readCode<Value>();
+                        printf("TEST ");
                         switch (getValueRegType(a))
                         {
                             case ValueRegType::gp:
+                                printf("gp%hu\n", a.index);
                                 cc.test(ctx.getReg<Gp>(a), ctx.getReg<Gp>(a));
                                 break;
                             default:
@@ -603,7 +613,7 @@ namespace BraneScript
                         asmjit::FuncSignatureBuilder sb;
                         sb.setCallConvId(asmjit::CallConvId::kCDecl);
 
-                        sb.setRet(strToASMType(function.returnType));
+                        sb.setRet(strToASMType(function.returnType.type));
                         for(auto& arg : function.arguments)
                             sb.addArg(strToASMType(arg.type));
 
@@ -614,15 +624,15 @@ namespace BraneScript
                         else
                             cc.invoke(&in, f->label(), sb);
 
-                        if(function.returnType != "void")
+                        if(function.returnType.type != "void")
                         {
-                            auto retVal = ctx.readCode<ValueIndex>();
+                            auto retVal = ctx.readCode<Value>();
                             ctx.verifyValue(retVal, cc);
                             in->setRet(0, ctx.getReg<Reg>(retVal));
                         }
                         for(uint32_t i = 0; i < function.arguments.size(); ++i)
                         {
-                            auto argVal = ctx.readCode<ValueIndex>();
+                            auto argVal = ctx.readCode<Value>();
                             in->setArg(i, ctx.getReg<Reg>(argVal));
                         }
                         break;
@@ -638,12 +648,12 @@ namespace BraneScript
                         bool hasRet = argFlags & (1 << 7);
                         uint8_t argCount = argFlags & ~(1 << 7);
 
-                        std::vector<ValueIndex> values;
+                        std::vector<Value> values;
                         values.reserve(argCount + (uint8_t)hasRet);
                         if(hasRet)
-                            values.push_back(ctx.readCode<ValueIndex>());
+                            values.push_back(ctx.readCode<Value>());
                         for(uint8_t i = 0; i < argCount; ++i)
-                            values.push_back(ctx.readCode<ValueIndex>());
+                            values.push_back(ctx.readCode<Value>());
 
                         auto* function = library.getFunction(funcDecl);
                         assert(function);
@@ -672,8 +682,8 @@ namespace BraneScript
                     }
                     case MOV:
                     {
-                        auto dest = ctx.readCode<ValueIndex>();
-                        auto src = ctx.readCode<ValueIndex>();
+                        auto dest = ctx.readCode<Value>();
+                        auto src = ctx.readCode<Value>();
                         ctx.verifyValue(dest, cc);
 
                         printf("MOV ");
@@ -689,7 +699,7 @@ namespace BraneScript
                                 break;
                             case gp_mem:
                             {
-                                printf("gp%hu mem%hu\n", dest.index, src.index);
+                                printf("gp%hu mem%hu (+%hu)\n", dest.index, src.index, src.offset);
                                 auto srcMem = ctx.getReg<Mem>(src);
                                 auto destReg = ctx.getReg<Gp>(dest);
                                 cc.mov(destReg, srcMem);
@@ -697,7 +707,7 @@ namespace BraneScript
                                 break;
                             case mem_gp:
                             {
-                                printf("mem%hu gp%hu\n", dest.index, src.index);
+                                printf("mem%hu (+%hu) gp%hu\n", dest.index, dest.offset, src.index);
                                 auto srcReg = ctx.getReg<Gp>(src);
                                 auto destMem = ctx.getReg<Mem>(dest);
                                 cc.mov(destMem, srcReg);
@@ -729,7 +739,7 @@ namespace BraneScript
                                 break;
                             case xmm_mem:
                             {
-                                printf("xmm%hu mem%hu\n", dest.index, src.index);
+                                printf("xmm%hu mem%hu (+%hu)\n", dest.index, src.index, src.offset);
                                 auto destReg = ctx.getReg<Xmm>(dest);
                                 auto srcMem = ctx.getReg<Mem>(src);
                                 cc.movss(destReg, srcMem);
@@ -737,7 +747,7 @@ namespace BraneScript
                                 break;
                             case mem_xmm:
                             {
-                                printf("mem%hu xmm%hu\n", dest.index, src.index);
+                                printf("mem%hu (+%hu) xmm%hu\n", dest.index, dest.offset, src.index);
                                 auto destMem = ctx.getReg<Mem>(dest);
                                 auto srcReg = ctx.getReg<Xmm>(src);
                                 cc.movss(destMem, srcReg);
@@ -747,7 +757,7 @@ namespace BraneScript
                             {
                                 auto destMem = ctx.getReg<Mem>(dest);
                                 auto srcMem = ctx.getReg<Mem>(src);
-                                printf("mem%hu mem%hu\n", dest.index, src.index);
+                                printf("mem%hu (+%hu) mem%hu (+%hu)\n", dest.index, dest.offset, src.index, src.offset);
                                 Gp tempReg;
                                 switch(src.valueType)
                                 {
@@ -776,10 +786,10 @@ namespace BraneScript
                     }
                     case MOVI:
                     {
-                        auto dest = ctx.readCode<ValueIndex>();
+                        auto dest = ctx.readCode<Value>();
                         ctx.verifyValue(dest, cc);
 
-                        printf("MOVI ");
+                        printf("MOVI \n");
                         switch(dest.valueType)
                         {
 
@@ -792,7 +802,7 @@ namespace BraneScript
                             case Int64:
                                 cc.mov(ctx.getReg<Gp>(dest), asmjit::imm(ctx.readCode<int64_t>()));
                                 break;
-                            case ObjectRef:
+                            case Struct:
                                 cc.mov(ctx.getReg<Gp>(dest), asmjit::imm(ctx.readCode<int32_t>()));
                                 break;
                             default:
@@ -802,7 +812,7 @@ namespace BraneScript
                     }
                     case SETE:
                     {
-                        auto regIndex = ctx.readCode<ValueIndex>();
+                        auto regIndex = ctx.readCode<Value>();
                         assert(regIndex.storageType == ValueStorageType_Reg);
 
                         ctx.verifyValue(regIndex, cc);
@@ -812,7 +822,7 @@ namespace BraneScript
                     }
                     case SETNE:
                     {
-                        auto regIndex = ctx.readCode<ValueIndex>();
+                        auto regIndex = ctx.readCode<Value>();
                         assert(regIndex.storageType == ValueStorageType_Reg);
 
                         ctx.verifyValue(regIndex, cc);
@@ -822,7 +832,7 @@ namespace BraneScript
                     }
                     case SETA:
                     {
-                        auto regIndex = ctx.readCode<ValueIndex>();
+                        auto regIndex = ctx.readCode<Value>();
                         assert(regIndex.storageType == ValueStorageType_Reg);
 
                         ctx.verifyValue(regIndex, cc);
@@ -832,7 +842,7 @@ namespace BraneScript
                     }
                     case SETG:
                     {
-                        auto regIndex = ctx.readCode<ValueIndex>();
+                        auto regIndex = ctx.readCode<Value>();
                         assert(regIndex.storageType == ValueStorageType_Reg);
 
                         ctx.verifyValue(regIndex, cc);
@@ -842,7 +852,7 @@ namespace BraneScript
                     }
                     case SETAE:
                     {
-                        auto regIndex = ctx.readCode<ValueIndex>();
+                        auto regIndex = ctx.readCode<Value>();
                         assert(regIndex.storageType == ValueStorageType_Reg);
 
                         ctx.verifyValue(regIndex, cc);
@@ -852,7 +862,7 @@ namespace BraneScript
                     }
                     case SETGE:
                     {
-                        auto regIndex = ctx.readCode<ValueIndex>();
+                        auto regIndex = ctx.readCode<Value>();
                         assert(regIndex.storageType == ValueStorageType_Reg);
 
                         ctx.verifyValue(regIndex, cc);
@@ -862,8 +872,8 @@ namespace BraneScript
                     }
                     case ADD:
                     {
-                        auto a = ctx.readCode<ValueIndex>();
-                        auto b = ctx.readCode<ValueIndex>();
+                        auto a = ctx.readCode<Value>();
+                        auto b = ctx.readCode<Value>();
                         printf("ADD ");
                         switch (getOperationType(a, b))
                         {
@@ -906,8 +916,8 @@ namespace BraneScript
                     }
                     case SUB:
                     {
-                        auto a = ctx.readCode<ValueIndex>();
-                        auto b = ctx.readCode<ValueIndex>();
+                        auto a = ctx.readCode<Value>();
+                        auto b = ctx.readCode<Value>();
                         printf("SUB ");
                         switch (getOperationType(a, b))
                         {
@@ -950,8 +960,8 @@ namespace BraneScript
                     }
                     case MUL:
                     {
-                        auto a = ctx.readCode<ValueIndex>();
-                        auto b = ctx.readCode<ValueIndex>();
+                        auto a = ctx.readCode<Value>();
+                        auto b = ctx.readCode<Value>();
                         printf("MUL ");
                         switch (getOperationType(a, b))
                         {
@@ -994,8 +1004,8 @@ namespace BraneScript
                     }
                     case DIV:
                     {
-                        auto a = ctx.readCode<ValueIndex>();
-                        auto b = ctx.readCode<ValueIndex>();
+                        auto a = ctx.readCode<Value>();
+                        auto b = ctx.readCode<Value>();
                         printf("DIV ");
                         switch (getOperationType(a, b))
                         {

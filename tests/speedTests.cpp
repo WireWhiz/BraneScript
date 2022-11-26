@@ -8,7 +8,7 @@
 
 using namespace BraneScript;
 
-// Returns time in nanoseconds it takes for function f to run n times
+// Returns time in milliseconds it takes for function f to run n times
 template<typename F, typename T>
 size_t speedTestFib(F f, T n, size_t count)
 {

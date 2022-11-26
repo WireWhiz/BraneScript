@@ -10,9 +10,10 @@
 #include <list>
 #include <any>
 #include <exception>
+#include <memory>
 
 #include "../antlr4/braneBaseVisitor.h"
-#include "scriptFunction.h"
+#include "irFunction.h"
 #include "irScript.h"
 #include "aotNode/aotNode.h"
 #include "aotNode/aotValueNodes.h"
@@ -97,17 +98,16 @@ namespace BraneScript
 
         std::any visitMemberAccess(braneParser::MemberAccessContext *context) override;
 
-        std::any visitNew(braneParser::NewContext *context) override;
-
         std::any visitDelete(braneParser::DeleteContext *context) override;
-
-        std::any visitStructMembers(braneParser::StructMembersContext *context) override;
 
         std::any visitStructDef(braneParser::StructDefContext *context) override;
 
+        std::any visitType(braneParser::TypeContext *context) override;
+
         bool localValueExists(const std::string& name);
 
-        uint16_t registerLocalValue(std::string name, const std::string& type, bool constant, bool ref=false);
+        void registerLocalValue(std::string name, const TypeInfo& type);
+        void registerLocalValue(std::string name, AotValue* value, const TypeInfo& type);
         AotNode* getValueNode(const std::string& name);
 
         void pushScope();
@@ -122,11 +122,19 @@ namespace BraneScript
 
         void throwError(antlr4::Token* token, const std::string& message);
 
+        void throwError(antlr4::ParserRuleContext* ctx, const std::string& message);
+
         void throwError(size_t line, size_t position, const std::string& context, const std::string& message);
 
         bool contextValid();
 
         static std::string removePars(const std::string& str);
+
+        template<typename T>
+        T visitT(antlr4::tree::ParseTree* tree)
+        {
+            return std::move(std::any_cast<T>(visit(tree)));
+        }
 
     public:
         Compiler(Linker* linker);
@@ -146,31 +154,29 @@ namespace BraneScript
         uint32_t markIndex = 0;
 
         IRScript* script = nullptr;
-        ScriptFunction* function = nullptr;
+        IRFunction* function = nullptr;
+        StructDef* structDef = nullptr;
         bool returnCalled = false;
-        std::map<uint16_t, AotValue> lValues;
-        std::vector<std::unique_ptr<StructDef>> localStructDefs;
+        std::vector<std::unique_ptr<AotValue>> values;
+        std::vector<std::unique_ptr<StructDef>>  localStructDefs;
         std::unordered_map<StructDef*, uint16_t> localStructIndices;
 
         std::unordered_map<std::string, uint32_t> libraryAliases;
 
         CompilerCtx(Compiler& c, IRScript* s);
 
-        void setFunction(ScriptFunction* function);
+        void setFunction(IRFunction* function);
 
         uint32_t newMark();
 
-        AotValue newReg(const std::string& type, uint8_t flags);
-
-        AotValue newReg(TypeDef* type, uint8_t flags);
-
-        AotValue newConst(ValueType type, uint8_t flags = AotValue::Const | AotValue::Constexpr);
-
-        AotValue castValue(const AotValue& value);
-
-        AotValue castTemp(const AotValue& value);
-
-        AotValue castReg(const AotValue& value);
+        AotValue* newReg(const std::string& type, uint8_t flags);
+        AotValue* newReg(TypeDef* type, uint8_t flags);
+        AotValue* newConst(ValueType type, uint8_t flags = AotValue::Const | AotValue::Constexpr);
+        AotValue* castValue(AotValue* value);
+        AotValue* castTemp(AotValue* value);
+        AotValue* castReg(AotValue* value);
+        AotValue* blankValue();
+        AotValue* derefPtr(AotValue* value, TypeDef* type, uint16_t offset = 0);
 
     };
 
