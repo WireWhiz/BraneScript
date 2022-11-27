@@ -56,6 +56,10 @@ TEST(BraneScript, Objects)
         int a;
         bool b;
         float c;
+        float sum()
+        {
+            return a + c;
+        }
     }
 
     TestStruct2 testScriptStruct()
@@ -67,20 +71,25 @@ TEST(BraneScript, Objects)
         return output;
     }
 
-    void modStruct(ref TestStruct2 r)
+    void modStruct(ref TestStruct2 s)
     {
-          r.c = 4.2f;
+          s.c = 4.2f;
+    }
+
+    float testMemberFunc(ref TestStruct2 s)
+    {
+        return s.sum();
     }
 )";
     StructDef testStruct1Def("TestStruct1");
-    testStruct1Def.addMember("c", getNativeTypeDef(ValueType::Bool));
-    testStruct1Def.addMember("a", getNativeTypeDef(ValueType::Float32));
-    testStruct1Def.addMember("b", getNativeTypeDef(ValueType::Int32));
+    testStruct1Def.addMemberVar("c", getNativeTypeDef(ValueType::Bool));
+    testStruct1Def.addMemberVar("a", getNativeTypeDef(ValueType::Float32));
+    testStruct1Def.addMemberVar("b", getNativeTypeDef(ValueType::Int32));
     testStruct1Def.padMembers();
 
-    EXPECT_EQ(testStruct1Def.members()[0].offset, offsetof(TestStruct1, c));
-    EXPECT_EQ(testStruct1Def.members()[1].offset, offsetof(TestStruct1, a));
-    EXPECT_EQ(testStruct1Def.members()[2].offset, offsetof(TestStruct1, b));
+    EXPECT_EQ(testStruct1Def.memberVars()[0].offset, offsetof(TestStruct1, c));
+    EXPECT_EQ(testStruct1Def.memberVars()[1].offset, offsetof(TestStruct1, a));
+    EXPECT_EQ(testStruct1Def.memberVars()[2].offset, offsetof(TestStruct1, b));
 
     Linker l;
     l.addType(&testStruct1Def);
@@ -118,7 +127,9 @@ TEST(BraneScript, Objects)
     EXPECT_EQ(createdStruct->c, false);
     delete createdStruct;
 
-    auto testScriptStruct = (FunctionHandle<TestStruct2*>)testScript->functions[4];
+    // We skip index 5 here because it is used for TestStruct2::sum()
+
+    auto testScriptStruct = (FunctionHandle<TestStruct2*>)testScript->functions[5];
     ASSERT_TRUE(testScriptStruct);
     TestStruct2* ts2 = testScriptStruct();
     ASSERT_TRUE(ts2);
@@ -126,9 +137,16 @@ TEST(BraneScript, Objects)
     EXPECT_EQ(ts2->b, true);
     EXPECT_EQ(ts2->c, 3.2f);
 
-    auto modStruct = (FunctionHandle<void, TestStruct2*>)testScript->functions[5];
+    auto modStruct = (FunctionHandle<void, TestStruct2*>)testScript->functions[6];
     ASSERT_TRUE(testScriptStruct);
     modStruct(ts2);
+    EXPECT_EQ(ts2->a, 5);
+    EXPECT_EQ(ts2->b, true);
+    EXPECT_EQ(ts2->c, 4.2f);
+
+    auto testMemberFunc = (FunctionHandle<float, TestStruct2*>)testScript->functions[7];
+    ASSERT_TRUE(testMemberFunc);
+    EXPECT_EQ(testMemberFunc(ts2), 5 + 4.2f);
     EXPECT_EQ(ts2->a, 5);
     EXPECT_EQ(ts2->b, true);
     EXPECT_EQ(ts2->c, 4.2f);

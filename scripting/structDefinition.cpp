@@ -11,7 +11,7 @@ namespace BraneScript
         _size = 0;
     }
 
-    void StructDef::addMember(std::string name, TypeDef* type)
+    void StructDef::addMemberVar(std::string name, TypeDef* type)
     {
         _variables.push_back({std::move(name), (uint16_t)_size, type});
     }
@@ -46,7 +46,7 @@ namespace BraneScript
         }
     }
 
-    const StructVar* StructDef::getMember(const std::string& name) const
+    const StructVar* StructDef::getMemberVar(const std::string& name) const
     {
         for (const auto& m: _variables)
             if (name == m.name)
@@ -54,7 +54,7 @@ namespace BraneScript
         return nullptr;
     }
 
-    const std::vector<StructVar>& StructDef::members() const
+    const std::vector<StructVar>& StructDef::memberVars() const
     {
         return _variables;
     }

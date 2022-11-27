@@ -146,7 +146,7 @@ namespace antlr4 {
      * classDef : 'class' ID '{' member* '}'
      * </pre>
      *
-     * input with an extra token between members would force the parser to
+     * input with an extra token between memberVars would force the parser to
      * consume until it found the next class definition rather than the next
      * member definition of the current class.
      *

@@ -243,7 +243,7 @@ namespace BraneScript
             assert(_linker);
             auto def = std::make_unique<StructDef>(s.name);
             for(auto& m : s.members)
-                def->addMember(m.type, _linker->getType(m.type));
+                def->addMemberVar(m.type, _linker->getType(m.type));
             if(s.packed)
                 def->packMembers();
             else

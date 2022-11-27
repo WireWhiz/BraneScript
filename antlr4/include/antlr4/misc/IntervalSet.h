@@ -116,7 +116,7 @@ namespace misc {
     bool contains(size_t el) const; // For mapping of e.g. Token::EOF to -1 etc.
     bool contains(ssize_t el) const;
 
-    /// return true if this set has no members
+    /// return true if this set has no memberVars
     bool isEmpty() const;
 
     /// If this set is a single integer, return it otherwise Token.INVALID_TYPE.

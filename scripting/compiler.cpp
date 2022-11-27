@@ -183,7 +183,19 @@ namespace BraneScript
         AotNode* node = getValueNode(context->getText());
         if (!node)
         {
-            throwError(context->start, "Undefined identifier");
+            if(_ctx->structDef)
+            {
+                auto member = _ctx->structDef->getMemberVar(context->getText());
+                if(!member)
+                {
+                    throwError(context->start, "Undeclared identifier");
+                    return (AotNode*)nullptr;
+                }
+
+                return (AotNode*)new AotDerefNode(getValueNode("this"), member->type, member->offset);
+            }
+
+            throwError(context->start, "Undeclared identifier");
             return (AotNode*)nullptr;
         }
         return node;
@@ -205,7 +217,7 @@ namespace BraneScript
             RETURN_NULL;
         }
 
-        auto structMemberDef = structDef->getMember(context->member->getText());
+        auto structMemberDef = structDef->getMemberVar(context->member->getText());
         if(!structMemberDef)
         {
             throwError(context->member, "Member for struct " + context->base->getText() + " not found");
@@ -282,17 +294,19 @@ namespace BraneScript
         }
 
         if(_ctx->structDef)
-            _ctx->function->name += _ctx->structDef->name() + std::string("::");
+            _ctx->function->name = _ctx->structDef->name() + std::string("::");
 
-        _ctx->function->name = ctx->id->getText();
+        _ctx->function->name += ctx->id->getText();
         _ctx->function->name += "(";
         pushScope();
         if(_ctx->structDef)
         {
-            _ctx->function->name += std::string("(ref ") + _ctx->structDef->name() + ",";
+            //_ctx->function->name += std::string("(ref ") + _ctx->structDef->name() + ",";
             TypeInfo info = {_ctx->structDef->name(), false, true, false};
             _ctx->function->arguments.push_back(info);
             AotValue* value = _ctx->newReg(info.type, 0);
+            value->valueIndex = _ctx->regIndex++;
+            value->flags |= AotValue::Initialized;
             registerLocalValue("this", value, info);
         }
         for (auto argument: ctx->arguments->declaration())
@@ -507,33 +521,51 @@ namespace BraneScript
 
         if(context->namespace_)
         {
-            std::string space = context->namespace_->getText();
-            if(!_ctx->libraryAliases.count(space))
+            std::string scope = context->namespace_->getText();
+
+            auto* str = getValueNode(scope);
+            if(str)
             {
-                throwError(context->namespace_, "Library not found!");
+                if(str->resType()->type() != ValueType::Struct)
+                {
+                    throwError(context->namespace_, "Can't call functions from non-struct value");
+                    RETURN_NULL;
+                }
+                arguments.insert(arguments.begin(), str);
+
+                std::string scopedName = std::string(str->resType()->name()) + "::" + functionName;
+                uint32_t fIndex = getLocalFunction(scopedName);
+                if(fIndex < _ctx->script->localFunctions.size())
+                {
+                    auto& func = _ctx->script->localFunctions[fIndex];
+                    return (AotNode*)new AotFunctionCall(fIndex, getType(func.returnType.type), arguments);
+                }
+
+                throwError(context, "Could not find function with signature " + scopedName);
                 RETURN_NULL;
             }
 
-            auto* library = _linker->getLibrary(_ctx->script->linkedLibraries[_ctx->libraryAliases[space]]);
+            if(!_ctx->libraryAliases.count(scope))
+            {
+                throwError(context->namespace_, "Library or identifier not found!");
+                RETURN_NULL;
+            }
+
+            auto* library = _linker->getLibrary(_ctx->script->linkedLibraries[_ctx->libraryAliases[scope]]);
 
             auto retType = getType(library->getFunctionReturnT(functionName));
-            uint32_t libIndex = _ctx->libraryAliases.at(space);
+            uint32_t libIndex = _ctx->libraryAliases.at(scope);
             return (AotNode*)new AotExternalFunctionCall(libIndex, functionName, retType, arguments);
         }
 
-        uint32_t fIndex = 0;
-        for(auto& func : _ctx->script->localFunctions)
+        uint32_t fIndex = getLocalFunction(functionName);
+        if(fIndex == _ctx->script->localFunctions.size())
         {
-            if(functionName == func.name)
-            {
-                TypeDef* retType = getType(func.returnType.type);
-                return (AotNode*)new AotFunctionCall(fIndex, retType, arguments);
-            }
-            ++fIndex;
+            throwError(context->getStart(), "Could not find function with signature " + functionName);
+            RETURN_NULL;
         }
-
-        throwError(context->getStart(), "Could not find function with signature " + functionName);
-        RETURN_NULL;
+        TypeDef* retType = getType(_ctx->script->localFunctions[fIndex].returnType.type);
+        return (AotNode*)new AotFunctionCall(fIndex, retType, arguments);
     }
 
     std::any Compiler::visitLink(braneParser::LinkContext* context)
@@ -592,7 +624,7 @@ namespace BraneScript
         auto newDef = new StructDef(context->id->getText());
 
         for(auto& m : members)
-            newDef->addMember(std::move(m.name), m.type);
+            newDef->addMemberVar(std::move(m.name), m.type);
         if(context->packed)
             newDef->packMembers();
         else
@@ -606,7 +638,7 @@ namespace BraneScript
         irDef.name = newDef->name();
         irDef.packed = context->packed;
 
-        for(auto& m : newDef->members())
+        for(auto& m : newDef->memberVars())
             irDef.members.push_back({m.name, m.offset, m.type->name()});
         _ctx->script->localStructs.push_back(irDef);
 
@@ -678,6 +710,18 @@ namespace BraneScript
     Compiler::Compiler(Linker* linker)
     {
         _linker = linker;
+    }
+
+    uint16_t Compiler::getLocalFunction(const std::string& name)
+    {
+        uint32_t fIndex = 0;
+        for(auto& func : _ctx->script->localFunctions)
+        {
+            if(name == func.name)
+                return fIndex;
+            ++fIndex;
+        }
+        return fIndex;
     }
 
     CompilerCtx::CompilerCtx(Compiler& c, IRScript* s) : compiler(c), script(s)
@@ -786,6 +830,7 @@ namespace BraneScript
     {
         assert(value->storageType == ValueStorageType_Ptr);
         assert(value->valueIndex != (uint16_t)-1);
+        assert(type);
         assert(offset == 0 || value->def->type() == ValueType::Struct);
         auto* drefValue = new AotValue(*value);
         drefValue->storageType = ValueStorageType_DerefPtr;

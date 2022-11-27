@@ -85,9 +85,10 @@ namespace BraneScript
     AotValue* AotCastNode::generateBytecode(CompilerCtx& ctx) const
     {
         AotValue* source = arg->generateBytecode(ctx);
-        if (source->value(ctx).valueType == _resType->type())
+        if (source->def == _resType)
             return source;
 
+        source = ctx.castReg(source);
         AotValue* castValue = ctx.newReg(_resType->name(), AotValue::Temp);
         ctx.function->appendCode(MOV, castValue->value(ctx), source->value(ctx));
         return castValue;
@@ -142,6 +143,7 @@ namespace BraneScript
     {
         AotValue* left = argA->generateBytecode(ctx);
         AotValue* right = argB->generateBytecode(ctx);
+        assert(left->def == right->def);
         if (right->flags & AotValue::Temp && !(left->flags & AotValue::Temp))
             std::swap(left, right);
         else
@@ -287,7 +289,7 @@ namespace BraneScript
                     ctx.script->linkedStructs.push_back(sDef->name());
                 ctx.function->appendCode(Operand::EXMALLOC, ptr->value(ctx), sIndex);
             }
-            for(auto& m : sDef->members())
+            for(auto& m : sDef->memberVars())
             {
                 Value valA = value->value(ctx);
                 valA.offset = m.offset;
@@ -358,7 +360,7 @@ namespace BraneScript
         {
             //This is where a move/copy constructor would go
             auto* sDef = static_cast<StructDef*>(rValue->def);
-            for(auto& m : sDef->members())
+            for(auto& m : sDef->memberVars())
             {
                 Value valA = lValue->value(ctx);
                 valA.offset = m.offset;

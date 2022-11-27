@@ -28,12 +28,12 @@ namespace BraneScript
         StructDef(std::string name);
         /**
          * Add a tightly packed member
-         * Call padMembers after all members have been added if you want to use padding.
+         * Call padMembers after all memberVars have been added if you want to use padding.
          * @see padMembers()
          * @param name member name
          * @param type member type
          */
-        void addMember(std::string name, TypeDef* type);
+        void addMemberVar(std::string name, TypeDef* type);
         /**
          * initialize member offsets and struct size using padding
          */
@@ -43,8 +43,8 @@ namespace BraneScript
          */
         void packMembers();
 
-        const StructVar* getMember(const std::string& name) const;
-        const std::vector<StructVar>& members() const;
+        const StructVar* getMemberVar(const std::string& name) const;
+        const std::vector<StructVar>& memberVars() const;
 
         const char* name() const override;
         uint16_t size() const override;

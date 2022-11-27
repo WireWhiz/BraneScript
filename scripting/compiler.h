@@ -110,6 +110,8 @@ namespace BraneScript
         void registerLocalValue(std::string name, AotValue* value, const TypeInfo& type);
         AotNode* getValueNode(const std::string& name);
 
+        uint16_t getLocalFunction(const std::string& name);
+
         void pushScope();
 
         void popScope();

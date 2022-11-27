@@ -5,6 +5,7 @@ COMMENT : '//'(.*?)[\r\n(EOF)] -> skip;
 BLOCK_COMMENT : '/*'.*?'*/' -> skip;
 SPACE   : (' '|'\t') -> skip;
 
+BOOL    : ('true'|'false');
 INT     : [0-9]+;
 FLOAT   : INT('.'([0-9]*))?'f';
 STRING  : '"'.*?'"';
@@ -36,7 +37,7 @@ link        : 'link' library=STRING ('as' alias=STRING)? ';';
 
 structMember  : (var=declaration ';' | func=function);
 structMembers : structMember*;
-structDef     : packed='packed'? 'struct' id=ID '{' members=structMembers '}';
+structDef     : packed='packed'? 'struct' id=ID '{' memberVars=structMembers '}';
 
 statement   : expression ';'                                                #exprStatement
             | '{' statement* '}'                                            #scope
@@ -49,7 +50,7 @@ statement   : expression ';'                                                #exp
 expression  : INT                                                           #constInt
             | FLOAT                                                         #constFloat
             | STRING                                                        #constString
-            | ('true'|'false')                                              #constBool
+            | BOOL                                                          #constBool
             | declaration                                                   #decl
             | 'delete' ptr=expression                                       #delete
             | (namespace=ID '.')? name=ID '(' argumentPack ')'              #functionCall
@@ -57,7 +58,7 @@ expression  : INT                                                           #con
             | base=ID '.' member=ID                                         #memberAccess
             | left=expression op=(MUL | DIV) right=expression               #muldiv
             | left=expression op=(ADD | SUB) right=expression               #addsub
-            | left=expression op=('==' | '!=' | '<' | '>' | '<=' | '>=') right=expression             #comparison
+            | left=expression op=('==' | '!=' | '<' | '>' | '<=' | '>=') right=expression #comparison
             | '(' expression ')'                                            #inlineScope
             | '(' ID ')' expression                                         #cast
             | dest=expression '=' expr=expression                           #assignment
