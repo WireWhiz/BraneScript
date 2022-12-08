@@ -3,7 +3,6 @@
 #include "../scripting/compiler.h"
 #include "../scripting/scriptRuntime.h"
 #include "../scripting/script.h"
-#include "../scripting/structDefinition.h"
 #include "../scripting/nativeTypes.h"
 #include "../scripting/linker.h"
 

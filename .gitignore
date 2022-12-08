@@ -3,17 +3,4 @@ cmake-build-release
 
 docs/*
 
-/antlr4/brane.interp
-/antlr4/brane.tokens
-/antlr4/braneBaseVisitor.cpp
-/antlr4/braneBaseVisitor.h
-/antlr4/braneLexer.cpp
-/antlr4/braneLexer.h
-/antlr4/braneLexer.interp
-/antlr4/braneLexer.tokens
-/antlr4/braneParser.cpp
-/antlr4/braneParser.h
-/antlr4/braneVisitor.cpp
-/antlr4/braneVisitor.h
-
 .idea
