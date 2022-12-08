@@ -8,12 +8,16 @@
 #include <string>
 #include <unordered_map>
 #include <cassert>
+#include <vector>
 
 namespace BraneScript
 {
     class Linker;
-
+#if _WIN32
 #define BS_API_CALL __cdecl
+#elif __unix__
+#define BS_API_CALL __attribute__((cdecl))
+#endif
 
     template<typename Ret, typename... Args>
     using FunctionHandle = Ret (BS_API_CALL*)(Args...);
@@ -69,7 +73,7 @@ namespace BraneScript
         std::string name = typeName<T>();
 
         assert(!name.empty());
-        if constexpr(sizeof...(Types))
+        if constexpr(sizeof...(Types) > 0)
             return name + "," + argsToString<Types...>();
         else
             return name;

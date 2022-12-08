@@ -20,7 +20,7 @@ namespace BraneScript
         void addFunction(std::string name, FunctionHandle<Ret, Args...> f)
         {
             std::string decl = std::move(name) + "(" + argsToString<Args...>() + ")";
-            _functions.insert({decl, {typeName<Ret>(), f}});
+            _functions.insert({decl, {typeName<Ret>(), (void*)f}});
         }
 
         void* getFunction(const std::string& name) const;

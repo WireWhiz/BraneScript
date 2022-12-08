@@ -1,6 +1,7 @@
 #include "irFunction.h"
 #include <cassert>
 #include <stdexcept>
+#include <cstring>
 
 namespace BraneScript
 {

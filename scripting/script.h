@@ -23,7 +23,7 @@ namespace BraneScript
         FunctionHandle<Ret, Args...> getFunction(const std::string& name)
         {
             std::string arguments;
-            if constexpr(sizeof...(Args))
+            if constexpr(sizeof...(Args) > 0)
                 arguments = "(" + argsToString<Args...>() + ")";
             else
                 arguments = "()";
