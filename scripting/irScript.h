@@ -30,6 +30,7 @@ namespace BraneScript
             std::vector<Member> members;
             uint16_t functions;
             bool packed = false;
+            bool isPublic = false;
         };
         std::vector<IRStructDef> localStructs;
         std::vector<std::string> linkedStructs;

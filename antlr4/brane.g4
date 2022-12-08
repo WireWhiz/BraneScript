@@ -37,7 +37,7 @@ link        : 'link' library=STRING ('as' alias=STRING)? ';';
 
 structMember  : (var=declaration ';' | func=function);
 structMembers : structMember*;
-structDef     : packed='packed'? 'struct' id=ID '{' memberVars=structMembers '}';
+structDef     : isPublic='public'? packed='packed'? 'struct' id=ID '{' memberVars=structMembers '}';
 
 statement   : expression ';'                                                #exprStatement
             | '{' statement* '}'                                            #scope

@@ -603,7 +603,7 @@ namespace BraneScript
     std::any Compiler::visitStructDef(braneParser::StructDefContext* context)
     {
         std::vector<StructVar> members;
-        for(auto& member : context->members->structMember())
+        for(auto& member : context->memberVars->structMember())
         {
             if(!member->var)
                 continue;
@@ -637,13 +637,14 @@ namespace BraneScript
         IRScript::IRStructDef irDef;
         irDef.name = newDef->name();
         irDef.packed = context->packed;
+        irDef.isPublic = context->isPublic;
 
         for(auto& m : newDef->memberVars())
             irDef.members.push_back({m.name, m.offset, m.type->name()});
         _ctx->script->localStructs.push_back(irDef);
 
         _ctx->structDef = newDef;
-        for(auto& member : context->members->structMember())
+        for(auto& member : context->memberVars->structMember())
         {
             if(!member->func)
                 continue;

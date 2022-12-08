@@ -51,7 +51,7 @@ TEST(BraneScript, Objects)
         return output;
     }
 
-    struct TestStruct2
+    public struct TestStruct2
     {
         int a;
         bool b;
@@ -95,9 +95,15 @@ TEST(BraneScript, Objects)
     l.addType(&testStruct1Def);
 
     Compiler compiler(&l);
-    auto* ir = compiler.compile(testString);
+    IRScript* ir = compiler.compile(testString);
     checkCompileErrors(compiler);
     ASSERT_TRUE(ir);
+
+    IRScript::IRStructDef& scriptStructDef = ir->localStructs[0];
+    EXPECT_TRUE(scriptStructDef.isPublic);
+    EXPECT_EQ(scriptStructDef.members[0].offset, offsetof(TestStruct2, a));
+    EXPECT_EQ(scriptStructDef.members[1].offset, offsetof(TestStruct2, b));
+    EXPECT_EQ(scriptStructDef.members[2].offset, offsetof(TestStruct2, c));
 
     ScriptRuntime rt;
     rt.setLinker(&l);
