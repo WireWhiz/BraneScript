@@ -2,6 +2,8 @@
 #define BRANESCRIPT_LINKER_H
 
 #include <unordered_map>
+#include <string>
+
 namespace BraneScript
 {
     class Library;
