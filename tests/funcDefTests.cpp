@@ -1,6 +1,6 @@
 #include "testing.h"
 
-#include "../scripting/functionHandle.h"
+#include "../src/functionHandle.h"
 
 using namespace BraneScript;
 

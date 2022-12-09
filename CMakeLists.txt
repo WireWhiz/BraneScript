@@ -8,11 +8,11 @@ option(BS_FETCH_GTEST "Turn off if your project already includes gtest" ON)
 
 if(BS_BUILD_EXECUTABLE)
     add_executable(BraneScriptCompiler main.cpp)
-    target_link_libraries(BraneScriptCompiler antlr4 scripting)
+    target_link_libraries(BraneScriptCompiler antlr4 BraneScript)
 endif()
 
 add_subdirectory(antlr4)
-add_subdirectory(scripting)
+add_subdirectory(src)
 
 set(ASMJIT_STATIC TRUE)
 set(ASMJIT_TEST)

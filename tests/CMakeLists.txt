@@ -13,7 +13,7 @@ endif()
 enable_testing()
 
 add_executable(bs_tests operatorTests.cpp testing.cpp flowStatementTests.cpp overrideTests.cpp recursionTest.cpp libraryTests.cpp objectTests.cpp speedTests.cpp funcDefTests.cpp)
-target_link_libraries(bs_tests PUBLIC gtest_main scripting)
+target_link_libraries(bs_tests PUBLIC gtest_main BraneScript)
 
 include(GoogleTest)
 gtest_discover_tests(bs_tests)

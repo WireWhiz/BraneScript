@@ -3,7 +3,7 @@
 //
 
 #include "testing.h"
-#include "../scripting/compiler.h"
+#include "../src/compiler.h"
 
 namespace BraneScript
 {

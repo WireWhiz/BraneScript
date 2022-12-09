@@ -1,9 +1,9 @@
 #include "testing.h"
 
-#include "../scripting/compiler.h"
-#include "../scripting/scriptRuntime.h"
-#include "../scripting/script.h"
-#include "../scripting/linker.h"
+#include "../src/compiler.h"
+#include "../src/scriptRuntime.h"
+#include "../src/script.h"
+#include "../src/linker.h"
 
 using namespace BraneScript;
 
