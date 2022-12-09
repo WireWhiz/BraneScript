@@ -35,6 +35,16 @@ namespace BraneScript
          */
         void addMemberVar(std::string name, TypeDef* type);
         /**
+         * Add a member with a defined offset
+         * Expects members to be added in order
+         * Calling a padding function will discard manual offsets.
+         * @see padMembers()
+         * @param name member name
+         * @param type member type
+         * @param offset member offset
+         */
+        void addMemberVar(std::string name, TypeDef* type, uint16_t offset);
+        /**
          * initialize member offsets and struct size using padding
          */
         void padMembers();

@@ -14,6 +14,13 @@ namespace BraneScript
     void StructDef::addMemberVar(std::string name, TypeDef* type)
     {
         _variables.push_back({std::move(name), (uint16_t)_size, type});
+        _size += type->size();
+    }
+
+    void StructDef::addMemberVar(std::string name, TypeDef* type, uint16_t offset)
+    {
+        _variables.push_back({std::move(name), offset, type});
+        _size = offset + type->size();
     }
 
     void StructDef::padMembers()
