@@ -55,6 +55,10 @@ TEST(BraneScript, Objects)
         int a;
         bool b;
         float c;
+        void _init()
+        {
+
+        }
         float sum()
         {
             return a + c;
@@ -111,19 +115,19 @@ TEST(BraneScript, Objects)
 
     TestStruct1 testStruct1{true, 23.3, 45};
 
-    auto getMember1 = (FunctionHandle<float, TestStruct1*>)testScript->functions[0];
+    auto getMember1 = testScript->getFunction<float, TestStruct1*>("getMember1(ref TestStruct1)");
     ASSERT_TRUE(getMember1);
     EXPECT_EQ(getMember1(&testStruct1), 23.3f);
 
-    auto getMember2 = (FunctionHandle<int, TestStruct1*>)testScript->functions[1];
+    auto getMember2 =  testScript->getFunction<int, TestStruct1*>("getMember2(ref TestStruct1)");
     ASSERT_TRUE(getMember2);
     EXPECT_EQ(getMember2(&testStruct1), 45);
 
-    auto getMember3 = (FunctionHandle<bool, TestStruct1*>)testScript->functions[2];
+    auto getMember3 = testScript->getFunction<bool, TestStruct1*>("getMember3(ref TestStruct1)");
     ASSERT_TRUE(getMember3);
     EXPECT_EQ(getMember3(&testStruct1), true);
 
-    auto createStruct = (FunctionHandle<TestStruct1*>)testScript->functions[3];
+    auto createStruct = testScript->getFunction<TestStruct1*>("createStruct()");
     ASSERT_TRUE(createStruct);
     TestStruct1* createdStruct = createStruct();
     ASSERT_TRUE(createdStruct);
@@ -132,9 +136,7 @@ TEST(BraneScript, Objects)
     EXPECT_EQ(createdStruct->c, false);
     delete createdStruct;
 
-    // We skip index 5 here because it is used for TestStruct2::sum()
-
-    auto testScriptStruct = (FunctionHandle<TestStruct2*>)testScript->functions[5];
+    auto testScriptStruct = testScript->getFunction<TestStruct2*>("testScriptStruct()");
     ASSERT_TRUE(testScriptStruct);
     TestStruct2* ts2 = testScriptStruct();
     ASSERT_TRUE(ts2);
@@ -142,14 +144,14 @@ TEST(BraneScript, Objects)
     EXPECT_EQ(ts2->b, true);
     EXPECT_EQ(ts2->c, 3.2f);
 
-    auto modStruct = (FunctionHandle<void, TestStruct2*>)testScript->functions[6];
+    auto modStruct = testScript->getFunction<void, TestStruct2*>("modStruct(ref TestStruct2)");
     ASSERT_TRUE(testScriptStruct);
     modStruct(ts2);
     EXPECT_EQ(ts2->a, 5);
     EXPECT_EQ(ts2->b, true);
     EXPECT_EQ(ts2->c, 4.2f);
 
-    auto testMemberFunc = (FunctionHandle<float, TestStruct2*>)testScript->functions[7];
+    auto testMemberFunc = testScript->getFunction<float, TestStruct2*>("testMemberFunc(ref TestStruct2)");
     ASSERT_TRUE(testMemberFunc);
     EXPECT_EQ(testMemberFunc(ts2), 5 + 4.2f);
     EXPECT_EQ(ts2->a, 5);

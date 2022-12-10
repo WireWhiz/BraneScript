@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.22)
 project(BraneScript)
 
-set(CMAKE_CXX_STANDARD 20)
+set(CMAKE_CXX_STANDARD 17)
 option(BS_BUILD_EXECUTABLE "Build standalone compiler/interpreter" ON)
 option(BS_BUILD_TESTS "Build tests" ON)
 option(BS_FETCH_GTEST "Turn off if your project already includes gtest" ON)

@@ -23,10 +23,15 @@ namespace BraneScript
         FunctionHandle<Ret, Args...> getFunction(const std::string& name)
         {
             std::string arguments;
-            if constexpr(sizeof...(Args) > 0)
-                arguments = "(" + argsToString<Args...>() + ")";
-            else
-                arguments = "()";
+            //Check to see if arguments already have been filled in
+            if(*--name.end() != ')')
+            {
+                if constexpr(sizeof...(Args) > 0)
+                    arguments = "(" + argsToString<Args...>() + ")";
+                else
+                    arguments = "()";
+            }
+
             auto f = functionNames.find(name + arguments);
             if (f == functionNames.end())
                 return nullptr;
