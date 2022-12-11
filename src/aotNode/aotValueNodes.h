@@ -17,7 +17,7 @@ namespace BraneScript
     {
         std::any _value;
     public:
-        AotConst(std::any value, TypeDef* resType);
+        AotConst(std::any value, const TypeDef* resType);
 
         AotNode* optimize() override;
 
@@ -37,7 +37,7 @@ namespace BraneScript
 
         AotConst* operator/(const AotConst&);
 
-        AotNode* cast(TypeDef* type) const;
+        AotNode* cast(const TypeDef* type) const;
     };
 
     class AotValueNode : public AotNode
@@ -48,8 +48,8 @@ namespace BraneScript
         };
         std::shared_ptr<ValueContext> _ctx;
     public:
-        AotValueNode(TypeDef* type, TypeInfo info);
-        AotValueNode(TypeDef* type, AotValue* value, TypeInfo info);
+        AotValueNode(const TypeDef* type, TypeInfo info);
+        AotValueNode(const TypeDef* type, AotValue* value, TypeInfo info);
         AotValueNode(const AotValueNode&);
 
         AotNode* optimize() override;
@@ -63,7 +63,7 @@ namespace BraneScript
         uint32_t _offset;
 
     public:
-        AotDerefNode(AotNode* value, TypeDef* type, uint32_t offset);
+        AotDerefNode(AotNode* value, const TypeDef* type, uint32_t offset);
 
         AotNode* optimize() override;
 

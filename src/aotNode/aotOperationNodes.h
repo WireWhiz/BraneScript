@@ -15,7 +15,7 @@ namespace BraneScript
     public:
         std::unique_ptr<AotNode> arg;
 
-        explicit AotSingleArgNode(AotNode* arg, TypeDef* resType, NodeType type);
+        explicit AotSingleArgNode(AotNode* arg, const TypeDef* resType, NodeType type);
 
         AotNode* optimize() override;
     };
@@ -26,7 +26,7 @@ namespace BraneScript
         std::unique_ptr<AotNode> argA;
         std::unique_ptr<AotNode> argB;
 
-        explicit AotDualArgNode(AotNode* argA, AotNode* argB, TypeDef* resType, NodeType type);
+        explicit AotDualArgNode(AotNode* argA, AotNode* argB, const TypeDef* resType, NodeType type);
 
         AotNode* optimize() override;
 
@@ -56,7 +56,7 @@ namespace BraneScript
     class AotCastNode : public AotSingleArgNode
     {
     public:
-        explicit AotCastNode(AotNode* arg, TypeDef* castType);
+        explicit AotCastNode(AotNode* arg, const TypeDef* castType);
 
         AotNode* optimize() override;
 

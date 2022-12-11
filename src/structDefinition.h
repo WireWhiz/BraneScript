@@ -7,6 +7,7 @@
 
 #include "typeDef.h"
 #include <vector>
+#include "functionHandle.h"
 
 namespace BraneScript
 {
@@ -14,7 +15,7 @@ namespace BraneScript
     {
         std::string name;
         uint16_t offset = 0;
-        TypeDef* type = nullptr;
+        const TypeDef* type = nullptr;
         bool ref = false;
     };
 
@@ -24,7 +25,14 @@ namespace BraneScript
         std::vector<StructVar> _variables;
         std::vector<std::string> _functions;
         uint16_t _size;
+
+        FunctionHandle<void, void*> _constructor = nullptr;
+        FunctionHandle<void, void*, void*> _copyConstructor = nullptr;
+        FunctionHandle<void, void*, void*> _moveConstructor = nullptr;
+        FunctionHandle<void, void*> _destructor = nullptr;
     public:
+        using SingleArgFunc = FunctionHandle<void, void*>;
+        using DualArgFunc = FunctionHandle<void, void*, void*>;
         StructDef(std::string name);
         /**
          * Add a tightly packed member
@@ -33,7 +41,7 @@ namespace BraneScript
          * @param name member name
          * @param type member type
          */
-        void addMemberVar(std::string name, TypeDef* type);
+        void addMemberVar(std::string name, const TypeDef* type);
         /**
          * Add a member with a defined offset
          * Expects members to be added in order
@@ -43,7 +51,7 @@ namespace BraneScript
          * @param type member type
          * @param offset member offset
          */
-        void addMemberVar(std::string name, TypeDef* type, uint16_t offset);
+        void addMemberVar(std::string name, const TypeDef* type, uint16_t offset);
         /**
          * initialize member offsets and struct size using padding
          */
@@ -52,6 +60,15 @@ namespace BraneScript
          * initialize member offsets and struct size without padding
          */
         void packMembers();
+
+        void setConstructor(FunctionHandle<void, void*> f);
+        void setCopyConstructor(FunctionHandle<void, void*, void*> f);
+        void setMoveConstructor(FunctionHandle<void, void*, void*> f);
+        void setDestructor(FunctionHandle<void, void*> f);
+        FunctionHandle<void, void*> constructor() const;
+        FunctionHandle<void, void*, void*> copyConstructor() const;
+        FunctionHandle<void, void*, void*> moveConstructor() const;
+        FunctionHandle<void, void*> destructor() const;
 
         const StructVar* getMemberVar(const std::string& name) const;
         const std::vector<StructVar>& memberVars() const;

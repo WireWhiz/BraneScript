@@ -11,7 +11,9 @@ add_library(BraneScript STATIC
         aotNode/aotValueNodes.cpp
         aotNode/aotFlowNodes.cpp
         library.cpp
-        operands.h functionHandle.cpp functionHandle.h linker.cpp linker.h structDefinition.cpp structDefinition.h typeInfo.h)
+        functionHandle.cpp
+        linker.cpp
+        structDefinition.cpp)
 target_link_libraries(BraneScript PUBLIC antlr4 asmjit)
 target_compile_definitions(BraneScript PUBLIC ASMJIT_EMBED)
 target_include_directories(BraneScript PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})

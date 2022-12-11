@@ -15,17 +15,17 @@ namespace BraneScript
         return _type;
     }
 
-    AotNode::AotNode(TypeDef* resType, NodeType type) : _type(type), _resType(resType)
+    AotNode::AotNode(const TypeDef* resType, NodeType type) : _type(type), _resType(resType)
     {
 
     }
 
-    TypeDef* AotNode::resType() const
+    const TypeDef* AotNode::resType() const
     {
         return _resType;
     }
 
-    TypeDef* AotNode::dominantArgType(TypeDef* a, TypeDef* b)
+    const TypeDef* AotNode::dominantArgType(const TypeDef* a, const TypeDef* b)
     {
         assert(a && b);
         if (a->type() == Float64)

@@ -6,6 +6,17 @@ using namespace BraneScript;
 
 TEST(BraneScript, FuncDefTests)
 {
+    FuncDef empty("empty()");
+    EXPECT_TRUE(empty.name() == "empty") << empty.name();
+    EXPECT_EQ(empty.argCount(), 0);
+
+    FuncDef structMember("struct::member()");
+    EXPECT_TRUE(structMember.name() == "struct::member") << structMember.name();
+    EXPECT_EQ(structMember.argCount(), 1);
+    EXPECT_TRUE(structMember.argType(0) == "struct") << structMember.argType(0);
+    EXPECT_FALSE(structMember.argIsConst(0));
+    EXPECT_TRUE(structMember.argIsRef(0));
+
     FuncDef simple("simple(int)");
     EXPECT_TRUE(simple.name() == "simple") << simple.name();
     EXPECT_EQ(simple.argCount(), 1);

@@ -110,7 +110,7 @@ namespace BraneScript
         void registerLocalValue(std::string name, AotValue* value, const TypeInfo& type);
         AotNode* getValueNode(const std::string& name);
 
-        uint16_t getLocalFunction(const std::string& name);
+        int16_t getLocalFunction(const std::string& name);
 
         void pushScope();
 
@@ -145,7 +145,7 @@ namespace BraneScript
 
         const std::vector<std::string>& errors() const;
 
-        TypeDef* getType(const std::string& typeName) const;
+        const TypeDef* getType(const std::string& typeName) const;
     };
 
     struct CompilerCtx
@@ -161,7 +161,7 @@ namespace BraneScript
         bool returnCalled = false;
         std::vector<std::unique_ptr<AotValue>> values;
         std::vector<std::unique_ptr<StructDef>>  localStructDefs;
-        std::unordered_map<StructDef*, uint16_t> localStructIndices;
+        std::unordered_map<const StructDef*, int16_t> localStructIndices;
 
         std::unordered_map<std::string, uint32_t> libraryAliases;
 
@@ -172,13 +172,13 @@ namespace BraneScript
         uint32_t newMark();
 
         AotValue* newReg(const std::string& type, uint8_t flags);
-        AotValue* newReg(TypeDef* type, uint8_t flags);
+        AotValue* newReg(const TypeDef* type, uint8_t flags);
         AotValue* newConst(ValueType type, uint8_t flags = AotValue::Const | AotValue::Constexpr);
         AotValue* castValue(AotValue* value);
         AotValue* castTemp(AotValue* value);
         AotValue* castReg(AotValue* value);
         AotValue* blankValue();
-        AotValue* derefPtr(AotValue* value, TypeDef* type, uint16_t offset = 0);
+        AotValue* derefPtr(AotValue* value,const TypeDef* type, uint16_t offset = 0);
 
     };
 

@@ -19,18 +19,17 @@ namespace BraneScript
     class IRFunction
     {
     public:
-
-        std::vector<uint8_t> code;
-
-        std::vector<TypeInfo> arguments;
-        TypeInfo returnType = {"void"};
         std::string name;
+        TypeInfo returnType = {"void"};
+        std::vector<TypeInfo> arguments;
+        std::vector<uint8_t> code;
 
         void appendCode(Operand op);
         void appendCode(const std::string& string);
 
         void appendCode(Operand op, Value a);
         void appendCode(Operand op, Value a, Value b);
+        void appendCode(Operand op, int16_t index);
         void appendCode(Operand op, uint16_t index);
         void appendCode(Operand op, uint32_t index);
 

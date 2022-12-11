@@ -9,6 +9,13 @@
 
 namespace BraneScript
 {
+
+    Linker::Linker() : _global("global")
+    {
+        for(auto& t : getNativeTypes())
+            _globalTypes.emplace(t->name(), t);
+    }
+
     Library* Linker::getLibrary(const std::string& name) const
     {
         auto f = libraries.find(name);
@@ -29,21 +36,46 @@ namespace BraneScript
         libraries.erase(name);
     }
 
-    TypeDef* Linker::getType(const std::string& name)
+    const TypeDef* Linker::getType(const std::string& name)
     {
-        if(globalTypes.count(name))
-            return globalTypes.at(name);
-        return nullptr;
+        auto gt = _globalTypes.find(name);
+        if (gt != _globalTypes.end())
+            return gt->second;
+        return getStruct(name);
     }
 
-    Linker::Linker()
+    const StructDef* Linker::getStruct(const std::string& name)
     {
-        for(auto& t : getNativeTypes())
-            globalTypes.emplace(t->name(), t);
+        auto del = name.find("::");
+        if(del == std::string::npos)
+            return _global.getStruct(name);
+
+        std::string prefix = {name.data(), del};
+        auto lib = getLibrary(prefix);
+        if(!lib)
+            return _global.getStruct(name);
+        auto nameOffset = del + 2;
+        assert(nameOffset < name.size());
+        return lib->getStruct(std::string{name.data() + nameOffset, name.size() - nameOffset});
+
     }
 
-    void Linker::addType(TypeDef* type)
+    const FunctionData* Linker::getFunction(const std::string& name)
     {
-        globalTypes.insert({type->name(), type});
+        auto del = name.find("::");
+        if(del == std::string::npos)
+            return _global.getFunction(name);
+        std::string prefix = {name.data(), del};
+        auto lib = getLibrary(prefix);
+        if(!lib)
+            return _global.getFunction(name);
+        auto nameOffset = del + 2;
+        assert(nameOffset < name.size());
+        return lib->getFunction(std::string{name.data() + nameOffset, name.size() - nameOffset});
+    }
+
+    Library& Linker::globalLib()
+    {
+        return _global;
     }
 }

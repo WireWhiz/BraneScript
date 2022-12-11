@@ -8,7 +8,7 @@
 #include "../nativeTypes.h"
 namespace BraneScript
 {
-    AotSingleArgNode::AotSingleArgNode(AotNode* arg, TypeDef* resType, NodeType type) : AotNode(resType, type), arg(arg)
+    AotSingleArgNode::AotSingleArgNode(AotNode* arg, const TypeDef* resType, NodeType type) : AotNode(resType, type), arg(arg)
     {
 
     }
@@ -22,7 +22,7 @@ namespace BraneScript
     }
 
 
-    AotDualArgNode::AotDualArgNode(AotNode* argA, AotNode* argB, TypeDef* resType, NodeType type) : AotNode(resType,
+    AotDualArgNode::AotDualArgNode(AotNode* argA, AotNode* argB, const TypeDef* resType, NodeType type) : AotNode(resType,
                                                                                                             type),
                                                                                                     argA(argA),
                                                                                                     argB(argB)
@@ -69,7 +69,7 @@ namespace BraneScript
         return nullptr;
     }
 
-    AotCastNode::AotCastNode(AotNode* arg, TypeDef* castType) : AotSingleArgNode(arg, castType, NodeType::Cast)
+    AotCastNode::AotCastNode(AotNode* arg, const TypeDef* castType) : AotSingleArgNode(arg, castType, NodeType::Cast)
     {
     }
 
@@ -256,6 +256,25 @@ namespace BraneScript
 
     AotValue* AotReturnNode::generateBytecode(CompilerCtx& ctx) const
     {
+        //Call destructors for local values
+        for(auto& v : ctx.values)
+        {
+            if(!v->isStackRef())
+                continue;
+
+            auto sDef = static_cast<const StructDef*>(v->def);
+            int16_t dIndex;
+            if(ctx.localStructIndices.count(sDef))
+            {
+                dIndex = ctx.script->findLocalFuncIndex(std::string(sDef->name()) + "::_destruct()");
+                assert(dIndex >= 0);
+            }
+            else
+                dIndex = int16_t{-1} -  ctx.script->linkFunction(std::string(sDef->name()) + "::_destruct()");
+            ctx.function->appendCode(Operand::CALL, dIndex);
+            ctx.function->appendCode(v->value(ctx));
+        }
+
         ctx.function->appendCode(Operand::RET);
         return {};
     }
@@ -272,35 +291,56 @@ namespace BraneScript
         if(value->isStackRef())
         {
             //This is where a move/copy constructor would go
-            auto* sDef = static_cast<StructDef*>(value->def);
+            auto* sDef = static_cast<const StructDef*>(value->def);
             auto ptr = ctx.newReg(value->def, 0);
+            int16_t sIndex;
+            int16_t cIndex;
+            int16_t mcIndex;
             if(ctx.localStructIndices.count(sDef))
-                ctx.function->appendCode(Operand::MALLOC, ptr->value(ctx), ctx.localStructIndices.at(sDef));
+            {
+                sIndex = ctx.localStructIndices.at(sDef);
+                cIndex = ctx.script->findLocalFuncIndex(std::string(sDef->name()) + "::_construct()");
+                mcIndex = ctx.script->findLocalFuncIndex(std::string(sDef->name()) + "::_move(ref " + sDef->name() + ")");
+                assert(mcIndex >= 0);
+            }
             else
             {
-                uint16_t sIndex = 0;
-                for(auto& sName : ctx.script->linkedStructs)
-                {
-                    if(sName == sDef->name())
-                        break;
-                    ++sIndex;
-                }
-                if(sIndex == ctx.script->linkedStructs.size())
-                    ctx.script->linkedStructs.push_back(sDef->name());
-                ctx.function->appendCode(Operand::EXMALLOC, ptr->value(ctx), sIndex);
+                sIndex = int16_t{-1} - ctx.script->linkStruct(sDef->name());
+                cIndex = int16_t{-1} -  ctx.script->linkFunction(std::string(sDef->name()) + "::_construct()");
+                mcIndex = int16_t{-1} -  ctx.script->linkFunction(std::string(sDef->name()) + "::_move(ref " + sDef->name() + ")");
             }
-            for(auto& m : sDef->memberVars())
-            {
-                Value valA = value->value(ctx);
-                valA.offset = m.offset;
-                valA.storageType = ValueStorageType_DerefPtr;
-                valA.valueType = m.type->type();
-                Value valB = ptr->value(ctx);
-                valB.offset = m.offset;
-                valB.storageType = ValueStorageType_DerefPtr;
-                ctx.function->appendCode(MOV, valB, valA);
-            }
+            //Allocate memory to return
+            ctx.function->appendCode(Operand::MALLOC, ptr->value(ctx), sIndex);
+
+            //Call constructor
+            ctx.function->appendCode(Operand::CALL, cIndex);
+            ctx.function->appendCode(ptr->value(ctx));
+
+            //Call move constructor
+            ctx.function->appendCode(Operand::CALL, mcIndex);
+            ctx.function->appendCode(ptr->value(ctx));
+            ctx.function->appendCode(value->value(ctx));
+
             value = ptr;
+        }
+
+        //Call destructors for local values
+        for(auto& v : ctx.values)
+        {
+            if(!v->isStackRef())
+                continue;
+
+            auto sDef = static_cast<const StructDef*>(v->def);
+            int16_t dIndex;
+            if(ctx.localStructIndices.count(sDef))
+            {
+                dIndex = ctx.script->findLocalFuncIndex(std::string(sDef->name()) + "::_destruct()");
+                assert(dIndex >= 0);
+            }
+            else
+                dIndex = int16_t{-1} -  ctx.script->linkFunction(std::string(sDef->name()) + "::_destruct()");
+            ctx.function->appendCode(Operand::CALL, dIndex);
+            ctx.function->appendCode(v->value(ctx));
         }
 
         ctx.function->appendCode(RETV, value->value(ctx));
@@ -358,21 +398,36 @@ namespace BraneScript
 
         if(lValue->isRef() && lValue->flags & AotValue::Initialized && rValue->isRef())
         {
-            //This is where a move/copy constructor would go
-            auto* sDef = static_cast<StructDef*>(rValue->def);
-            for(auto& m : sDef->memberVars())
+            auto s = static_cast<const StructDef*>(lValue->def);
+            bool shouldMove = rValue->isExternalRef() && rValue->isTemp();
+            std::string cName;
+            if(shouldMove)
+                cName = std::string(s->name()) + "::_move(ref " + s->name() + ")";
+            else
+                cName = std::string(s->name()) + "::_copy(const ref " + s->name() + ")";
+
+            int16_t cIndex;
+            if(ctx.localStructIndices.count(s))
+                cIndex = ctx.script->findLocalFuncIndex(cName);
+            else
+                cIndex = int16_t{-1} - ctx.script->linkFunction(cName);
+            //Call constructor
+            ctx.function->appendCode(Operand::CALL, cIndex);
+            ctx.function->appendCode(lValue->value(ctx));
+            ctx.function->appendCode(rValue->value(ctx));
+
+            if(shouldMove)
             {
-                Value valA = lValue->value(ctx);
-                valA.offset = m.offset;
-                valA.storageType = ValueStorageType_DerefPtr;
-                Value valB = rValue->value(ctx);
-                valB.offset = m.offset;
-                valB.storageType = ValueStorageType_DerefPtr;
-                valB.valueType = m.type->type();
-                ctx.function->appendCode(MOV, valA, valB);
-            }
-            if(rValue->isExternalRef() && rValue->isTemp())
+                //Destruct the temp struct before deleting
+                int16_t dIndex;
+                if(ctx.localStructIndices.count(s))
+                    dIndex = ctx.script->findLocalFuncIndex(std::string(s->name()) + "::_destruct()");
+                else
+                    dIndex = int16_t{-1} - ctx.script->linkFunction(std::string(s->name()) + "::_destruct()");
+                ctx.function->appendCode(Operand::CALL, dIndex);
+                ctx.function->appendCode(rValue->value(ctx));
                 ctx.function->appendCode(FREE, rValue->value(ctx));
+            }
         }
         else
             ctx.function->appendCode(MOV, lValue->value(ctx), rValue->value(ctx));

@@ -48,7 +48,7 @@ namespace BraneScript
         }
     }
 
-    asmjit::TypeId strToASMType(const std::string& str)
+    asmjit::TypeId strToASMType(std::string_view str)
     {
         if (str == "void") return asmjit::TypeId::kVoid;
         if (str == "bool") return asmjit::TypeId::kUInt8;
@@ -252,17 +252,17 @@ namespace BraneScript
         }
 
         //Link external struct typedefs
-        std::vector<StructDef*> linkedStructs;
+        std::vector<const StructDef*> linkedStructs;
         for(auto& s : irScript->linkedStructs)
         {
             assert(_linker);
-            auto def = dynamic_cast<StructDef*>(_linker->getType(s));
+            auto def = dynamic_cast<const StructDef*>(_linker->getType(s));
             assert(def);
             linkedStructs.push_back(def);
         }
 
         //Find linked libraries
-        std::vector<Library*> linkedLibraries;
+        std::vector<const Library*> linkedLibraries;
         for(auto& lib : irScript->linkedLibraries)
         {
             assert(_linker);
@@ -275,6 +275,22 @@ namespace BraneScript
             }
             linkedLibraries.push_back(libPtr);
         }
+
+        //Find linked functions
+        std::vector<const FunctionData*> linkedFunctions;
+        for(auto& func : irScript->linkedFunctions)
+        {
+            assert(_linker);
+            auto funcData = _linker->getFunction(func);
+            if(!funcData)
+            {
+                //TODO runtime assertion system
+                assert(false);
+                return nullptr;
+            }
+            linkedFunctions.push_back(funcData);
+        }
+
         JitErrorHandler errorHandler;
         for (auto& func: irScript->localFunctions)
         {
@@ -357,21 +373,21 @@ namespace BraneScript
                     {
                         auto valIndex = ctx.readCode<Value>();
                         assert(valIndex.storageType == ValueStorageType_Ptr);
-                        auto structIndex = ctx.readCode<uint16_t>();
-                        assert(structIndex < localStructs.size());
-                        auto& structDef = localStructs[structIndex];
-                        printf("ALLOC gp%hu, %s\n", valIndex.index, structDef->name());
+                        auto structIndex = ctx.readCode<int16_t>();
+                        if(structIndex >= 0)
+                        {
+                            //Local struct alloc
+                            assert(structIndex < localStructs.size());
+                            auto& structDef = localStructs[structIndex];
+                            printf("ALLOC gp%hu, %s\n", valIndex.index, structDef->name());
 
-                        ctx.verifyValue(valIndex, cc);
-                        auto stackMem = cc.newStack(structDef->size(), 4);
-                        cc.lea(ctx.getReg<Gp>(valIndex), stackMem);
-                        break;
-                    }
-                    case EXALLOC:
-                    {
-                        auto valIndex = ctx.readCode<Value>();
-                        assert(valIndex.storageType == ValueStorageType_Ptr);
-                        auto structIndex = ctx.readCode<uint16_t>();
+                            ctx.verifyValue(valIndex, cc);
+                            auto stackMem = cc.newStack(structDef->size(), 4);
+                            cc.lea(ctx.getReg<Gp>(valIndex), stackMem);
+                            break;
+                        }
+                        //External struct alloc
+                        structIndex = -structIndex -int16_t{1};
                         assert(structIndex < linkedStructs.size());
                         auto& structDef = linkedStructs[structIndex];
                         printf("EXALLOC gp%hu, %s\n", valIndex.index, structDef->name());
@@ -381,29 +397,30 @@ namespace BraneScript
                         auto stackMem = cc.newStack(size, 4);
                         cc.lea(ctx.getReg<Gp>(valIndex), stackMem);
                         break;
+                        break;
                     }
                     case MALLOC:
                     {
                         auto valIndex = ctx.readCode<Value>();
                         assert(valIndex.storageType == ValueStorageType_Ptr);
-                        auto structIndex = ctx.readCode<uint16_t>();
-                        assert(structIndex < localStructs.size());
-                        auto& structDef = localStructs[structIndex];
-                        printf("MALLOC gp%hu, %s\n", valIndex.index, structDef->name());
+                        int16_t structIndex = ctx.readCode<int16_t>();
+                        if(structIndex >= 0)
+                        {
+                            //Internal struct malloc
+                            assert(structIndex < localStructs.size());
+                            auto& structDef = localStructs[structIndex];
+                            printf("MALLOC gp%hu, %s\n", valIndex.index, structDef->name());
 
-                        asmjit::InvokeNode* in;
-                        cc.invoke(&in, &scriptAlloc, asmjit::FuncSignatureT<void*, uint16_t>());
+                            asmjit::InvokeNode* in;
+                            cc.invoke(&in, &scriptAlloc, asmjit::FuncSignatureT<void*, uint16_t>());
 
-                        ctx.verifyValue(valIndex, cc);
-                        in->setRet(0, ctx.getReg<Gp>(valIndex));
-                        in->setArg(0, asmjit::Imm((uint16_t)structDef->size()));
-                        break;
-                    }
-                    case EXMALLOC:
-                    {
-                        auto valIndex = ctx.readCode<Value>();
-                        assert(valIndex.storageType == ValueStorageType_Ptr);
-                        auto structIndex = ctx.readCode<uint16_t>();
+                            ctx.verifyValue(valIndex, cc);
+                            in->setRet(0, ctx.getReg<Gp>(valIndex));
+                            in->setArg(0, asmjit::Imm((uint16_t)structDef->size()));
+                            break;
+                        }
+                        // External struct malloc
+                        structIndex = - structIndex - int16_t{1};
                         assert(structIndex < linkedStructs.size());
                         auto& structDef = linkedStructs[structIndex];
                         printf("EXMALLOC gp%hu, %s\n", valIndex.index, structDef->name());
@@ -418,12 +435,9 @@ namespace BraneScript
                     }
                     case FREE:
                     {
-                        assert(false);
                         auto valIndex = ctx.readCode<Value>();
                         asmjit::InvokeNode* in;
                         cc.invoke(&in, &scriptDealoc, asmjit::FuncSignatureT<void, void*>());
-
-                        ctx.verifyValue(valIndex, cc);
                         in->setArg(0, ctx.getReg<Gp>(valIndex));
                         break;
                     }
@@ -606,78 +620,69 @@ namespace BraneScript
                     }
                     case CALL:
                     {
-                        auto fIndex = ctx.readCode<uint32_t>();
-
-                        auto& function = irScript->localFunctions[fIndex];
-                        assert(fIndex < irScript->localFunctions.size());
+                        auto fIndex = ctx.readCode<int16_t>();
                         asmjit::FuncSignatureBuilder sb;
                         sb.setCallConvId(asmjit::CallConvId::kCDecl);
+                        printf("CALL ");
+                        if(fIndex >= 0)
+                        {
+                            //Internal func call
+                            auto& function = irScript->localFunctions[fIndex];
+                            assert(fIndex < irScript->localFunctions.size());
 
-                        sb.setRet(strToASMType(function.returnType.type));
-                        for(auto& arg : function.arguments)
-                            sb.addArg(strToASMType(arg.type));
+                            sb.setRet(strToASMType(function.returnType.type));
+                            for(auto& arg : function.arguments)
+                                sb.addArg(strToASMType(arg.type));
+
+                            asmjit::InvokeNode* in;
+                            assert(fIndex <= script->functions.size());
+                            if(fIndex < script->functions.size())
+                                cc.invoke(&in, script->functions[fIndex], sb);
+                            else
+                                cc.invoke(&in, f->label(), sb);
+
+                            if(function.returnType.type != "void")
+                            {
+                                auto retVal = ctx.readCode<Value>();
+                                ctx.verifyValue(retVal, cc);
+                                in->setRet(0, ctx.getReg<Reg>(retVal));
+                            }
+                            for(uint32_t i = 0; i < function.arguments.size(); ++i)
+                            {
+                                auto argVal = ctx.readCode<Value>();
+                                in->setArg(i, ctx.getReg<Reg>(argVal));
+                            }
+                            printf("%s %s\n", function.returnType.type.c_str(), function.name.c_str());
+                            break;
+                        }
+
+                        //External func call
+                        fIndex = -1 - fIndex;
+                        assert(fIndex < linkedFunctions.size());
+                        auto function = linkedFunctions[fIndex];
+
+                        if(function->ret != "void")
+                            sb.setRet(strToASMType(function->ret));
+                        else
+                            sb.setRet(asmjit::TypeId::kVoid);
+                        for(size_t arg = 0; arg < function->def.argCount(); ++arg)
+                            sb.addArg(strToASMType(function->def.argType(arg)));
 
                         asmjit::InvokeNode* in;
-                        assert(fIndex <= script->functions.size());
-                        if(fIndex < script->functions.size())
-                            cc.invoke(&in, script->functions[fIndex], sb);
-                        else
-                            cc.invoke(&in, f->label(), sb);
+                        cc.invoke(&in, function->pointer, sb);
 
-                        if(function.returnType.type != "void")
+                        if(function->ret != "void")
                         {
                             auto retVal = ctx.readCode<Value>();
                             ctx.verifyValue(retVal, cc);
                             in->setRet(0, ctx.getReg<Reg>(retVal));
                         }
-                        for(uint32_t i = 0; i < function.arguments.size(); ++i)
+                        for(uint32_t i = 0; i < function->def.argCount(); ++i)
                         {
                             auto argVal = ctx.readCode<Value>();
                             in->setArg(i, ctx.getReg<Reg>(argVal));
                         }
-                        break;
-                    }
-                    case EXCALL:
-                    {
-                        auto libIndex = ctx.readCode<uint32_t>();
-                        assert(libIndex < linkedLibraries.size());
-                        auto& library = *linkedLibraries[libIndex];
-
-                        std::string funcDecl = ctx.readString();
-                        auto argFlags = ctx.readCode<uint8_t>();
-                        bool hasRet = argFlags & (1 << 7);
-                        uint8_t argCount = argFlags & ~(1 << 7);
-
-                        std::vector<Value> values;
-                        values.reserve(argCount + (uint8_t)hasRet);
-                        if(hasRet)
-                            values.push_back(ctx.readCode<Value>());
-                        for(uint8_t i = 0; i < argCount; ++i)
-                            values.push_back(ctx.readCode<Value>());
-
-                        auto* function = library.getFunction(funcDecl);
-                        assert(function);
-
-                        asmjit::FuncSignatureBuilder sb;
-                        sb.setCallConvId(asmjit::CallConvId::kCDecl);
-
-                        if(hasRet)
-                            sb.setRet(valueToASMType(values[0]));
-                        else
-                            sb.setRet(asmjit::TypeId::kVoid);
-                        for(uint8_t arg = hasRet; arg < values.size(); ++arg)
-                            sb.addArg(valueToASMType(values[arg]));
-
-                        asmjit::InvokeNode* in;
-                        cc.invoke(&in, function, sb);
-
-                        if(hasRet)
-                        {
-                            ctx.verifyValue(values[0], cc);
-                            in->setRet(0, ctx.getReg<Reg>(values[0]));
-                        }
-                        for(uint8_t arg = hasRet; arg < values.size(); ++arg)
-                            in->setArg(arg, ctx.getReg<Reg>(values[arg]));
+                        printf("%s %s\n", function->ret.c_str(), function->name.c_str());
                         break;
                     }
                     case MOV:
@@ -792,7 +797,6 @@ namespace BraneScript
                         printf("MOVI \n");
                         switch(dest.valueType)
                         {
-
                             case Bool:
                                 cc.mov(ctx.getReg<Gp>(dest), asmjit::imm(ctx.readCode<uint8_t>()));
                                 break;
@@ -801,6 +805,18 @@ namespace BraneScript
                                 break;
                             case Int64:
                                 cc.mov(ctx.getReg<Gp>(dest), asmjit::imm(ctx.readCode<int64_t>()));
+                                break;
+                            case Float32:
+                            {
+                                auto d = cc.newFloatConst(asmjit::ConstPoolScope::kLocal, ctx.readCode<float>());
+                                cc.movss(ctx.getReg<Xmm>(dest), d);
+                            }
+                                break;
+                            case Float64:
+                            {
+                                auto d = cc.newDoubleConst(asmjit::ConstPoolScope::kLocal, ctx.readCode<double>());
+                                cc.movss(ctx.getReg<Xmm>(dest), d);
+                            }
                                 break;
                             case Struct:
                                 cc.mov(ctx.getReg<Gp>(dest), asmjit::imm(ctx.readCode<int32_t>()));

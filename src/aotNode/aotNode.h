@@ -39,7 +39,7 @@ namespace BraneScript
         uint8_t flags = 0;
         CompareType compareType = NoRes;
         ValueStorageType storageType = ValueStorageType_Null;
-        TypeDef* def = nullptr;
+        const TypeDef* def = nullptr;
         uint16_t compileIndex = 0;
         uint16_t valueIndex = (uint16_t)-1;
         uint16_t ptrOffset = 0;
@@ -47,9 +47,9 @@ namespace BraneScript
         inline bool isCompare() const { return compareType != NoRes; }
         inline bool isVoid() const { return def == nullptr; }
         inline bool isTemp() const { return flags & Temp; }
-        inline bool isRef() const { return flags & (StackRef | ExternalRef); }
-        inline bool isStackRef() const { return flags & StackRef; }
-        inline bool isExternalRef() const { return flags & ExternalRef; }
+        inline bool isRef() const { return storageType == ValueStorageType_Ptr && flags & (StackRef | ExternalRef); }
+        inline bool isStackRef() const { return storageType == ValueStorageType_Ptr && flags & StackRef; }
+        inline bool isExternalRef() const { return storageType == ValueStorageType_Ptr &&  flags & ExternalRef; }
     };
 
     class CompilerCtx;
@@ -79,12 +79,12 @@ namespace BraneScript
             Div
         };
         NodeType _type;
-        TypeDef* _resType = nullptr;
+        const TypeDef* _resType = nullptr;
 
-        static TypeDef* dominantArgType(TypeDef* a, TypeDef* b);
+        static const TypeDef* dominantArgType(const TypeDef* a, const TypeDef* b);
 
     public:
-        explicit AotNode(TypeDef* resType, NodeType type);
+        explicit AotNode(const TypeDef* resType, NodeType type);
 
         virtual ~AotNode() = default;
         AotNode(const AotNode&) = default;
@@ -102,7 +102,7 @@ namespace BraneScript
 
         NodeType type() const;
 
-        TypeDef* resType() const;
+        const TypeDef* resType() const;
     };
 
 }

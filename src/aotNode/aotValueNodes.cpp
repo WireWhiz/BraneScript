@@ -8,7 +8,7 @@
 
 namespace BraneScript
 {
-    AotConst::AotConst(std::any value, TypeDef* resType) : AotNode(resType, NodeType::Const), _value(std::move(value))
+    AotConst::AotConst(std::any value, const TypeDef* resType) : AotNode(resType, NodeType::Const), _value(std::move(value))
     {
     }
 
@@ -114,7 +114,7 @@ namespace BraneScript
         return nullptr;
     }
 
-    AotNode* AotConst::cast(TypeDef* type) const
+    AotNode* AotConst::cast(const TypeDef* type) const
     {
         if (type == _resType)
             return new AotConst(_value, _resType);
@@ -145,12 +145,12 @@ namespace BraneScript
         return nullptr;
     }
 
-    AotValueNode::AotValueNode(TypeDef* type, TypeInfo info) : AotNode(type, NodeType::Value)
+    AotValueNode::AotValueNode(const TypeDef* type, TypeInfo info) : AotNode(type, NodeType::Value)
     {
         _ctx = std::shared_ptr<ValueContext>(new ValueContext{std::move(info)});
     }
 
-    AotValueNode::AotValueNode(TypeDef* type, AotValue* value, TypeInfo info) : AotNode(type, NodeType::Value)
+    AotValueNode::AotValueNode(const TypeDef* type, AotValue* value, TypeInfo info) : AotNode(type, NodeType::Value)
     {
         _ctx = std::shared_ptr<ValueContext>(new ValueContext{std::move(info), value});
     }
@@ -192,33 +192,33 @@ namespace BraneScript
         }
         else
         {
-            auto s = dynamic_cast<StructDef*>(_resType);
+            auto s = dynamic_cast<const StructDef*>(_resType);
 
+            int16_t sIndex = 0;
+            int16_t cIndex;
             if(ctx.localStructIndices.count(s))
             {
-                ctx.function->appendCode(Operand::ALLOC, _ctx->value->value(ctx), ctx.localStructIndices.at(s));
+                sIndex = ctx.localStructIndices.at(s);
+                cIndex = ctx.script->findLocalFuncIndex(std::string(s->name()) + "::_construct()");
             }
             else
             {
-                uint16_t sIndex = 0;
-                for(auto& sName : ctx.script->linkedStructs)
-                {
-                    if(sName == s->name())
-                        break;
-                    ++sIndex;
-                }
-                if(sIndex == ctx.script->linkedStructs.size())
-                    ctx.script->linkedStructs.emplace_back(s->name());
-                ctx.function->appendCode(Operand::EXALLOC, _ctx->value->value(ctx), sIndex);
+                sIndex = int16_t{-1} -ctx.script->linkStruct(s->name());
+                cIndex = int16_t{-1} -  ctx.script->linkFunction(std::string(s->name()) + "::_construct()");
             }
+            ctx.function->appendCode(Operand::ALLOC, _ctx->value->value(ctx), sIndex);
             _ctx->value->flags |= AotValue::Initialized;
+
+            //Call constructor
+            ctx.function->appendCode(Operand::CALL, cIndex);
+            ctx.function->appendCode(_ctx->value->value(ctx));
         }
 
 
         return _ctx->value;
     }
 
-    AotDerefNode::AotDerefNode(AotNode* value, TypeDef* type, uint32_t offset) : AotNode(type, NodeType::Deref), _value(value)
+    AotDerefNode::AotDerefNode(AotNode* value, const TypeDef* type, uint32_t offset) : AotNode(type, NodeType::Deref), _value(value)
     {
         _offset = offset;
     }

@@ -210,7 +210,7 @@ namespace BraneScript
             RETURN_NULL;
         }
 
-        auto structDef = dynamic_cast<StructDef*>(baseStructValue->resType());
+        auto structDef = dynamic_cast<const StructDef*>(baseStructValue->resType());
         if(!structDef)
         {
             throwError(context->base, "Cant get member of void type");
@@ -402,14 +402,14 @@ namespace BraneScript
 
     void Compiler::registerLocalValue(std::string name, const TypeInfo& type)
     {
-        TypeDef* typeDef = getType(type.type);
+        const TypeDef* typeDef = getType(type.type);
         assert(typeDef);
         _scopes.back().localValues.emplace(std::move(name), AotValueNode(typeDef, type));
     }
 
     void Compiler::registerLocalValue(std::string name, AotValue* value, const TypeInfo& type)
     {
-        TypeDef* typeDef = getType(type.type);
+        const TypeDef* typeDef = getType(type.type);
         assert(typeDef);
         _scopes.back().localValues.emplace(std::move(name), AotValueNode(typeDef, value, type));
     }
@@ -507,7 +507,7 @@ namespace BraneScript
         for(auto* arg : arguments)
         {
             PROPAGATE_NULL(arg);
-            TypeDef* argType = arg->resType();
+            const TypeDef* argType = arg->resType();
             if(!argType)
             {
                 throwError(context->getStart()->getLine(), context->getStart()->getChannel(), "", "Tried to pass void argument into function");
@@ -534,7 +534,7 @@ namespace BraneScript
                 arguments.insert(arguments.begin(), str);
 
                 std::string scopedName = std::string(str->resType()->name()) + "::" + functionName;
-                uint32_t fIndex = getLocalFunction(scopedName);
+                int16_t fIndex = getLocalFunction(scopedName);
                 if(fIndex < _ctx->script->localFunctions.size())
                 {
                     auto& func = _ctx->script->localFunctions[fIndex];
@@ -552,19 +552,24 @@ namespace BraneScript
             }
 
             auto* library = _linker->getLibrary(_ctx->script->linkedLibraries[_ctx->libraryAliases[scope]]);
+            auto* function = library->getFunction(functionName);
+            if(!function)
+            {
+                throwError(context->name, "Library \"" + library->name() + "\" does not have a function with signature: " + functionName);
+                RETURN_NULL;
+            }
 
-            auto retType = getType(library->getFunctionReturnT(functionName));
-            uint32_t libIndex = _ctx->libraryAliases.at(scope);
-            return (AotNode*)new AotExternalFunctionCall(libIndex, functionName, retType, arguments);
+            int16_t index = int16_t{-1} - _ctx->script->linkFunction(library->name() + "::" + function->name);
+            return (AotNode*)new AotFunctionCall(index, getType(function->ret), arguments);
         }
 
-        uint32_t fIndex = getLocalFunction(functionName);
+        int16_t fIndex = getLocalFunction(functionName);
         if(fIndex == _ctx->script->localFunctions.size())
         {
             throwError(context->getStart(), "Could not find function with signature " + functionName);
             RETURN_NULL;
         }
-        TypeDef* retType = getType(_ctx->script->localFunctions[fIndex].returnType.type);
+        const TypeDef* retType = getType(_ctx->script->localFunctions[fIndex].returnType.type);
         return (AotNode*)new AotFunctionCall(fIndex, retType, arguments);
     }
 
@@ -644,6 +649,158 @@ namespace BraneScript
         _ctx->script->localStructs.push_back(irDef);
 
         _ctx->structDef = newDef;
+        bool constructors[4] = {false, false, false, false};
+        for(auto& member : context->memberVars->structMember())
+        {
+            if(!member->func)
+                continue;
+            if(member->func->id->getText() == "_construct")
+                constructors[0] = true;
+            if(member->func->id->getText() == "_copy")
+                constructors[1] = true;
+            if(member->func->id->getText() == "_move")
+                constructors[2] = true;
+            if(member->func->id->getText() == "_destruct")
+                constructors[3] = true;
+        }
+
+        //Generate default constructor
+        if(!constructors[0])
+        {
+            IRFunction constructor;
+            _ctx->setFunction(&constructor);
+            constructor.name = irDef.name + "::_construct()";
+
+            TypeInfo info = {_ctx->structDef->name(), false, true, false};
+            constructor.arguments.push_back(info);
+            AotValue* thisRef = _ctx->newReg(info.type, 0);
+            thisRef->valueIndex = _ctx->regIndex++;
+            thisRef->flags |= AotValue::Initialized;
+
+            for(auto& m : newDef->memberVars())
+            {
+                if(m.type->type() != Struct)
+                {
+                    auto member = _ctx->derefPtr(thisRef, m.type, m.offset);
+                    constructor.appendCode(Operand::MOVI, member->value(*_ctx));
+                }
+                switch(m.type->type())
+                {
+                    case Bool:
+                        constructor.appendCode(false);
+                        break;
+                    case Int32:
+                        constructor.appendCode(int32_t{0});
+                        break;
+                    case Int64:
+                        constructor.appendCode(int64_t{0});
+                        break;
+                    case Float32:
+                        constructor.appendCode(float{0});
+                        break;
+                    case Float64:
+                        constructor.appendCode(double{0});
+                        break;
+                    case Struct:
+                        assert(false);
+                        break;
+                }
+
+            }
+            _ctx->script->localFunctions.push_back(std::move(constructor));
+            _ctx->function = nullptr;
+        }
+
+        //Generate default copy constructor
+        if(!constructors[1])
+        {
+            IRFunction constructor;
+            _ctx->setFunction(&constructor);
+            constructor.name = irDef.name + "::_copy(const ref " + irDef.name + ")";
+
+            TypeInfo info = {_ctx->structDef->name(), false, true, false};
+            constructor.arguments.push_back(info);
+            info.isConst = true;
+            constructor.arguments.push_back(info);
+            AotValue* thisRef = _ctx->newReg(info.type, 0);
+            thisRef->valueIndex = _ctx->regIndex++;
+            thisRef->flags |= AotValue::Initialized;
+
+            AotValue* otherRef = _ctx->newReg(info.type, 0);
+            otherRef->valueIndex = _ctx->regIndex++;
+            otherRef->flags |= AotValue::Initialized;
+
+            for(auto& m : newDef->memberVars())
+            {
+                if(m.type->type() != Struct)
+                {
+                    auto member = _ctx->derefPtr(thisRef, m.type, m.offset);
+                    auto otherMember = _ctx->derefPtr(otherRef, m.type, m.offset);
+                    constructor.appendCode(Operand::MOV, member->value(*_ctx), otherMember->value(*_ctx));
+                }
+                else
+                    assert(false);
+            }
+            _ctx->script->localFunctions.push_back(std::move(constructor));
+            _ctx->function = nullptr;
+        }
+
+        //Generate default move constructor, exactly the same as copy except for calls to member struct move calls
+        if(!constructors[2])
+        {
+            IRFunction constructor;
+            _ctx->setFunction(&constructor);
+            constructor.name = irDef.name + "::_move(ref " + irDef.name + ")";
+
+            TypeInfo info = {_ctx->structDef->name(), false, true, false};
+            constructor.arguments.push_back(info);
+            info.isConst = true;
+            constructor.arguments.push_back(info);
+            AotValue* thisRef = _ctx->newReg(info.type, 0);
+            thisRef->valueIndex = _ctx->regIndex++;
+            thisRef->flags |= AotValue::Initialized;
+
+            AotValue* otherRef = _ctx->newReg(info.type, 0);
+            otherRef->valueIndex = _ctx->regIndex++;
+            otherRef->flags |= AotValue::Initialized;
+
+            for(auto& m : newDef->memberVars())
+            {
+                if(m.type->type() != Struct)
+                {
+                    auto member = _ctx->derefPtr(thisRef, m.type, m.offset);
+                    auto otherMember = _ctx->derefPtr(otherRef, m.type, m.offset);
+                    constructor.appendCode(Operand::MOV, member->value(*_ctx), otherMember->value(*_ctx));
+                }
+                else
+                    assert(false);
+            }
+            _ctx->script->localFunctions.push_back(std::move(constructor));
+            _ctx->function = nullptr;
+        }
+
+        //Generate default destructor
+        if(!constructors[3])
+        {
+            IRFunction constructor;
+            _ctx->setFunction(&constructor);
+            constructor.name = irDef.name + "::_destruct()";
+
+            TypeInfo info = {_ctx->structDef->name(), false, true, false};
+            constructor.arguments.push_back(info);
+            AotValue* thisRef = _ctx->newReg(info.type, 0);
+            thisRef->valueIndex = _ctx->regIndex++;
+            thisRef->flags |= AotValue::Initialized;
+
+            for(auto& m : newDef->memberVars())
+            {
+                if(m.type->type() == Struct)
+                    assert(false); // TODO Call child struct destructor
+            }
+            _ctx->script->localFunctions.push_back(std::move(constructor));
+            _ctx->function = nullptr;
+        }
+
         for(auto& member : context->memberVars->structMember())
         {
             if(!member->func)
@@ -685,7 +842,7 @@ namespace BraneScript
         return _errors.empty();
     }
 
-    TypeDef* Compiler::getType(const std::string& typeName) const
+    const TypeDef* Compiler::getType(const std::string& typeName) const
     {
         if(_privateTypes.count(typeName))
             return _privateTypes.at(typeName);
@@ -713,7 +870,7 @@ namespace BraneScript
         _linker = linker;
     }
 
-    uint16_t Compiler::getLocalFunction(const std::string& name)
+    int16_t Compiler::getLocalFunction(const std::string& name)
     {
         uint32_t fIndex = 0;
         for(auto& func : _ctx->script->localFunctions)
@@ -732,11 +889,11 @@ namespace BraneScript
 
     AotValue* CompilerCtx::newReg(const std::string& type, uint8_t flags)
     {
-        TypeDef* t = compiler.getType(type);
+        const TypeDef* t = compiler.getType(type);
         return newReg(t, flags);
     }
 
-    AotValue* CompilerCtx::newReg(TypeDef* type, uint8_t flags)
+    AotValue* CompilerCtx::newReg(const TypeDef* type, uint8_t flags)
     {
         auto* value = new AotValue{};
         value->def = type;
@@ -827,7 +984,7 @@ namespace BraneScript
     }
 
 
-    AotValue* CompilerCtx::derefPtr(AotValue* value, TypeDef* type, uint16_t offset)
+    AotValue* CompilerCtx::derefPtr(AotValue* value, const TypeDef* type, uint16_t offset)
     {
         assert(value->storageType == ValueStorageType_Ptr);
         assert(value->valueIndex != (uint16_t)-1);

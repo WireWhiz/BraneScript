@@ -55,6 +55,12 @@ namespace BraneScript
         *(Value*)(code.data() + index) = b;
     }
 
+    void IRFunction::appendCode(Operand op, int16_t index)
+    {
+        appendCode(op);
+        appendCode(index);
+    }
+
     void IRFunction::appendCode(Operand op, uint16_t index)
     {
         appendCode(op);

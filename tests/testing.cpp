@@ -9,6 +9,7 @@ namespace BraneScript
 {
     void checkCompileErrors(Compiler& c)
     {
+        fflush(0);
         EXPECT_TRUE(c.errors().empty()) << "Compiler errors were detected";
         if(c.errors().empty())
             return;

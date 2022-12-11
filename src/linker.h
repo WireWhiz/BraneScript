@@ -3,23 +3,29 @@
 
 #include <unordered_map>
 #include <string>
+#include "functionHandle.h"
+#include "library.h"
 
 namespace BraneScript
 {
-    class Library;
     class TypeDef;
     class Linker
     {
+        Library _global;
+        std::unordered_map<std::string, TypeDef*> _globalTypes;
     public:
         Linker();
         std::unordered_map<std::string, Library*> libraries;
-        std::unordered_map<std::string, TypeDef*> globalTypes;
         Library* getLibrary(const std::string& name) const;
 
         void addLibrary(Library* lib);
         void removeLibrary(const std::string& name);
-        TypeDef* getType(const std::string& name);
-        void addType(TypeDef* type);
+
+        Library& globalLib();
+
+        const TypeDef* getType(const std::string& name);
+        const StructDef* getStruct(const std::string& name);
+        const FunctionData* getFunction(const std::string& name);
     };
 }
 

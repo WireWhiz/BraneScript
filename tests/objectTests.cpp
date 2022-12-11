@@ -8,11 +8,17 @@
 
 using namespace BraneScript;
 
+bool constructorCalled = false;
+bool copyConstructorCalled = false;
+bool moveConstructorCalled = false;
+bool destructorCalled = false;
+
 struct TestStruct1
 {
     bool c;
     float a;
     int b;
+public:
 };
 
 struct TestStruct2
@@ -50,14 +56,21 @@ TEST(BraneScript, Objects)
         return output;
     }
 
+    void testDestruct()
+    {
+        TestStruct1 temp = createStruct();
+    }
+
     public struct TestStruct2
     {
         int a;
         bool b;
         float c;
-        void _init()
+        void _construct()
         {
-
+            a = 5;
+            b = true;
+            c = 3.2f;
         }
         float sum()
         {
@@ -68,9 +81,6 @@ TEST(BraneScript, Objects)
     TestStruct2 testScriptStruct()
     {
         TestStruct2 output;
-        output.a = 5;
-        output.b = true;
-        output.c = 3.2f;
         return output;
     }
 
@@ -85,6 +95,23 @@ TEST(BraneScript, Objects)
     }
 )";
     StructDef testStruct1Def("TestStruct1");
+    testStruct1Def.setConstructor([](void* data) {
+        new(data) TestStruct1();
+        constructorCalled = true;
+    });
+    testStruct1Def.setCopyConstructor([](void* dest, void* src){
+        *((TestStruct1*)dest) = *((TestStruct1*)src);
+        copyConstructorCalled = true;
+    });
+    testStruct1Def.setMoveConstructor([](void* dest, void* src){
+        *((TestStruct1*)dest) = std::move(*((TestStruct1*)src));
+        moveConstructorCalled = true;
+    });
+    testStruct1Def.setDestructor([](void* data) {
+        ((TestStruct1*)data)->~TestStruct1();
+        destructorCalled = true;
+    });
+
     testStruct1Def.addMemberVar("c", getNativeTypeDef(ValueType::Bool));
     testStruct1Def.addMemberVar("a", getNativeTypeDef(ValueType::Float32));
     testStruct1Def.addMemberVar("b", getNativeTypeDef(ValueType::Int32));
@@ -95,7 +122,7 @@ TEST(BraneScript, Objects)
     EXPECT_EQ(testStruct1Def.memberVars()[2].offset, offsetof(TestStruct1, b));
 
     Linker l;
-    l.addType(&testStruct1Def);
+    l.globalLib().addStruct(testStruct1Def);
 
     Compiler compiler(&l);
     IRScript* ir = compiler.compile(testString);
@@ -127,6 +154,11 @@ TEST(BraneScript, Objects)
     ASSERT_TRUE(getMember3);
     EXPECT_EQ(getMember3(&testStruct1), true);
 
+    EXPECT_FALSE(constructorCalled);
+    EXPECT_FALSE(moveConstructorCalled);
+    EXPECT_FALSE(copyConstructorCalled);
+    EXPECT_FALSE(destructorCalled);
+
     auto createStruct = testScript->getFunction<TestStruct1*>("createStruct()");
     ASSERT_TRUE(createStruct);
     TestStruct1* createdStruct = createStruct();
@@ -135,6 +167,18 @@ TEST(BraneScript, Objects)
     EXPECT_EQ(createdStruct->b, 420);
     EXPECT_EQ(createdStruct->c, false);
     delete createdStruct;
+
+    EXPECT_TRUE(constructorCalled);
+    EXPECT_TRUE(moveConstructorCalled);
+    EXPECT_TRUE(copyConstructorCalled);
+    EXPECT_TRUE(destructorCalled);
+    destructorCalled = false;
+
+    auto testDestruct = testScript->getFunction<void>("testDestruct()");
+    ASSERT_TRUE(testDestruct);
+    testDestruct();
+
+    EXPECT_TRUE(destructorCalled);
 
     auto testScriptStruct = testScript->getFunction<TestStruct2*>("testScriptStruct()");
     ASSERT_TRUE(testScriptStruct);

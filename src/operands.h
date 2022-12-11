@@ -9,8 +9,7 @@
 
 namespace BraneScript
 {
-
-
+    //When a signed index is present, negative values represent external indices
     enum Operand : uint8_t
     {
         // Waiting until we are near feature complete to manually set enum values
@@ -18,11 +17,9 @@ namespace BraneScript
         RETV,   // (ValueIndex value) Return int32 value
         LOADC,  // (ValueIndex value, uint32_t constantIndex) load constant defined by byte array into the value
 
-        ALLOC,     // (ValueIndex ptr, uint16_t structDef) allocate local struct on the stack
-        EXALLOC,   // (ValueIndex ptr, uint16_t structDef) allocate external struct on the stack
-        MALLOC,    // (ValueIndex ptr, uint16_t structDef) allocate local struct on the heap
-        EXMALLOC,  // (ValueIndex ptr, uint16_t structDef) allocate external struct on the heap
-        FREE,      // (ValueIndex ptr, uint16_t structDef) deallocate struct
+        ALLOC,     // (ValueIndex ptr, int16_t structDef) allocate local struct on the stack
+        MALLOC,    // (ValueIndex ptr, int16_t structDef) allocate local struct on the heap
+        FREE,      // (ValueIndex ptr, uint16_t structDef) deallocate struct memory
 
         SETE,  // (ValueIndex) set to 0 or 1 based on condition
         SETNE, // (ValueIndex) set to 0 or 1 based on condition
@@ -46,8 +43,7 @@ namespace BraneScript
         JGE,  // (uint32_t markIndex) jump to mark on condition
         JLE,  // (uint32_t markIndex) jump to mark on condition
 
-        CALL,   // (uint32_t function, ValueIndex returnValue, ValueIndex...) call to another function within the script
-        EXCALL, // (uint32_t library, uint8_t declSize, chararray decl, uint8_t argFlags, ValueIndex...) call to a library function TODO switch to use irScript var index instead of string
+        CALL,   // (int16_t function, ValueIndex returnValue, ValueIndex...) call to another function within the script
 
         MOV,   // (ValueIndex value, ValueIndex value) move value to another value.
         MOVI,  // (ValueIndex value, T value) move an immediate value into a register.

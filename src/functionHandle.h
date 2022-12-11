@@ -27,9 +27,11 @@ namespace BraneScript
      *
      * Format to be used: name(type,const type,const ref type,ref type)
      */
+
+
     class FuncDef
     {
-        std::string _def;
+        std::string_view _def;
         uint16_t _nameEnd;
         enum ArgFlags
         {
@@ -44,7 +46,7 @@ namespace BraneScript
         };
         std::vector<ArgData> _argIndices;
     public:
-        FuncDef(std::string def);
+        FuncDef(std::string_view def);
         size_t argCount() const;
         std::string_view name() const;
         std::string_view argType(size_t index) const;
@@ -56,6 +58,8 @@ namespace BraneScript
     std::string typeName()
     {
         std::string name;
+        if constexpr(std::is_same<T, void>())
+            name = "void";
         if constexpr(std::is_same<T, bool>())
             name = "bool";
         if constexpr(std::is_same<T, int32_t>())
@@ -78,6 +82,25 @@ namespace BraneScript
         else
             return name;
     }
+
+    struct FunctionData
+    {
+        std::string name;
+        std::string ret;
+        FuncDef def;
+        void* pointer;
+
+        FunctionData(std::string name, std::string ret, void* pointer);
+        FunctionData(const FunctionData&);
+        FunctionData(FunctionData&&) noexcept ;
+
+        template<typename Ret, typename... Args>
+        FunctionHandle<Ret, Args...> as() const
+        {
+            return (FunctionHandle<Ret, Args...>)pointer;
+        }
+
+    };
 }
 
 

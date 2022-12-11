@@ -8,12 +8,23 @@
 namespace BraneScript
 {
 
-    FuncDef::FuncDef(std::string def) : _def(std::move(def))
+    FuncDef::FuncDef(std::string_view def) : _def(def)
     {
-        size_t i = _def.find('(');
+        auto sEnd = _def.find("::");
+        if(sEnd != std::string::npos)
+        {
+            ArgData hiddenArg{};
+            hiddenArg.tStart = 0;
+            hiddenArg.tEnd = sEnd;
+            hiddenArg.flags = ArgFlags_Ref;
+            _argIndices.push_back(hiddenArg);
+        }
+        auto i = _def.find('(');
         assert(i != std::string::npos);
         _nameEnd = i;
         ++i;
+        if(_def[i] == ')')
+            return;
 
         bool commaFound = true;
         while(commaFound)
@@ -41,6 +52,7 @@ namespace BraneScript
 
             data.tStart = i;
             data.tEnd = end;
+
             _argIndices.push_back(data);
             if(commaFound)
                 i = end + 1;
@@ -79,5 +91,20 @@ namespace BraneScript
     bool FuncDef::argIsRef(size_t index) const
     {
         return _argIndices[index].flags & ArgFlags_Ref;
+    }
+
+    FunctionData::FunctionData(std::string name, std::string ret, void* pointer) : name(std::move(name)), def(this->name), ret(std::move(ret)), pointer(pointer)
+    {
+
+    }
+
+    FunctionData::FunctionData(const FunctionData& o) : name(o.name), def(this->name), ret(o.ret), pointer(o.pointer)
+    {
+
+    }
+
+    FunctionData::FunctionData(FunctionData&& o) noexcept : name(std::move(o.name)), def(this->name), ret(std::move(o.ret)), pointer(o.pointer)
+    {
+
     }
 }

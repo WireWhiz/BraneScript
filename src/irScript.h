@@ -11,8 +11,6 @@
 #include "irFunction.h"
 namespace BraneScript
 {
-
-
     struct IRScript
     {
         std::string namespace_;
@@ -33,18 +31,16 @@ namespace BraneScript
             bool isPublic = false;
         };
         std::vector<IRStructDef> localStructs;
-        std::vector<std::string> linkedStructs;
-
-        struct LinkedFunction
-        {
-            std::string name;
-            uint16_t library;
-        };
-
 
         std::vector<std::string> linkedLibraries;
-        std::vector<LinkedFunction> linkedFunctions;
-        std::vector<std::string> linkedTypes;
+        std::vector<std::string> linkedFunctions;
+        std::vector<std::string> linkedStructs;
+
+        int16_t findLocalFuncIndex(const std::string& name) const;
+
+        int16_t linkLibrary(const std::string& name);
+        int16_t linkFunction(const std::string& name);
+        int16_t linkStruct(const std::string& name);
     };
 
 }

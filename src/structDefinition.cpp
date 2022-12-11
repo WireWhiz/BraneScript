@@ -11,13 +11,13 @@ namespace BraneScript
         _size = 0;
     }
 
-    void StructDef::addMemberVar(std::string name, TypeDef* type)
+    void StructDef::addMemberVar(std::string name, const TypeDef* type)
     {
         _variables.push_back({std::move(name), (uint16_t)_size, type});
         _size += type->size();
     }
 
-    void StructDef::addMemberVar(std::string name, TypeDef* type, uint16_t offset)
+    void StructDef::addMemberVar(std::string name, const TypeDef* type, uint16_t offset)
     {
         _variables.push_back({std::move(name), offset, type});
         _size = offset + type->size();
@@ -79,5 +79,45 @@ namespace BraneScript
     ValueType StructDef::type() const
     {
         return Struct;
+    }
+
+    void StructDef::setConstructor(FunctionHandle<void, void*> f)
+    {
+        _constructor = f;
+    }
+
+    void StructDef::setCopyConstructor(FunctionHandle<void, void*, void*> f)
+    {
+        _copyConstructor = f;
+    }
+
+    void StructDef::setMoveConstructor(FunctionHandle<void, void*, void*> f)
+    {
+        _moveConstructor = f;
+    }
+
+    void StructDef::setDestructor(FunctionHandle<void, void*> f)
+    {
+        _destructor = f;
+    }
+
+    FunctionHandle<void, void*> StructDef::constructor() const
+    {
+        return _constructor;
+    }
+
+    FunctionHandle<void, void*, void*> StructDef::copyConstructor() const
+    {
+        return _copyConstructor;
+    }
+
+    FunctionHandle<void, void*, void*> StructDef::moveConstructor() const
+    {
+        return _moveConstructor;
+    }
+
+    FunctionHandle<void, void*> StructDef::destructor() const
+    {
+        return _destructor;
     }
 }
