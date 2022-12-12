@@ -135,6 +135,10 @@ public:
     return visitChildren(ctx);
   }
 
+  virtual std::any visitMemberFunctionCall(braneParser::MemberFunctionCallContext *ctx) override {
+    return visitChildren(ctx);
+  }
+
   virtual std::any visitFunctionCall(braneParser::FunctionCallContext *ctx) override {
     return visitChildren(ctx);
   }

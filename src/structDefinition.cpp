@@ -30,7 +30,12 @@ namespace BraneScript
         for (auto& m: _variables)
         {
             const auto* t = m.type;
-            auto mSize = std::min<uint16_t>(t->size(), 8);
+            auto mSize = t->size();
+            if(m.type->type() == Struct)
+            {
+                auto sDef = dynamic_cast<const StructDef*>(m.type);
+                mSize = sDef->alignment();
+            }
             auto padding = _size % mSize;
             if(padding)
                 _size += mSize - padding;
@@ -119,5 +124,20 @@ namespace BraneScript
     FunctionHandle<void, void*> StructDef::destructor() const
     {
         return _destructor;
+    }
+
+    uint16_t StructDef::alignment() const
+    {
+        uint16_t largest = 0;
+        for(auto& m : _variables)
+        {
+            if(m.type->type() != Struct)
+                largest = std::max(largest, m.type->size());
+            else
+                largest = std::max(largest, dynamic_cast<const StructDef*>(m.type)->alignment());
+        }
+        if(largest == 0)
+            return 1;
+        return largest;
     }
 }

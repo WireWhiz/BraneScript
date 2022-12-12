@@ -31,8 +31,6 @@ namespace BraneScript
         FunctionHandle<void, void*, void*> _moveConstructor = nullptr;
         FunctionHandle<void, void*> _destructor = nullptr;
     public:
-        using SingleArgFunc = FunctionHandle<void, void*>;
-        using DualArgFunc = FunctionHandle<void, void*, void*>;
         StructDef(std::string name);
         /**
          * Add a tightly packed member
@@ -75,6 +73,7 @@ namespace BraneScript
 
         const char* name() const override;
         uint16_t size() const override;
+        uint16_t alignment() const;
         ValueType type() const override;
     };
 }

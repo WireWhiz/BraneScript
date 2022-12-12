@@ -28,6 +28,20 @@ struct TestStruct2
     float c;
 };
 
+struct NestedStructChild
+{
+    float x;
+    float y;
+    float z;
+};
+
+struct NestedStructBase
+{
+    float a;
+    NestedStructChild b;
+    float c;
+};
+
 TEST(BraneScript, Objects)
 {
     std::string testString = R"(
@@ -93,6 +107,35 @@ TEST(BraneScript, Objects)
     {
         return s.sum();
     }
+
+    public struct NestedStructChild
+    {
+        float x;
+        float y;
+        float z;
+        void _construct()
+        {
+            x = 1;
+            y = 2;
+            z = 3;
+        }
+    }
+    public struct NestedStructBase
+    {
+        float a;
+        NestedStructChild b;
+        float c;
+    }
+
+    NestedStructBase nestedTest()
+    {
+        NestedStructBase base;
+        base.c = 42;
+        base.b.y = 4;
+        NestedStructBase copied = base;
+        return copied;
+    }
+
 )";
     StructDef testStruct1Def("TestStruct1");
     testStruct1Def.setConstructor([](void* data) {
@@ -203,7 +246,16 @@ TEST(BraneScript, Objects)
     EXPECT_EQ(ts2->c, 4.2f);
     delete ts2;
 
+    auto nestedTest = testScript->getFunction<NestedStructBase*>("nestedTest()");
+    ASSERT_TRUE(nestedTest);
+    auto nestedStruct = nestedTest();
+    // We don't test a and c as they are not initialized
+    EXPECT_EQ(nestedStruct->b.x, 1.0f);
+    EXPECT_EQ(nestedStruct->b.y, 4.0f);
+    EXPECT_EQ(nestedStruct->b.z, 3.0f);
+    delete nestedStruct;
+
 #ifndef NDEBUG
-    EXPECT_EQ(scriptMallocDiff, 2);
+    EXPECT_EQ(scriptMallocDiff, 3);
 #endif
 }

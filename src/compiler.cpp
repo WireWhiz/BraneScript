@@ -180,37 +180,39 @@ namespace BraneScript
 
     std::any Compiler::visitId(braneParser::IdContext* context)
     {
-        AotNode* node = getValueNode(context->getText());
-        if (!node)
+        auto text = context->getText();
+        AotNode* node = getValueNode(text);
+        if (node)
+            return node;
+        if(_ctx->structDef)
         {
-            if(_ctx->structDef)
+            auto member = _ctx->structDef->getMemberVar(text);
+            if (!member)
             {
-                auto member = _ctx->structDef->getMemberVar(context->getText());
-                if(!member)
-                {
-                    throwError(context->start, "Undeclared identifier");
-                    return (AotNode*)nullptr;
-                }
-
-                return (AotNode*)new AotDerefNode(getValueNode("this"), member->type, member->offset);
+                throwError(context->start, "Undeclared identifier");
+                return (AotNode*)nullptr;
             }
 
-            throwError(context->start, "Undeclared identifier");
-            return (AotNode*)nullptr;
+            return (AotNode*)new AotDerefNode(getValueNode("this"), member->type, member->offset);
         }
-        return node;
+
+        if(_ctx->libraryAliases.count(text))
+        {
+            Library* library = _linker->getLibrary(_ctx->script->linkedLibraries[_ctx->libraryAliases[text]]);
+            return (AotNode*)new AotLibraryNode(library);
+        }
+
+        throwError(context, "Library or identifier not found!");
+        RETURN_NULL;
     }
 
     std::any Compiler::visitMemberAccess(braneParser::MemberAccessContext* context)
     {
-        auto* baseStructValue = getValueNode(context->base->getText());
-        if(!baseStructValue)
-        {
-            throwError(context->base, "Identifier not found");
+        auto base = std::any_cast<AotNode*>(visit(context->base));
+        if(!base)
             RETURN_NULL;
-        }
 
-        auto structDef = dynamic_cast<const StructDef*>(baseStructValue->resType());
+        auto structDef = dynamic_cast<const StructDef*>(base->resType());
         if(!structDef)
         {
             throwError(context->base, "Cant get member of void type");
@@ -224,8 +226,7 @@ namespace BraneScript
             RETURN_NULL;
         }
 
-
-        return (AotNode*)new AotDerefNode(baseStructValue, structMemberDef->type, structMemberDef->offset);
+        return (AotNode*)new AotDerefNode(base, structMemberDef->type, structMemberDef->offset);
     }
 
     std::any Compiler::visitDecl(braneParser::DeclContext* context)
@@ -519,58 +520,102 @@ namespace BraneScript
         }
         functionName += ")";
 
-        if(context->namespace_)
+        int16_t fIndex = getLocalFunction(functionName);
+
+        //Account for member functions
+        if(fIndex < 0 && _ctx->structDef)
         {
-            std::string scope = context->namespace_->getText();
-
-            auto* str = getValueNode(scope);
-            if(str)
-            {
-                if(str->resType()->type() != ValueType::Struct)
-                {
-                    throwError(context->namespace_, "Can't call functions from non-struct value");
-                    RETURN_NULL;
-                }
-                arguments.insert(arguments.begin(), str);
-
-                std::string scopedName = std::string(str->resType()->name()) + "::" + functionName;
-                int16_t fIndex = getLocalFunction(scopedName);
-                if(fIndex < _ctx->script->localFunctions.size())
-                {
-                    auto& func = _ctx->script->localFunctions[fIndex];
-                    return (AotNode*)new AotFunctionCall(fIndex, getType(func.returnType.type), arguments);
-                }
-
-                throwError(context, "Could not find function with signature " + scopedName);
-                RETURN_NULL;
-            }
-
-            if(!_ctx->libraryAliases.count(scope))
-            {
-                throwError(context->namespace_, "Library or identifier not found!");
-                RETURN_NULL;
-            }
-
-            auto* library = _linker->getLibrary(_ctx->script->linkedLibraries[_ctx->libraryAliases[scope]]);
-            auto* function = library->getFunction(functionName);
-            if(!function)
-            {
-                throwError(context->name, "Library \"" + library->name() + "\" does not have a function with signature: " + functionName);
-                RETURN_NULL;
-            }
-
-            int16_t index = int16_t{-1} - _ctx->script->linkFunction(library->name() + "::" + function->name);
-            return (AotNode*)new AotFunctionCall(index, getType(function->ret), arguments);
+            functionName = std::string(_ctx->structDef->name()) + "::" + functionName;
+            fIndex = getLocalFunction(functionName);
+            arguments.insert(arguments.begin(), getValueNode("this"));
         }
 
-        int16_t fIndex = getLocalFunction(functionName);
-        if(fIndex == _ctx->script->localFunctions.size())
+        if(fIndex < 0)
         {
             throwError(context->getStart(), "Could not find function with signature " + functionName);
             RETURN_NULL;
         }
         const TypeDef* retType = getType(_ctx->script->localFunctions[fIndex].returnType.type);
         return (AotNode*)new AotFunctionCall(fIndex, retType, arguments);
+    }
+
+    std::any Compiler::visitMemberFunctionCall(braneParser::MemberFunctionCallContext* context)
+    {
+        auto* base = std::any_cast<AotNode*>(visit(context->base));
+
+        std::string functionName = context->name->getText();
+        std::vector<AotNode*> arguments = std::any_cast<std::vector<AotNode*>>(visit(context->argumentPack()));
+        functionName += "(";
+        for(auto* arg : arguments)
+        {
+            PROPAGATE_NULL(arg);
+            const TypeDef* argType = arg->resType();
+            if(!argType)
+            {
+                throwError(context->getStart()->getLine(), context->getStart()->getChannel(), "", "Tried to pass void argument into function");
+                RETURN_NULL;
+            }
+            if(*--functionName.end() != '(')
+                functionName += ',';
+            functionName += argType->name();
+        }
+        functionName += ")";
+
+
+        if(base->type() == AotNode::NodeType::Lib)
+        {
+            auto lib = static_cast<AotLibraryNode*>(base)->lib();
+            functionName = lib->name() + "::" + functionName;
+            auto funcDef = _linker->getFunction(functionName);
+            if(!funcDef)
+            {
+                throwError(context, "library does not contain member function");
+                RETURN_NULL;
+            }
+            int16_t fIndex = int16_t{-1} -  _ctx->script->linkFunction(functionName);
+            auto retType = getType(funcDef->ret);
+            return (AotNode*)new AotFunctionCall(fIndex, retType, arguments);
+        }
+        if(base->type() == AotNode::NodeType::Value || base->type() == AotNode::NodeType::Deref)
+        {
+            if(base->resType()->type() != Struct)
+            {
+                throwError(context->base, "Type does not support member functions");
+                RETURN_NULL;
+            }
+
+            auto sDef = static_cast<const StructDef*>(base->resType());
+
+            int16_t fIndex;
+            const TypeDef* retType = nullptr;
+            if(_ctx->localStructIndices.count(sDef))
+            {
+                fIndex = _ctx->script->findLocalFuncIndex(std::string(sDef->name()) + "::" + functionName);
+                if(fIndex < 0)
+                {
+                    throwError(context, "Could not find member function for local struct: " + std::string(sDef->name()));
+                    RETURN_NULL;
+                }
+                retType = getType(_ctx->script->localFunctions[fIndex].returnType.type);
+            }
+            else
+            {
+                functionName = std::string(sDef->name()) + "::" + functionName;
+                auto funcDef = _linker->getFunction(functionName);
+                if(!funcDef)
+                {
+                    throwError(context, "Linker could not find member function for external struct: " + std::string(sDef->name()));
+                    RETURN_NULL;
+                }
+                fIndex = int16_t{-1} -  _ctx->script->linkFunction(functionName);
+                retType = getType(funcDef->ret);
+            }
+            arguments.insert(arguments.begin(), base);
+            return (AotNode*)new AotFunctionCall(fIndex, retType, arguments);
+        }
+
+        throwError(context->base, "Unable to resolve base");
+        RETURN_NULL;
     }
 
     std::any Compiler::visitLink(braneParser::LinkContext* context)
@@ -679,31 +724,20 @@ namespace BraneScript
 
             for(auto& m : newDef->memberVars())
             {
-                if(m.type->type() != Struct)
+                if(m.type->type() == Struct)
                 {
-                    auto member = _ctx->derefPtr(thisRef, m.type, m.offset);
-                    constructor.appendCode(Operand::MOVI, member->value(*_ctx));
-                }
-                switch(m.type->type())
-                {
-                    case Bool:
-                        constructor.appendCode(false);
-                        break;
-                    case Int32:
-                        constructor.appendCode(int32_t{0});
-                        break;
-                    case Int64:
-                        constructor.appendCode(int64_t{0});
-                        break;
-                    case Float32:
-                        constructor.appendCode(float{0});
-                        break;
-                    case Float64:
-                        constructor.appendCode(double{0});
-                        break;
-                    case Struct:
-                        assert(false);
-                        break;
+                    auto member = _ctx->newReg(m.type, 0);
+                    constructor.appendCode(Operand::MOV, member->value(*_ctx), thisRef->value(*_ctx));
+                    constructor.appendCode(Operand::ADDI, member->value(*_ctx), (int32_t)m.offset);
+                    auto s = dynamic_cast<const StructDef*>(m.type);
+                    int16_t cIndex;
+                    if(_ctx->localStructIndices.count(s))
+                        cIndex = _ctx->script->findLocalFuncIndex(std::string(s->name()) + "::_construct()");
+                    else
+                        cIndex = int16_t{-1} - _ctx->script->linkFunction(std::string(s->name()) + "::_construct()");
+                    constructor.appendCode(Operand::CALL, cIndex);
+                    constructor.appendCode(member->value(*_ctx));
+                    break;
                 }
 
             }
@@ -739,7 +773,23 @@ namespace BraneScript
                     constructor.appendCode(Operand::MOV, member->value(*_ctx), otherMember->value(*_ctx));
                 }
                 else
-                    assert(false);
+                {
+                    auto member = _ctx->newReg(m.type, 0);
+                    auto otherMember = _ctx->newReg(m.type, 0);
+                    constructor.appendCode(Operand::MOV, member->value(*_ctx), thisRef->value(*_ctx));
+                    constructor.appendCode(Operand::ADDI, member->value(*_ctx), (int32_t)m.offset);
+                    constructor.appendCode(Operand::MOV, otherMember->value(*_ctx), otherRef->value(*_ctx));
+                    constructor.appendCode(Operand::ADDI, otherMember->value(*_ctx), (int32_t)m.offset);
+                    auto s = dynamic_cast<const StructDef*>(m.type);
+                    int16_t cIndex;
+                    if(_ctx->localStructIndices.count(s))
+                        cIndex = _ctx->script->findLocalFuncIndex(std::string(s->name()) + "::_copy(const ref " + s->name() + ")");
+                    else
+                        cIndex = int16_t{-1} - _ctx->script->linkFunction(std::string(s->name()) + "::_copy(const ref " + s->name() + ")");
+                    constructor.appendCode(Operand::CALL, cIndex);
+                    constructor.appendCode(member->value(*_ctx));
+                    constructor.appendCode(otherMember->value(*_ctx));
+                }
             }
             _ctx->script->localFunctions.push_back(std::move(constructor));
             _ctx->function = nullptr;
@@ -773,7 +823,23 @@ namespace BraneScript
                     constructor.appendCode(Operand::MOV, member->value(*_ctx), otherMember->value(*_ctx));
                 }
                 else
-                    assert(false);
+                {
+                    auto member = _ctx->newReg(m.type, 0);
+                    auto otherMember = _ctx->newReg(m.type, 0);
+                    constructor.appendCode(Operand::MOV, member->value(*_ctx), thisRef->value(*_ctx));
+                    constructor.appendCode(Operand::ADDI, member->value(*_ctx), (int32_t)m.offset);
+                    constructor.appendCode(Operand::MOV, otherMember->value(*_ctx), otherRef->value(*_ctx));
+                    constructor.appendCode(Operand::ADDI, otherMember->value(*_ctx), (int32_t)m.offset);
+                    auto s = dynamic_cast<const StructDef*>(m.type);
+                    int16_t cIndex;
+                    if(_ctx->localStructIndices.count(s))
+                        cIndex = _ctx->script->findLocalFuncIndex(std::string(s->name()) + "::_move(ref " + s->name() + ")");
+                    else
+                        cIndex = int16_t{-1} - _ctx->script->linkFunction(std::string(s->name()) + "::_move(ref " + s->name() + ")");
+                    constructor.appendCode(Operand::CALL, cIndex);
+                    constructor.appendCode(member->value(*_ctx));
+                    constructor.appendCode(otherMember->value(*_ctx));
+                }
             }
             _ctx->script->localFunctions.push_back(std::move(constructor));
             _ctx->function = nullptr;
@@ -795,7 +861,19 @@ namespace BraneScript
             for(auto& m : newDef->memberVars())
             {
                 if(m.type->type() == Struct)
-                    assert(false); // TODO Call child struct destructor
+                {
+                    auto member = _ctx->newReg(m.type, 0);
+                    constructor.appendCode(Operand::MOV, member->value(*_ctx), thisRef->value(*_ctx));
+                    constructor.appendCode(Operand::ADDI, member->value(*_ctx), (int32_t)m.offset);
+                    auto s = dynamic_cast<const StructDef*>(m.type);
+                    int16_t cIndex;
+                    if(_ctx->localStructIndices.count(s))
+                        cIndex = _ctx->script->findLocalFuncIndex(std::string(s->name()) + "::_destruct()");
+                    else
+                        cIndex = int16_t{-1} - _ctx->script->linkFunction(std::string(s->name()) + "::_destruct()");
+                    constructor.appendCode(Operand::CALL, cIndex);
+                    constructor.appendCode(member->value(*_ctx));
+                }
             }
             _ctx->script->localFunctions.push_back(std::move(constructor));
             _ctx->function = nullptr;
@@ -879,7 +957,7 @@ namespace BraneScript
                 return fIndex;
             ++fIndex;
         }
-        return fIndex;
+        return -1;
     }
 
     CompilerCtx::CompilerCtx(Compiler& c, IRScript* s) : compiler(c), script(s)
@@ -990,6 +1068,14 @@ namespace BraneScript
         assert(value->valueIndex != (uint16_t)-1);
         assert(type);
         assert(offset == 0 || value->def->type() == ValueType::Struct);
+        if(type->type() == Struct)
+        {
+            auto* offsetPtr = newReg(type, AotValue::Initialized & value->flags);
+            function->appendCode(Operand::MOV, offsetPtr->value(*this), value->value(*this));
+            function->appendCode(Operand::ADDI, offsetPtr->value(*this), (int32_t)offset);
+            return offsetPtr;
+        }
+
         auto* drefValue = new AotValue(*value);
         drefValue->storageType = ValueStorageType_DerefPtr;
         drefValue->def = type;

@@ -79,6 +79,8 @@ public:
 
     virtual std::any visitCast(braneParser::CastContext *context) = 0;
 
+    virtual std::any visitMemberFunctionCall(braneParser::MemberFunctionCallContext *context) = 0;
+
     virtual std::any visitFunctionCall(braneParser::FunctionCallContext *context) = 0;
 
     virtual std::any visitConstFloat(braneParser::ConstFloatContext *context) = 0;

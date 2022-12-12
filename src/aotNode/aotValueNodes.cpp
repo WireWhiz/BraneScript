@@ -271,4 +271,43 @@ namespace BraneScript
         ctx.function->appendCode(Operand::MOVI, ptr->value(ctx), (int32_t)0);
         return {};
     }
+
+    AotLibraryNode::AotLibraryNode(Library* lib) : AotNode(nullptr, NodeType::Lib)
+    {
+        _lib = lib;
+    }
+
+    Library* AotLibraryNode::lib() const
+    {
+        return _lib;
+    }
+
+    AotNode* AotLibraryNode::optimize()
+    {
+        assert(false);
+        return this;
+    }
+
+    AotValue* AotLibraryNode::generateBytecode(CompilerCtx& ctx) const
+    {
+        assert(false);
+        return nullptr;
+    }
+
+    AotFunctionNode::AotFunctionNode(int16_t index) : AotNode(nullptr, NodeType::Func)
+    {
+        _index = index;
+    }
+
+    AotNode* AotFunctionNode::optimize()
+    {
+        assert(false);
+        return this;
+    }
+
+    AotValue* AotFunctionNode::generateBytecode(CompilerCtx& ctx) const
+    {
+        assert(false);
+        return nullptr;
+    }
 }

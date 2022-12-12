@@ -199,6 +199,10 @@ namespace BraneScript
             else
             {
                 assert(value.index < registers.size());
+                if constexpr (std::is_same<RT, Gp>())
+                    assert(registers[value.index].isGp());
+                if constexpr (std::is_same<RT, Xmm>())
+                    assert(registers[value.index].isXmm());
                 return registers[value.index].as<RT>();
             }
         }
@@ -243,11 +247,22 @@ namespace BraneScript
             assert(_linker);
             auto def = std::make_unique<StructDef>(s.name);
             for(auto& m : s.members)
-                def->addMemberVar(m.type, _linker->getType(m.type));
-            if(s.packed)
-                def->packMembers();
-            else
-                def->padMembers();
+            {
+                auto type = _linker->getType(m.type);
+                if(!type)
+                {
+                    for(auto& ls : localStructs)
+                    {
+                        if(ls->name() == m.type)
+                        {
+                            type = ls.get();
+                            break;
+                        }
+                    }
+                }
+                assert(type);
+                def->addMemberVar(m.type, type, m.offset);
+            }
             localStructs.push_back(std::move(def));
         }
 
@@ -792,6 +807,7 @@ namespace BraneScript
                     case MOVI:
                     {
                         auto dest = ctx.readCode<Value>();
+                        assert(dest.storageType == ValueStorageType_Reg || dest.storageType == ValueStorageType_Ptr);
                         ctx.verifyValue(dest, cc);
 
                         printf("MOVI \n");
@@ -927,6 +943,41 @@ namespace BraneScript
                                 break;
                             default:
                                 throw std::runtime_error("Invalid add operands");
+                        }
+                        break;
+                    }
+                    case ADDI:
+                    {
+                        auto dest = ctx.readCode<Value>();
+                        assert(dest.storageType == ValueStorageType_Reg || dest.storageType == ValueStorageType_Ptr);
+                        ctx.verifyValue(dest, cc);
+
+                        printf("ADDI \n");
+                        switch(dest.valueType)
+                        {
+                            case Int32:
+                                cc.add(ctx.getReg<Gp>(dest), asmjit::imm(ctx.readCode<int32_t>()));
+                                break;
+                            case Int64:
+                                cc.add(ctx.getReg<Gp>(dest), asmjit::imm(ctx.readCode<int64_t>()));
+                                break;
+                            case Float32:
+                            {
+                                auto d = cc.newFloatConst(asmjit::ConstPoolScope::kLocal, ctx.readCode<float>());
+                                cc.addss(ctx.getReg<Xmm>(dest), d);
+                            }
+                                break;
+                            case Float64:
+                            {
+                                auto d = cc.newDoubleConst(asmjit::ConstPoolScope::kLocal, ctx.readCode<double>());
+                                cc.addss(ctx.getReg<Xmm>(dest), d);
+                            }
+                                break;
+                            case Struct:
+                                cc.add(ctx.getReg<Gp>(dest), asmjit::imm(ctx.readCode<int32_t>()));
+                                break;
+                            default:
+                                assert(false);
                         }
                         break;
                     }

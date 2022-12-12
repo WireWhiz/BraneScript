@@ -92,6 +92,26 @@ namespace BraneScript
         AotValue* generateBytecode(CompilerCtx& ctx) const override;
     };
 
+    class Library;
+    class AotLibraryNode : public AotNode
+    {
+        Library* _lib;
+    public:
+        AotLibraryNode(Library* lib);
+        Library* lib() const;
+        AotNode* optimize() override;
+        AotValue* generateBytecode(CompilerCtx& ctx) const override;
+    };
+
+    class AotFunctionNode : public AotNode
+    {
+        std::string _index;
+    public:
+        AotFunctionNode(int16_t index);
+        int16_t index() const;
+        AotNode* optimize() override;
+        AotValue* generateBytecode(CompilerCtx& ctx) const override;
+    };
 }
 
 

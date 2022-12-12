@@ -352,10 +352,10 @@ public:
   public:
     MemberAccessContext(ExpressionContext *ctx);
 
-    antlr4::Token *base = nullptr;
+    braneParser::ExpressionContext *base = nullptr;
     antlr4::Token *member = nullptr;
-    std::vector<antlr4::tree::TerminalNode *> ID();
-    antlr4::tree::TerminalNode* ID(size_t i);
+    ExpressionContext *expression();
+    antlr4::tree::TerminalNode *ID();
 
     virtual std::any accept(antlr4::tree::ParseTreeVisitor *visitor) override;
   };
@@ -480,15 +480,26 @@ public:
     virtual std::any accept(antlr4::tree::ParseTreeVisitor *visitor) override;
   };
 
+  class  MemberFunctionCallContext : public ExpressionContext {
+  public:
+    MemberFunctionCallContext(ExpressionContext *ctx);
+
+    braneParser::ExpressionContext *base = nullptr;
+    antlr4::Token *name = nullptr;
+    ArgumentPackContext *argumentPack();
+    ExpressionContext *expression();
+    antlr4::tree::TerminalNode *ID();
+
+    virtual std::any accept(antlr4::tree::ParseTreeVisitor *visitor) override;
+  };
+
   class  FunctionCallContext : public ExpressionContext {
   public:
     FunctionCallContext(ExpressionContext *ctx);
 
-    antlr4::Token *namespace_ = nullptr;
     antlr4::Token *name = nullptr;
     ArgumentPackContext *argumentPack();
-    std::vector<antlr4::tree::TerminalNode *> ID();
-    antlr4::tree::TerminalNode* ID(size_t i);
+    antlr4::tree::TerminalNode *ID();
 
     virtual std::any accept(antlr4::tree::ParseTreeVisitor *visitor) override;
   };

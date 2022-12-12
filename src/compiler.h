@@ -94,6 +94,8 @@ namespace BraneScript
 
         std::any visitFunctionCall(braneParser::FunctionCallContext *context) override;
 
+        std::any visitMemberFunctionCall(braneParser::MemberFunctionCallContext *context) override;
+
         std::any visitLink(braneParser::LinkContext *context) override;
 
         std::any visitMemberAccess(braneParser::MemberAccessContext *context) override;

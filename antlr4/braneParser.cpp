@@ -62,7 +62,7 @@ void braneParserInitialize() {
     }
   );
   static const int32_t serializedATNSegment[] = {
-  	4,1,39,212,2,0,7,0,2,1,7,1,2,2,7,2,2,3,7,3,2,4,7,4,2,5,7,5,2,6,7,6,2,
+  	4,1,39,215,2,0,7,0,2,1,7,1,2,2,7,2,2,3,7,3,2,4,7,4,2,5,7,5,2,6,7,6,2,
   	7,7,7,2,8,7,8,2,9,7,9,2,10,7,10,2,11,7,11,2,12,7,12,2,13,7,13,1,0,4,0,
   	30,8,0,11,0,12,0,31,1,0,1,0,1,0,3,0,37,8,0,1,1,1,1,1,1,1,1,1,1,1,1,3,
   	1,45,8,1,1,2,3,2,48,8,2,1,2,3,2,51,8,2,1,2,1,2,1,3,1,3,1,3,1,4,1,4,1,
@@ -74,65 +74,65 @@ void braneParserInitialize() {
   	1,11,1,11,1,11,1,11,1,11,1,12,1,12,1,12,1,12,1,12,5,12,138,8,12,10,12,
   	12,12,141,9,12,1,12,1,12,1,12,1,12,1,12,1,12,1,12,1,12,1,12,1,12,1,12,
   	1,12,1,12,1,12,1,12,1,12,1,12,1,12,1,12,3,12,162,8,12,1,13,1,13,1,13,
-  	1,13,1,13,1,13,1,13,1,13,1,13,1,13,3,13,174,8,13,1,13,1,13,1,13,1,13,
-  	1,13,1,13,1,13,1,13,1,13,1,13,1,13,1,13,1,13,1,13,1,13,1,13,1,13,3,13,
-  	193,8,13,1,13,1,13,1,13,1,13,1,13,1,13,1,13,1,13,1,13,1,13,1,13,1,13,
-  	5,13,207,8,13,10,13,12,13,210,9,13,1,13,1,95,1,26,14,0,2,4,6,8,10,12,
-  	14,16,18,20,22,24,26,0,3,1,0,36,37,1,0,38,39,1,0,20,25,236,0,36,1,0,0,
-  	0,2,44,1,0,0,0,4,47,1,0,0,0,6,54,1,0,0,0,8,65,1,0,0,0,10,75,1,0,0,0,12,
-  	77,1,0,0,0,14,91,1,0,0,0,16,100,1,0,0,0,18,112,1,0,0,0,20,117,1,0,0,0,
-  	22,121,1,0,0,0,24,161,1,0,0,0,26,192,1,0,0,0,28,30,3,2,1,0,29,28,1,0,
-  	0,0,30,31,1,0,0,0,31,29,1,0,0,0,31,32,1,0,0,0,32,33,1,0,0,0,33,34,5,0,
-  	0,1,34,37,1,0,0,0,35,37,5,0,0,1,36,29,1,0,0,0,36,35,1,0,0,0,37,1,1,0,
-  	0,0,38,45,3,12,6,0,39,40,3,14,7,0,40,41,5,27,0,0,41,45,1,0,0,0,42,45,
-  	3,16,8,0,43,45,3,22,11,0,44,38,1,0,0,0,44,39,1,0,0,0,44,42,1,0,0,0,44,
-  	43,1,0,0,0,45,3,1,0,0,0,46,48,5,1,0,0,47,46,1,0,0,0,47,48,1,0,0,0,48,
-  	50,1,0,0,0,49,51,5,2,0,0,50,49,1,0,0,0,50,51,1,0,0,0,51,52,1,0,0,0,52,
-  	53,5,35,0,0,53,5,1,0,0,0,54,55,3,4,2,0,55,56,5,35,0,0,56,7,1,0,0,0,57,
-  	62,3,6,3,0,58,59,5,3,0,0,59,61,3,6,3,0,60,58,1,0,0,0,61,64,1,0,0,0,62,
-  	60,1,0,0,0,62,63,1,0,0,0,63,66,1,0,0,0,64,62,1,0,0,0,65,57,1,0,0,0,65,
-  	66,1,0,0,0,66,9,1,0,0,0,67,72,3,26,13,0,68,69,5,3,0,0,69,71,3,26,13,0,
-  	70,68,1,0,0,0,71,74,1,0,0,0,72,70,1,0,0,0,72,73,1,0,0,0,73,76,1,0,0,0,
-  	74,72,1,0,0,0,75,67,1,0,0,0,75,76,1,0,0,0,76,11,1,0,0,0,77,78,3,4,2,0,
-  	78,79,5,35,0,0,79,80,5,4,0,0,80,81,3,8,4,0,81,82,5,5,0,0,82,86,5,6,0,
-  	0,83,85,3,24,12,0,84,83,1,0,0,0,85,88,1,0,0,0,86,84,1,0,0,0,86,87,1,0,
-  	0,0,87,89,1,0,0,0,88,86,1,0,0,0,89,90,5,7,0,0,90,13,1,0,0,0,91,95,5,8,
-  	0,0,92,94,9,0,0,0,93,92,1,0,0,0,94,97,1,0,0,0,95,96,1,0,0,0,95,93,1,0,
-  	0,0,96,98,1,0,0,0,97,95,1,0,0,0,98,99,5,27,0,0,99,15,1,0,0,0,100,101,
-  	5,9,0,0,101,104,5,34,0,0,102,103,5,10,0,0,103,105,5,34,0,0,104,102,1,
-  	0,0,0,104,105,1,0,0,0,105,106,1,0,0,0,106,107,5,11,0,0,107,17,1,0,0,0,
-  	108,109,3,6,3,0,109,110,5,11,0,0,110,113,1,0,0,0,111,113,3,12,6,0,112,
-  	108,1,0,0,0,112,111,1,0,0,0,113,19,1,0,0,0,114,116,3,18,9,0,115,114,1,
-  	0,0,0,116,119,1,0,0,0,117,115,1,0,0,0,117,118,1,0,0,0,118,21,1,0,0,0,
-  	119,117,1,0,0,0,120,122,5,12,0,0,121,120,1,0,0,0,121,122,1,0,0,0,122,
-  	124,1,0,0,0,123,125,5,13,0,0,124,123,1,0,0,0,124,125,1,0,0,0,125,126,
-  	1,0,0,0,126,127,5,14,0,0,127,128,5,35,0,0,128,129,5,6,0,0,129,130,3,20,
-  	10,0,130,131,5,7,0,0,131,23,1,0,0,0,132,133,3,26,13,0,133,134,5,11,0,
-  	0,134,162,1,0,0,0,135,139,5,6,0,0,136,138,3,24,12,0,137,136,1,0,0,0,138,
-  	141,1,0,0,0,139,137,1,0,0,0,139,140,1,0,0,0,140,142,1,0,0,0,141,139,1,
-  	0,0,0,142,162,5,7,0,0,143,144,5,15,0,0,144,145,3,26,13,0,145,146,5,11,
-  	0,0,146,162,1,0,0,0,147,148,5,15,0,0,148,162,5,11,0,0,149,150,5,16,0,
-  	0,150,151,5,4,0,0,151,152,3,26,13,0,152,153,5,5,0,0,153,154,3,24,12,0,
-  	154,162,1,0,0,0,155,156,5,17,0,0,156,157,5,4,0,0,157,158,3,26,13,0,158,
-  	159,5,5,0,0,159,160,3,24,12,0,160,162,1,0,0,0,161,132,1,0,0,0,161,135,
-  	1,0,0,0,161,143,1,0,0,0,161,147,1,0,0,0,161,149,1,0,0,0,161,155,1,0,0,
-  	0,162,25,1,0,0,0,163,164,6,13,-1,0,164,193,5,32,0,0,165,193,5,33,0,0,
-  	166,193,5,34,0,0,167,193,5,31,0,0,168,193,3,6,3,0,169,170,5,18,0,0,170,
-  	193,3,26,13,10,171,172,5,35,0,0,172,174,5,19,0,0,173,171,1,0,0,0,173,
-  	174,1,0,0,0,174,175,1,0,0,0,175,176,5,35,0,0,176,177,5,4,0,0,177,178,
-  	3,10,5,0,178,179,5,5,0,0,179,193,1,0,0,0,180,193,5,35,0,0,181,182,5,35,
-  	0,0,182,183,5,19,0,0,183,193,5,35,0,0,184,185,5,4,0,0,185,186,3,26,13,
-  	0,186,187,5,5,0,0,187,193,1,0,0,0,188,189,5,4,0,0,189,190,5,35,0,0,190,
-  	191,5,5,0,0,191,193,3,26,13,2,192,163,1,0,0,0,192,165,1,0,0,0,192,166,
-  	1,0,0,0,192,167,1,0,0,0,192,168,1,0,0,0,192,169,1,0,0,0,192,173,1,0,0,
-  	0,192,180,1,0,0,0,192,181,1,0,0,0,192,184,1,0,0,0,192,188,1,0,0,0,193,
-  	208,1,0,0,0,194,195,10,6,0,0,195,196,7,0,0,0,196,207,3,26,13,7,197,198,
-  	10,5,0,0,198,199,7,1,0,0,199,207,3,26,13,6,200,201,10,4,0,0,201,202,7,
-  	2,0,0,202,207,3,26,13,5,203,204,10,1,0,0,204,205,5,26,0,0,205,207,3,26,
-  	13,2,206,194,1,0,0,0,206,197,1,0,0,0,206,200,1,0,0,0,206,203,1,0,0,0,
-  	207,210,1,0,0,0,208,206,1,0,0,0,208,209,1,0,0,0,209,27,1,0,0,0,210,208,
-  	1,0,0,0,22,31,36,44,47,50,62,65,72,75,86,95,104,112,117,121,124,139,161,
-  	173,192,206,208
+  	1,13,1,13,1,13,1,13,1,13,1,13,1,13,1,13,1,13,1,13,1,13,1,13,1,13,1,13,
+  	1,13,1,13,1,13,1,13,1,13,3,13,186,8,13,1,13,1,13,1,13,1,13,1,13,1,13,
+  	1,13,1,13,1,13,1,13,1,13,1,13,1,13,1,13,1,13,1,13,1,13,1,13,1,13,1,13,
+  	1,13,1,13,5,13,210,8,13,10,13,12,13,213,9,13,1,13,1,95,1,26,14,0,2,4,
+  	6,8,10,12,14,16,18,20,22,24,26,0,3,1,0,36,37,1,0,38,39,1,0,20,25,239,
+  	0,36,1,0,0,0,2,44,1,0,0,0,4,47,1,0,0,0,6,54,1,0,0,0,8,65,1,0,0,0,10,75,
+  	1,0,0,0,12,77,1,0,0,0,14,91,1,0,0,0,16,100,1,0,0,0,18,112,1,0,0,0,20,
+  	117,1,0,0,0,22,121,1,0,0,0,24,161,1,0,0,0,26,185,1,0,0,0,28,30,3,2,1,
+  	0,29,28,1,0,0,0,30,31,1,0,0,0,31,29,1,0,0,0,31,32,1,0,0,0,32,33,1,0,0,
+  	0,33,34,5,0,0,1,34,37,1,0,0,0,35,37,5,0,0,1,36,29,1,0,0,0,36,35,1,0,0,
+  	0,37,1,1,0,0,0,38,45,3,12,6,0,39,40,3,14,7,0,40,41,5,27,0,0,41,45,1,0,
+  	0,0,42,45,3,16,8,0,43,45,3,22,11,0,44,38,1,0,0,0,44,39,1,0,0,0,44,42,
+  	1,0,0,0,44,43,1,0,0,0,45,3,1,0,0,0,46,48,5,1,0,0,47,46,1,0,0,0,47,48,
+  	1,0,0,0,48,50,1,0,0,0,49,51,5,2,0,0,50,49,1,0,0,0,50,51,1,0,0,0,51,52,
+  	1,0,0,0,52,53,5,35,0,0,53,5,1,0,0,0,54,55,3,4,2,0,55,56,5,35,0,0,56,7,
+  	1,0,0,0,57,62,3,6,3,0,58,59,5,3,0,0,59,61,3,6,3,0,60,58,1,0,0,0,61,64,
+  	1,0,0,0,62,60,1,0,0,0,62,63,1,0,0,0,63,66,1,0,0,0,64,62,1,0,0,0,65,57,
+  	1,0,0,0,65,66,1,0,0,0,66,9,1,0,0,0,67,72,3,26,13,0,68,69,5,3,0,0,69,71,
+  	3,26,13,0,70,68,1,0,0,0,71,74,1,0,0,0,72,70,1,0,0,0,72,73,1,0,0,0,73,
+  	76,1,0,0,0,74,72,1,0,0,0,75,67,1,0,0,0,75,76,1,0,0,0,76,11,1,0,0,0,77,
+  	78,3,4,2,0,78,79,5,35,0,0,79,80,5,4,0,0,80,81,3,8,4,0,81,82,5,5,0,0,82,
+  	86,5,6,0,0,83,85,3,24,12,0,84,83,1,0,0,0,85,88,1,0,0,0,86,84,1,0,0,0,
+  	86,87,1,0,0,0,87,89,1,0,0,0,88,86,1,0,0,0,89,90,5,7,0,0,90,13,1,0,0,0,
+  	91,95,5,8,0,0,92,94,9,0,0,0,93,92,1,0,0,0,94,97,1,0,0,0,95,96,1,0,0,0,
+  	95,93,1,0,0,0,96,98,1,0,0,0,97,95,1,0,0,0,98,99,5,27,0,0,99,15,1,0,0,
+  	0,100,101,5,9,0,0,101,104,5,34,0,0,102,103,5,10,0,0,103,105,5,34,0,0,
+  	104,102,1,0,0,0,104,105,1,0,0,0,105,106,1,0,0,0,106,107,5,11,0,0,107,
+  	17,1,0,0,0,108,109,3,6,3,0,109,110,5,11,0,0,110,113,1,0,0,0,111,113,3,
+  	12,6,0,112,108,1,0,0,0,112,111,1,0,0,0,113,19,1,0,0,0,114,116,3,18,9,
+  	0,115,114,1,0,0,0,116,119,1,0,0,0,117,115,1,0,0,0,117,118,1,0,0,0,118,
+  	21,1,0,0,0,119,117,1,0,0,0,120,122,5,12,0,0,121,120,1,0,0,0,121,122,1,
+  	0,0,0,122,124,1,0,0,0,123,125,5,13,0,0,124,123,1,0,0,0,124,125,1,0,0,
+  	0,125,126,1,0,0,0,126,127,5,14,0,0,127,128,5,35,0,0,128,129,5,6,0,0,129,
+  	130,3,20,10,0,130,131,5,7,0,0,131,23,1,0,0,0,132,133,3,26,13,0,133,134,
+  	5,11,0,0,134,162,1,0,0,0,135,139,5,6,0,0,136,138,3,24,12,0,137,136,1,
+  	0,0,0,138,141,1,0,0,0,139,137,1,0,0,0,139,140,1,0,0,0,140,142,1,0,0,0,
+  	141,139,1,0,0,0,142,162,5,7,0,0,143,144,5,15,0,0,144,145,3,26,13,0,145,
+  	146,5,11,0,0,146,162,1,0,0,0,147,148,5,15,0,0,148,162,5,11,0,0,149,150,
+  	5,16,0,0,150,151,5,4,0,0,151,152,3,26,13,0,152,153,5,5,0,0,153,154,3,
+  	24,12,0,154,162,1,0,0,0,155,156,5,17,0,0,156,157,5,4,0,0,157,158,3,26,
+  	13,0,158,159,5,5,0,0,159,160,3,24,12,0,160,162,1,0,0,0,161,132,1,0,0,
+  	0,161,135,1,0,0,0,161,143,1,0,0,0,161,147,1,0,0,0,161,149,1,0,0,0,161,
+  	155,1,0,0,0,162,25,1,0,0,0,163,164,6,13,-1,0,164,186,5,32,0,0,165,186,
+  	5,33,0,0,166,186,5,34,0,0,167,186,5,31,0,0,168,186,3,6,3,0,169,170,5,
+  	18,0,0,170,186,3,26,13,11,171,172,5,35,0,0,172,173,5,4,0,0,173,174,3,
+  	10,5,0,174,175,5,5,0,0,175,186,1,0,0,0,176,186,5,35,0,0,177,178,5,4,0,
+  	0,178,179,3,26,13,0,179,180,5,5,0,0,180,186,1,0,0,0,181,182,5,4,0,0,182,
+  	183,5,35,0,0,183,184,5,5,0,0,184,186,3,26,13,2,185,163,1,0,0,0,185,165,
+  	1,0,0,0,185,166,1,0,0,0,185,167,1,0,0,0,185,168,1,0,0,0,185,169,1,0,0,
+  	0,185,171,1,0,0,0,185,176,1,0,0,0,185,177,1,0,0,0,185,181,1,0,0,0,186,
+  	211,1,0,0,0,187,188,10,6,0,0,188,189,7,0,0,0,189,210,3,26,13,7,190,191,
+  	10,5,0,0,191,192,7,1,0,0,192,210,3,26,13,6,193,194,10,4,0,0,194,195,7,
+  	2,0,0,195,210,3,26,13,5,196,197,10,1,0,0,197,198,5,26,0,0,198,210,3,26,
+  	13,2,199,200,10,9,0,0,200,201,5,19,0,0,201,202,5,35,0,0,202,203,5,4,0,
+  	0,203,204,3,10,5,0,204,205,5,5,0,0,205,210,1,0,0,0,206,207,10,7,0,0,207,
+  	208,5,19,0,0,208,210,5,35,0,0,209,187,1,0,0,0,209,190,1,0,0,0,209,193,
+  	1,0,0,0,209,196,1,0,0,0,209,199,1,0,0,0,209,206,1,0,0,0,210,213,1,0,0,
+  	0,211,209,1,0,0,0,211,212,1,0,0,0,212,27,1,0,0,0,213,211,1,0,0,0,21,31,
+  	36,44,47,50,62,65,72,75,86,95,104,112,117,121,124,139,161,185,209,211
   };
   staticData->serializedATN = antlr4::atn::SerializedATNView(serializedATNSegment, sizeof(serializedATNSegment) / sizeof(serializedATNSegment[0]));
 
@@ -1371,12 +1371,12 @@ void braneParser::ExpressionContext::copyFrom(ExpressionContext *ctx) {
 
 //----------------- MemberAccessContext ------------------------------------------------------------------
 
-std::vector<tree::TerminalNode *> braneParser::MemberAccessContext::ID() {
-  return getTokens(braneParser::ID);
+braneParser::ExpressionContext* braneParser::MemberAccessContext::expression() {
+  return getRuleContext<braneParser::ExpressionContext>(0);
 }
 
-tree::TerminalNode* braneParser::MemberAccessContext::ID(size_t i) {
-  return getToken(braneParser::ID, i);
+tree::TerminalNode* braneParser::MemberAccessContext::ID() {
+  return getToken(braneParser::ID, 0);
 }
 
 braneParser::MemberAccessContext::MemberAccessContext(ExpressionContext *ctx) { copyFrom(ctx); }
@@ -1589,18 +1589,37 @@ std::any braneParser::CastContext::accept(tree::ParseTreeVisitor *visitor) {
   else
     return visitor->visitChildren(this);
 }
+//----------------- MemberFunctionCallContext ------------------------------------------------------------------
+
+braneParser::ArgumentPackContext* braneParser::MemberFunctionCallContext::argumentPack() {
+  return getRuleContext<braneParser::ArgumentPackContext>(0);
+}
+
+braneParser::ExpressionContext* braneParser::MemberFunctionCallContext::expression() {
+  return getRuleContext<braneParser::ExpressionContext>(0);
+}
+
+tree::TerminalNode* braneParser::MemberFunctionCallContext::ID() {
+  return getToken(braneParser::ID, 0);
+}
+
+braneParser::MemberFunctionCallContext::MemberFunctionCallContext(ExpressionContext *ctx) { copyFrom(ctx); }
+
+
+std::any braneParser::MemberFunctionCallContext::accept(tree::ParseTreeVisitor *visitor) {
+  if (auto parserVisitor = dynamic_cast<braneVisitor*>(visitor))
+    return parserVisitor->visitMemberFunctionCall(this);
+  else
+    return visitor->visitChildren(this);
+}
 //----------------- FunctionCallContext ------------------------------------------------------------------
 
 braneParser::ArgumentPackContext* braneParser::FunctionCallContext::argumentPack() {
   return getRuleContext<braneParser::ArgumentPackContext>(0);
 }
 
-std::vector<tree::TerminalNode *> braneParser::FunctionCallContext::ID() {
-  return getTokens(braneParser::ID);
-}
-
-tree::TerminalNode* braneParser::FunctionCallContext::ID(size_t i) {
-  return getToken(braneParser::ID, i);
+tree::TerminalNode* braneParser::FunctionCallContext::ID() {
+  return getToken(braneParser::ID, 0);
 }
 
 braneParser::FunctionCallContext::FunctionCallContext(ExpressionContext *ctx) { copyFrom(ctx); }
@@ -1668,9 +1687,9 @@ braneParser::ExpressionContext* braneParser::expression(int precedence) {
   try {
     size_t alt;
     enterOuterAlt(_localctx, 1);
-    setState(192);
+    setState(185);
     _errHandler->sync(this);
-    switch (getInterpreter<atn::ParserATNSimulator>()->adaptivePredict(_input, 19, _ctx)) {
+    switch (getInterpreter<atn::ParserATNSimulator>()->adaptivePredict(_input, 18, _ctx)) {
     case 1: {
       _localctx = _tracker.createInstance<ConstIntContext>(_localctx);
       _ctx = _localctx;
@@ -1724,7 +1743,7 @@ braneParser::ExpressionContext* braneParser::expression(int precedence) {
       setState(169);
       match(braneParser::T__17);
       setState(170);
-      antlrcpp::downCast<DeleteContext *>(_localctx)->ptr = expression(10);
+      antlrcpp::downCast<DeleteContext *>(_localctx)->ptr = expression(11);
       break;
     }
 
@@ -1732,28 +1751,13 @@ braneParser::ExpressionContext* braneParser::expression(int precedence) {
       _localctx = _tracker.createInstance<FunctionCallContext>(_localctx);
       _ctx = _localctx;
       previousContext = _localctx;
-      setState(173);
-      _errHandler->sync(this);
-
-      switch (getInterpreter<atn::ParserATNSimulator>()->adaptivePredict(_input, 18, _ctx)) {
-      case 1: {
-        setState(171);
-        antlrcpp::downCast<FunctionCallContext *>(_localctx)->namespace_ = match(braneParser::ID);
-        setState(172);
-        match(braneParser::T__18);
-        break;
-      }
-
-      default:
-        break;
-      }
-      setState(175);
+      setState(171);
       antlrcpp::downCast<FunctionCallContext *>(_localctx)->name = match(braneParser::ID);
-      setState(176);
+      setState(172);
       match(braneParser::T__3);
-      setState(177);
+      setState(173);
       argumentPack();
-      setState(178);
+      setState(174);
       match(braneParser::T__4);
       break;
     }
@@ -1762,48 +1766,35 @@ braneParser::ExpressionContext* braneParser::expression(int precedence) {
       _localctx = _tracker.createInstance<IdContext>(_localctx);
       _ctx = _localctx;
       previousContext = _localctx;
-      setState(180);
+      setState(176);
       match(braneParser::ID);
       break;
     }
 
     case 9: {
-      _localctx = _tracker.createInstance<MemberAccessContext>(_localctx);
+      _localctx = _tracker.createInstance<InlineScopeContext>(_localctx);
       _ctx = _localctx;
       previousContext = _localctx;
-      setState(181);
-      antlrcpp::downCast<MemberAccessContext *>(_localctx)->base = match(braneParser::ID);
-      setState(182);
-      match(braneParser::T__18);
-      setState(183);
-      antlrcpp::downCast<MemberAccessContext *>(_localctx)->member = match(braneParser::ID);
+      setState(177);
+      match(braneParser::T__3);
+      setState(178);
+      expression(0);
+      setState(179);
+      match(braneParser::T__4);
       break;
     }
 
     case 10: {
-      _localctx = _tracker.createInstance<InlineScopeContext>(_localctx);
-      _ctx = _localctx;
-      previousContext = _localctx;
-      setState(184);
-      match(braneParser::T__3);
-      setState(185);
-      expression(0);
-      setState(186);
-      match(braneParser::T__4);
-      break;
-    }
-
-    case 11: {
       _localctx = _tracker.createInstance<CastContext>(_localctx);
       _ctx = _localctx;
       previousContext = _localctx;
-      setState(188);
+      setState(181);
       match(braneParser::T__3);
-      setState(189);
+      setState(182);
       match(braneParser::ID);
-      setState(190);
+      setState(183);
       match(braneParser::T__4);
-      setState(191);
+      setState(184);
       expression(2);
       break;
     }
@@ -1812,26 +1803,26 @@ braneParser::ExpressionContext* braneParser::expression(int precedence) {
       break;
     }
     _ctx->stop = _input->LT(-1);
-    setState(208);
+    setState(211);
     _errHandler->sync(this);
-    alt = getInterpreter<atn::ParserATNSimulator>()->adaptivePredict(_input, 21, _ctx);
+    alt = getInterpreter<atn::ParserATNSimulator>()->adaptivePredict(_input, 20, _ctx);
     while (alt != 2 && alt != atn::ATN::INVALID_ALT_NUMBER) {
       if (alt == 1) {
         if (!_parseListeners.empty())
           triggerExitRuleEvent();
         previousContext = _localctx;
-        setState(206);
+        setState(209);
         _errHandler->sync(this);
-        switch (getInterpreter<atn::ParserATNSimulator>()->adaptivePredict(_input, 20, _ctx)) {
+        switch (getInterpreter<atn::ParserATNSimulator>()->adaptivePredict(_input, 19, _ctx)) {
         case 1: {
           auto newContext = _tracker.createInstance<MuldivContext>(_tracker.createInstance<ExpressionContext>(parentContext, parentState));
           _localctx = newContext;
           newContext->left = previousContext;
           pushNewRecursionContext(newContext, startState, RuleExpression);
-          setState(194);
+          setState(187);
 
           if (!(precpred(_ctx, 6))) throw FailedPredicateException(this, "precpred(_ctx, 6)");
-          setState(195);
+          setState(188);
           antlrcpp::downCast<MuldivContext *>(_localctx)->op = _input->LT(1);
           _la = _input->LA(1);
           if (!(_la == braneParser::MUL
@@ -1843,7 +1834,7 @@ braneParser::ExpressionContext* braneParser::expression(int precedence) {
             _errHandler->reportMatch(this);
             consume();
           }
-          setState(196);
+          setState(189);
           antlrcpp::downCast<MuldivContext *>(_localctx)->right = expression(7);
           break;
         }
@@ -1853,10 +1844,10 @@ braneParser::ExpressionContext* braneParser::expression(int precedence) {
           _localctx = newContext;
           newContext->left = previousContext;
           pushNewRecursionContext(newContext, startState, RuleExpression);
-          setState(197);
+          setState(190);
 
           if (!(precpred(_ctx, 5))) throw FailedPredicateException(this, "precpred(_ctx, 5)");
-          setState(198);
+          setState(191);
           antlrcpp::downCast<AddsubContext *>(_localctx)->op = _input->LT(1);
           _la = _input->LA(1);
           if (!(_la == braneParser::ADD
@@ -1868,7 +1859,7 @@ braneParser::ExpressionContext* braneParser::expression(int precedence) {
             _errHandler->reportMatch(this);
             consume();
           }
-          setState(199);
+          setState(192);
           antlrcpp::downCast<AddsubContext *>(_localctx)->right = expression(6);
           break;
         }
@@ -1878,10 +1869,10 @@ braneParser::ExpressionContext* braneParser::expression(int precedence) {
           _localctx = newContext;
           newContext->left = previousContext;
           pushNewRecursionContext(newContext, startState, RuleExpression);
-          setState(200);
+          setState(193);
 
           if (!(precpred(_ctx, 4))) throw FailedPredicateException(this, "precpred(_ctx, 4)");
-          setState(201);
+          setState(194);
           antlrcpp::downCast<ComparisonContext *>(_localctx)->op = _input->LT(1);
           _la = _input->LA(1);
           if (!((((_la & ~ 0x3fULL) == 0) &&
@@ -1897,7 +1888,7 @@ braneParser::ExpressionContext* braneParser::expression(int precedence) {
             _errHandler->reportMatch(this);
             consume();
           }
-          setState(202);
+          setState(195);
           antlrcpp::downCast<ComparisonContext *>(_localctx)->right = expression(5);
           break;
         }
@@ -1907,13 +1898,49 @@ braneParser::ExpressionContext* braneParser::expression(int precedence) {
           _localctx = newContext;
           newContext->dest = previousContext;
           pushNewRecursionContext(newContext, startState, RuleExpression);
-          setState(203);
+          setState(196);
 
           if (!(precpred(_ctx, 1))) throw FailedPredicateException(this, "precpred(_ctx, 1)");
-          setState(204);
+          setState(197);
           match(braneParser::T__25);
-          setState(205);
+          setState(198);
           antlrcpp::downCast<AssignmentContext *>(_localctx)->expr = expression(2);
+          break;
+        }
+
+        case 5: {
+          auto newContext = _tracker.createInstance<MemberFunctionCallContext>(_tracker.createInstance<ExpressionContext>(parentContext, parentState));
+          _localctx = newContext;
+          newContext->base = previousContext;
+          pushNewRecursionContext(newContext, startState, RuleExpression);
+          setState(199);
+
+          if (!(precpred(_ctx, 9))) throw FailedPredicateException(this, "precpred(_ctx, 9)");
+          setState(200);
+          match(braneParser::T__18);
+          setState(201);
+          antlrcpp::downCast<MemberFunctionCallContext *>(_localctx)->name = match(braneParser::ID);
+          setState(202);
+          match(braneParser::T__3);
+          setState(203);
+          argumentPack();
+          setState(204);
+          match(braneParser::T__4);
+          break;
+        }
+
+        case 6: {
+          auto newContext = _tracker.createInstance<MemberAccessContext>(_tracker.createInstance<ExpressionContext>(parentContext, parentState));
+          _localctx = newContext;
+          newContext->base = previousContext;
+          pushNewRecursionContext(newContext, startState, RuleExpression);
+          setState(206);
+
+          if (!(precpred(_ctx, 7))) throw FailedPredicateException(this, "precpred(_ctx, 7)");
+          setState(207);
+          match(braneParser::T__18);
+          setState(208);
+          antlrcpp::downCast<MemberAccessContext *>(_localctx)->member = match(braneParser::ID);
           break;
         }
 
@@ -1921,9 +1948,9 @@ braneParser::ExpressionContext* braneParser::expression(int precedence) {
           break;
         } 
       }
-      setState(210);
+      setState(213);
       _errHandler->sync(this);
-      alt = getInterpreter<atn::ParserATNSimulator>()->adaptivePredict(_input, 21, _ctx);
+      alt = getInterpreter<atn::ParserATNSimulator>()->adaptivePredict(_input, 20, _ctx);
     }
   }
   catch (RecognitionException &e) {
@@ -1950,6 +1977,8 @@ bool braneParser::expressionSempred(ExpressionContext *_localctx, size_t predica
     case 1: return precpred(_ctx, 5);
     case 2: return precpred(_ctx, 4);
     case 3: return precpred(_ctx, 1);
+    case 4: return precpred(_ctx, 9);
+    case 5: return precpred(_ctx, 7);
 
   default:
     break;

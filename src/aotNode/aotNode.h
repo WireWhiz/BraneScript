@@ -56,10 +56,12 @@ namespace BraneScript
 
     class AotNode
     {
-    protected:
+    public:
         enum class NodeType
         {
             Const,
+            Lib,
+            Func,
             Value,
             New,
             Free,
@@ -78,6 +80,7 @@ namespace BraneScript
             Mul,
             Div
         };
+    protected:
         NodeType _type;
         const TypeDef* _resType = nullptr;
 

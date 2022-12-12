@@ -53,9 +53,10 @@ expression  : INT                                                           #con
             | BOOL                                                          #constBool
             | declaration                                                   #decl
             | 'delete' ptr=expression                                       #delete
-            | (namespace=ID '.')? name=ID '(' argumentPack ')'              #functionCall
+            | name=ID '(' argumentPack ')'                                  #functionCall
+            | base=expression '.' name=ID '(' argumentPack ')'              #memberFunctionCall
             | ID                                                            #id
-            | base=ID '.' member=ID                                         #memberAccess
+            | base=expression '.' member=ID                                 #memberAccess
             | left=expression op=(MUL | DIV) right=expression               #muldiv
             | left=expression op=(ADD | SUB) right=expression               #addsub
             | left=expression op=('==' | '!=' | '<' | '>' | '<=' | '>=') right=expression #comparison

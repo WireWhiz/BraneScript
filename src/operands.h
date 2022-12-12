@@ -48,9 +48,8 @@ namespace BraneScript
         MOV,   // (ValueIndex value, ValueIndex value) move value to another value.
         MOVI,  // (ValueIndex value, T value) move an immediate value into a register.
 
-        INC,   // (ValueIndex value)  increment value.
-        DEC,   // (ValueIndex value)  decrement value.
         ADD,   // (ValueIndex value, ValueIndex value) add values.
+        ADDI,  // (ValueIndex value, T value) add immediate value to register
         SUB,   // (ValueIndex value, ValueIndex value) subtract values.
         MUL,   // (ValueIndex value, ValueIndex value) multiply values.
         DIV,   // (ValueIndex value, ValueIndex value) divide values.
