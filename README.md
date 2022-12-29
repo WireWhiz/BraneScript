@@ -11,3 +11,10 @@ inlined assembly instead of calling switch statements in a component definition.
 * C style syntax and strong static typing
 * Array indexes of 0
 * I want to
+
+### Todo
+* Unsigned scalar types
+* Strings and arrays/vectors
+* Operator overloading
+* Constexpr folding refactor (need way to run functions at compile time)
+* Separate function for printing out opcode debugging

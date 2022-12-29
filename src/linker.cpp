@@ -36,7 +36,7 @@ namespace BraneScript
         libraries.erase(name);
     }
 
-    const TypeDef* Linker::getType(const std::string& name)
+    const TypeDef* Linker::getType(const std::string& name) const
     {
         auto gt = _globalTypes.find(name);
         if (gt != _globalTypes.end())
@@ -44,7 +44,7 @@ namespace BraneScript
         return getStruct(name);
     }
 
-    const StructDef* Linker::getStruct(const std::string& name)
+    const StructDef* Linker::getStruct(const std::string& name) const
     {
         auto del = name.find("::");
         if(del == std::string::npos)
@@ -60,7 +60,7 @@ namespace BraneScript
 
     }
 
-    const FunctionData* Linker::getFunction(const std::string& name)
+    const FunctionData* Linker::getFunction(const std::string& name) const
     {
         auto del = name.find("::");
         if(del == std::string::npos)

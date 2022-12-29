@@ -23,9 +23,9 @@ namespace BraneScript
 
         Library& globalLib();
 
-        const TypeDef* getType(const std::string& name);
-        const StructDef* getStruct(const std::string& name);
-        const FunctionData* getFunction(const std::string& name);
+        const TypeDef* getType(const std::string& name) const;
+        const StructDef* getStruct(const std::string& name) const;
+        const FunctionData* getFunction(const std::string& name) const;
     };
 }
 
