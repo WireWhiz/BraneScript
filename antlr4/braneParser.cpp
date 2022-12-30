@@ -120,19 +120,20 @@ void braneParserInitialize() {
   	5,33,0,0,166,186,5,34,0,0,167,186,5,31,0,0,168,186,3,6,3,0,169,170,5,
   	18,0,0,170,186,3,26,13,11,171,172,5,35,0,0,172,173,5,4,0,0,173,174,3,
   	10,5,0,174,175,5,5,0,0,175,186,1,0,0,0,176,186,5,35,0,0,177,178,5,4,0,
-  	0,178,179,3,26,13,0,179,180,5,5,0,0,180,186,1,0,0,0,181,182,5,4,0,0,182,
-  	183,5,35,0,0,183,184,5,5,0,0,184,186,3,26,13,2,185,163,1,0,0,0,185,165,
-  	1,0,0,0,185,166,1,0,0,0,185,167,1,0,0,0,185,168,1,0,0,0,185,169,1,0,0,
-  	0,185,171,1,0,0,0,185,176,1,0,0,0,185,177,1,0,0,0,185,181,1,0,0,0,186,
-  	211,1,0,0,0,187,188,10,6,0,0,188,189,7,0,0,0,189,210,3,26,13,7,190,191,
-  	10,5,0,0,191,192,7,1,0,0,192,210,3,26,13,6,193,194,10,4,0,0,194,195,7,
-  	2,0,0,195,210,3,26,13,5,196,197,10,1,0,0,197,198,5,26,0,0,198,210,3,26,
-  	13,2,199,200,10,9,0,0,200,201,5,19,0,0,201,202,5,35,0,0,202,203,5,4,0,
-  	0,203,204,3,10,5,0,204,205,5,5,0,0,205,210,1,0,0,0,206,207,10,7,0,0,207,
-  	208,5,19,0,0,208,210,5,35,0,0,209,187,1,0,0,0,209,190,1,0,0,0,209,193,
-  	1,0,0,0,209,196,1,0,0,0,209,199,1,0,0,0,209,206,1,0,0,0,210,213,1,0,0,
-  	0,211,209,1,0,0,0,211,212,1,0,0,0,212,27,1,0,0,0,213,211,1,0,0,0,21,31,
-  	36,44,47,50,62,65,72,75,86,95,104,112,117,121,124,139,161,185,209,211
+  	0,178,179,5,35,0,0,179,180,5,5,0,0,180,186,3,26,13,6,181,182,5,4,0,0,
+  	182,183,3,26,13,0,183,184,5,5,0,0,184,186,1,0,0,0,185,163,1,0,0,0,185,
+  	165,1,0,0,0,185,166,1,0,0,0,185,167,1,0,0,0,185,168,1,0,0,0,185,169,1,
+  	0,0,0,185,171,1,0,0,0,185,176,1,0,0,0,185,177,1,0,0,0,185,181,1,0,0,0,
+  	186,211,1,0,0,0,187,188,10,5,0,0,188,189,7,0,0,0,189,210,3,26,13,6,190,
+  	191,10,4,0,0,191,192,7,1,0,0,192,210,3,26,13,5,193,194,10,3,0,0,194,195,
+  	7,2,0,0,195,210,3,26,13,4,196,197,10,1,0,0,197,198,5,26,0,0,198,210,3,
+  	26,13,2,199,200,10,9,0,0,200,201,5,19,0,0,201,202,5,35,0,0,202,203,5,
+  	4,0,0,203,204,3,10,5,0,204,205,5,5,0,0,205,210,1,0,0,0,206,207,10,7,0,
+  	0,207,208,5,19,0,0,208,210,5,35,0,0,209,187,1,0,0,0,209,190,1,0,0,0,209,
+  	193,1,0,0,0,209,196,1,0,0,0,209,199,1,0,0,0,209,206,1,0,0,0,210,213,1,
+  	0,0,0,211,209,1,0,0,0,211,212,1,0,0,0,212,27,1,0,0,0,213,211,1,0,0,0,
+  	21,31,36,44,47,50,62,65,72,75,86,95,104,112,117,121,124,139,161,185,209,
+  	211
   };
   staticData->serializedATN = antlr4::atn::SerializedATNView(serializedATNSegment, sizeof(serializedATNSegment) / sizeof(serializedATNSegment[0]));
 
@@ -1772,30 +1773,30 @@ braneParser::ExpressionContext* braneParser::expression(int precedence) {
     }
 
     case 9: {
-      _localctx = _tracker.createInstance<InlineScopeContext>(_localctx);
+      _localctx = _tracker.createInstance<CastContext>(_localctx);
       _ctx = _localctx;
       previousContext = _localctx;
       setState(177);
       match(braneParser::T__3);
       setState(178);
-      expression(0);
+      match(braneParser::ID);
       setState(179);
       match(braneParser::T__4);
+      setState(180);
+      expression(6);
       break;
     }
 
     case 10: {
-      _localctx = _tracker.createInstance<CastContext>(_localctx);
+      _localctx = _tracker.createInstance<InlineScopeContext>(_localctx);
       _ctx = _localctx;
       previousContext = _localctx;
       setState(181);
       match(braneParser::T__3);
       setState(182);
-      match(braneParser::ID);
+      expression(0);
       setState(183);
       match(braneParser::T__4);
-      setState(184);
-      expression(2);
       break;
     }
 
@@ -1821,7 +1822,7 @@ braneParser::ExpressionContext* braneParser::expression(int precedence) {
           pushNewRecursionContext(newContext, startState, RuleExpression);
           setState(187);
 
-          if (!(precpred(_ctx, 6))) throw FailedPredicateException(this, "precpred(_ctx, 6)");
+          if (!(precpred(_ctx, 5))) throw FailedPredicateException(this, "precpred(_ctx, 5)");
           setState(188);
           antlrcpp::downCast<MuldivContext *>(_localctx)->op = _input->LT(1);
           _la = _input->LA(1);
@@ -1835,7 +1836,7 @@ braneParser::ExpressionContext* braneParser::expression(int precedence) {
             consume();
           }
           setState(189);
-          antlrcpp::downCast<MuldivContext *>(_localctx)->right = expression(7);
+          antlrcpp::downCast<MuldivContext *>(_localctx)->right = expression(6);
           break;
         }
 
@@ -1846,7 +1847,7 @@ braneParser::ExpressionContext* braneParser::expression(int precedence) {
           pushNewRecursionContext(newContext, startState, RuleExpression);
           setState(190);
 
-          if (!(precpred(_ctx, 5))) throw FailedPredicateException(this, "precpred(_ctx, 5)");
+          if (!(precpred(_ctx, 4))) throw FailedPredicateException(this, "precpred(_ctx, 4)");
           setState(191);
           antlrcpp::downCast<AddsubContext *>(_localctx)->op = _input->LT(1);
           _la = _input->LA(1);
@@ -1860,7 +1861,7 @@ braneParser::ExpressionContext* braneParser::expression(int precedence) {
             consume();
           }
           setState(192);
-          antlrcpp::downCast<AddsubContext *>(_localctx)->right = expression(6);
+          antlrcpp::downCast<AddsubContext *>(_localctx)->right = expression(5);
           break;
         }
 
@@ -1871,7 +1872,7 @@ braneParser::ExpressionContext* braneParser::expression(int precedence) {
           pushNewRecursionContext(newContext, startState, RuleExpression);
           setState(193);
 
-          if (!(precpred(_ctx, 4))) throw FailedPredicateException(this, "precpred(_ctx, 4)");
+          if (!(precpred(_ctx, 3))) throw FailedPredicateException(this, "precpred(_ctx, 3)");
           setState(194);
           antlrcpp::downCast<ComparisonContext *>(_localctx)->op = _input->LT(1);
           _la = _input->LA(1);
@@ -1889,7 +1890,7 @@ braneParser::ExpressionContext* braneParser::expression(int precedence) {
             consume();
           }
           setState(195);
-          antlrcpp::downCast<ComparisonContext *>(_localctx)->right = expression(5);
+          antlrcpp::downCast<ComparisonContext *>(_localctx)->right = expression(4);
           break;
         }
 
@@ -1973,9 +1974,9 @@ bool braneParser::sempred(RuleContext *context, size_t ruleIndex, size_t predica
 
 bool braneParser::expressionSempred(ExpressionContext *_localctx, size_t predicateIndex) {
   switch (predicateIndex) {
-    case 0: return precpred(_ctx, 6);
-    case 1: return precpred(_ctx, 5);
-    case 2: return precpred(_ctx, 4);
+    case 0: return precpred(_ctx, 5);
+    case 1: return precpred(_ctx, 4);
+    case 2: return precpred(_ctx, 3);
     case 3: return precpred(_ctx, 1);
     case 4: return precpred(_ctx, 9);
     case 5: return precpred(_ctx, 7);

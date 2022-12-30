@@ -12,6 +12,7 @@
 #include "linker.h"
 #include "library.h"
 #include "structDefinition.h"
+#include "operator.h"
 #include <memory>
 
 namespace BraneScript
@@ -123,6 +124,17 @@ namespace BraneScript
         auto* lValue = std::any_cast<AotNode*>(visit(context->dest));
         PROPAGATE_NULL(lValue);
 
+        if(rValue->resType() != lValue->resType())
+        {
+            auto* castOpr = _linker->getOperator(oprSig(lValue->resType()->name(), rValue->resType()));
+            if(!castOpr)
+            {
+                throwError(context, "Can't implicitly cast " + std::string(rValue->resType()->name()) + " to " + lValue->resType()->name());
+                RETURN_NULL;
+            }
+            rValue = new AotUnaryOperatorNode(castOpr, rValue);
+        }
+
         return (AotNode*)new AotAssignNode(lValue, rValue);
     }
 
@@ -142,7 +154,7 @@ namespace BraneScript
 
     std::any Compiler::visitConstFloat(braneParser::ConstFloatContext* context)
     {
-        return (AotNode*)new AotConst(std::stof(context->FLOAT()->getText()), getType("float"));
+        return (AotNode*)new AotConstNode(std::stof(context->FLOAT()->getText()), getType("float"));
     }
 
     std::any Compiler::visitAddsub(braneParser::AddsubContext* context)
@@ -151,12 +163,19 @@ namespace BraneScript
         PROPAGATE_NULL(left);
         auto right = std::any_cast<AotNode*>(visit(context->right));
         PROPAGATE_NULL(right);
-        AotNode* node = nullptr;
-        if (context->op->getText() == "+")
-            node = new AotAddNode(left, right);
-        else
-            node = new AotSubNode(left, right);
-        return node;
+
+        auto* opr = _linker->getOperator(oprSig(context->op->getText(), left->resType(), right->resType()));
+        if(!opr)
+        {
+            castSameScalarType(left, right);
+            opr = _linker->getOperator(oprSig(context->op->getText(), left->resType(), right->resType()));
+        }
+        if(!opr)
+        {
+            throwError(context, "Could not find operator \"" + context->op->getText() + "\" with args " + left->resType()->name() + " and " + right->resType()->name());
+            RETURN_NULL;
+        }
+        return (AotNode*)new AotBinaryOperatorNode(opr, left, right);
     }
 
     std::any Compiler::visitMuldiv(braneParser::MuldivContext* context)
@@ -165,17 +184,24 @@ namespace BraneScript
         PROPAGATE_NULL(left);
         auto right = std::any_cast<AotNode*>(visit(context->right));
         PROPAGATE_NULL(right);
-        AotNode* node = nullptr;
-        if (context->op->getText() == "*")
-            node = new AotMulNode(left, right);
-        else
-            node = new AotDivNode(left, right);
-        return node;
+
+        auto* opr = _linker->getOperator(oprSig(context->op->getText(), left->resType(), right->resType()));
+        if(!opr)
+        {
+            castSameScalarType(left, right);
+            opr = _linker->getOperator(oprSig(context->op->getText(), left->resType(), right->resType()));
+        }
+        if(!opr)
+        {
+            throwError(context, "Could not find operator \"" + context->op->getText() + "\" with args " + left->resType()->name() + " and " + right->resType()->name());
+            RETURN_NULL;
+        }
+        return (AotNode*)new AotBinaryOperatorNode(opr, left, right);
     }
 
     std::any Compiler::visitConstInt(braneParser::ConstIntContext* context)
     {
-        return (AotNode*)new AotConst((int32_t)std::stoi(context->getText()), getType("int"));
+        return (AotNode*)new AotConstNode((int32_t)std::stoi(context->getText()), getType("int"));
     }
 
     std::any Compiler::visitId(braneParser::IdContext* context)
@@ -375,7 +401,23 @@ namespace BraneScript
 
     std::any Compiler::visitCast(braneParser::CastContext* ctx)
     {
-        return (AotNode*)new AotCastNode(std::any_cast<AotNode*>(visit(ctx->expression())), getType(ctx->ID()->getText()));
+        auto* expression = std::any_cast<AotNode*>(visit(ctx->expression()));
+        PROPAGATE_NULL(expression);
+
+        auto* castType = getType(ctx->ID()->getText());
+        if(!castType)
+        {
+            throwError(ctx->start++, "Type not found");
+            RETURN_NULL;
+        }
+
+        auto* castOpr = _linker->getOperator(oprSig(castType->name(), expression->resType()));
+        if(!castOpr)
+        {
+            throwError("Could not cast " + std::string(expression->resType()->name()) + " to " + castType->name());
+        }
+
+        return (AotNode*)new AotUnaryOperatorNode(castOpr, expression);
     }
 
     std::any Compiler::visitReturnVoid(braneParser::ReturnVoidContext* ctx)
@@ -395,8 +437,18 @@ namespace BraneScript
             throwError(ctx->expression()->start, "can't cast from void to " + _ctx->function->returnType.type);
             RETURN_NULL;
         }
-        if (retVal->resType()->name() != _ctx->function->returnType.type) //TODO check if a cast here is actually possible
-            retVal = new AotCastNode(retVal, getType(_ctx->function->returnType.type));
+
+        if (retVal->resType()->name() != _ctx->function->returnType.type)
+        {
+            auto* castOpr = _linker->getOperator(oprSig(_ctx->function->returnType.type, retVal->resType()));
+            if(!castOpr)
+            {
+                throwError("Could not implicitly cast " + std::string(retVal->resType()->name()) + " to " + _ctx->function->returnType.type);
+                RETURN_NULL;
+            }
+
+            retVal =  new AotUnaryOperatorNode(castOpr, retVal);
+        }
         _ctx->returnCalled = true;
         return (AotNode*)new AotReturnValueNode(retVal);
     }
@@ -439,9 +491,9 @@ namespace BraneScript
     std::any Compiler::visitConstBool(braneParser::ConstBoolContext* ctx)
     {
         if (ctx->getText() == "true")
-            return (AotNode*)new AotConst(true, getType("bool"));
+            return (AotNode*)new AotConstNode(true, getType("bool"));
         else
-            return (AotNode*)new AotConst(false, getType("bool"));
+            return (AotNode*)new AotConstNode(false, getType("bool"));
     }
 
     std::any Compiler::visitIf(braneParser::IfContext* ctx)
@@ -958,6 +1010,92 @@ namespace BraneScript
             ++fIndex;
         }
         return -1;
+    }
+
+    void Compiler::castSameScalarType(AotNode*& a, AotNode*& b)
+    {
+        if(a->resType() == b->resType())
+            return;
+        enum Side
+        {
+            Left, //cast b, keep a
+            Right //cast a, keep b
+        } side = Left;
+        switch(a->resType()->type())
+        {
+            case UInt32:
+                side = Right;
+                break;
+            case UInt64:
+                switch(b->resType()->type())
+                {
+                    case UInt32:
+                        side = Left;
+                        break;
+                    case Int32:
+                    case Int64:
+                    case Float32:
+                    case Float64:
+                        side = Right;
+                        break;
+                }
+                break;
+            case Int32:
+                switch(b->resType()->type())
+                {
+                    case UInt32:
+                    case UInt64:
+                        side = Left;
+                        break;
+                    case Int64:
+                    case Float32:
+                    case Float64:
+                        side = Right;
+                        break;
+                }
+                break;
+            case Int64:
+                switch(b->resType()->type())
+                {
+                    case UInt32:
+                    case UInt64:
+                    case Int32:
+                        side = Left;
+                        break;
+                    case Float32:
+                    case Float64:
+                        side = Right;
+                        break;
+                }
+                break;
+            case Float32:
+                switch(b->resType()->type())
+                {
+                    case UInt32:
+                    case UInt64:
+                    case Int32:
+                    case Int64:
+                        side = Left;
+                        break;
+                    case Float64:
+                        side = Right;
+                        break;
+                }
+                break;
+            case Float64:
+                side = Left;
+                break;
+        }
+        auto* originalType = (side == Left) ? b->resType() : a->resType();
+        auto* domType      = (side == Left) ? a->resType() : b->resType();
+        auto* castOpr = _linker->getOperator(oprSig(domType->name(), originalType));
+        if(!castOpr)
+            return;
+
+        if(side == Left)
+            b = new AotUnaryOperatorNode(castOpr, b);
+        else
+            a = new AotUnaryOperatorNode(castOpr, a);
     }
 
     CompilerCtx::CompilerCtx(Compiler& c, IRScript* s) : compiler(c), script(s)

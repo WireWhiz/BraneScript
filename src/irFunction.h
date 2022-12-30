@@ -9,7 +9,6 @@
 #include <vector>
 #include <string>
 #include <unordered_map>
-#include "baseTypes.h"
 #include "aotNode/aotNode.h"
 #include "operands.h"
 #include "typeInfo.h"

@@ -7,7 +7,6 @@
 
 #include <vector>
 #include <string>
-#include "baseTypes.h"
 #include "irFunction.h"
 namespace BraneScript
 {

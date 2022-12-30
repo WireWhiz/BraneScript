@@ -68,6 +68,7 @@ namespace BraneScript
             Deref,
             Cast,
             Compare,
+            Operator,
             Return,
             ReturnValue,
             Scope,

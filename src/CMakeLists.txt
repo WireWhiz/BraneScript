@@ -13,7 +13,7 @@ add_library(BraneScript STATIC
         library.cpp
         functionHandle.cpp
         linker.cpp
-        structDefinition.cpp)
+        structDefinition.cpp operator.cpp operator.h)
 target_link_libraries(BraneScript PUBLIC antlr4 asmjit)
 target_compile_definitions(BraneScript PUBLIC ASMJIT_EMBED)
-target_include_directories(BraneScript PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
+target_include_directories(BraneScript PUBLIC ${CMAKE_CURRENT_SOURCE_DIR} ../robin_hood)

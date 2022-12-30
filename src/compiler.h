@@ -112,6 +112,8 @@ namespace BraneScript
         void registerLocalValue(std::string name, AotValue* value, const TypeInfo& type);
         AotNode* getValueNode(const std::string& name);
 
+        void castSameScalarType(AotNode*& a, AotNode*& b);
+
         int16_t getLocalFunction(const std::string& name);
 
         void pushScope();
@@ -181,7 +183,6 @@ namespace BraneScript
         AotValue* castReg(AotValue* value);
         AotValue* blankValue();
         AotValue* derefPtr(AotValue* value,const TypeDef* type, uint16_t offset = 0);
-
     };
 
 }

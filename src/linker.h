@@ -5,17 +5,20 @@
 #include <string>
 #include "functionHandle.h"
 #include "library.h"
+#include "robin_hood.h"
 
 namespace BraneScript
 {
+    class Operator;
     class TypeDef;
     class Linker
     {
         Library _global;
-        std::unordered_map<std::string, TypeDef*> _globalTypes;
+        robin_hood::unordered_map<std::string, TypeDef*> _globalTypes;
+        robin_hood::unordered_map<std::string, Operator*> _operators;
+        robin_hood::unordered_map<std::string, Library*> _libraries;
     public:
         Linker();
-        std::unordered_map<std::string, Library*> libraries;
         Library* getLibrary(const std::string& name) const;
 
         void addLibrary(Library* lib);
@@ -26,6 +29,7 @@ namespace BraneScript
         const TypeDef* getType(const std::string& name) const;
         const StructDef* getStruct(const std::string& name) const;
         const FunctionData* getFunction(const std::string& name) const;
+        const Operator* getOperator(const std::string& name) const;
     };
 }
 

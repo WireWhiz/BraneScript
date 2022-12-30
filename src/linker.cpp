@@ -14,12 +14,13 @@ namespace BraneScript
     {
         for(auto& t : getNativeTypes())
             _globalTypes.emplace(t->name(), t);
+        _operators = nativeOperators();
     }
 
     Library* Linker::getLibrary(const std::string& name) const
     {
-        auto f = libraries.find(name);
-        if (f == libraries.end())
+        auto f = _libraries.find(name);
+        if (f == _libraries.end())
             return nullptr;
         return f->second;
     }
@@ -27,13 +28,13 @@ namespace BraneScript
     void Linker::addLibrary(Library* lib)
     {
         assert(lib);
-        libraries.insert({lib->name(), lib});
+        _libraries.insert({lib->name(), lib});
     }
 
     void Linker::removeLibrary(const std::string& name)
     {
-        assert(libraries.count(name));
-        libraries.erase(name);
+        assert(_libraries.count(name));
+        _libraries.erase(name);
     }
 
     const TypeDef* Linker::getType(const std::string& name) const
@@ -77,5 +78,13 @@ namespace BraneScript
     Library& Linker::globalLib()
     {
         return _global;
+    }
+
+    const Operator* Linker::getOperator(const std::string& name) const
+    {
+        auto opr = _operators.find(name);
+        if(opr != _operators.end())
+            return opr->second;
+        return nullptr;
     }
 }

@@ -10,12 +10,14 @@ namespace BraneScript
 {
     enum ValueType : uint8_t
     {
-        Bool = 1,
-        Int32 = 2,
-        Int64 = 3,
-        Float32 = 4,
-        Float64 = 5,
-        Struct = 6
+        Bool    = 1,
+        UInt32  = 2,
+        UInt64  = 3,
+        Int32   = 4,
+        Int64   = 5,
+        Float32 = 6,
+        Float64 = 7,
+        Struct  = 8
     };
 
     enum ValueStorageType : uint8_t

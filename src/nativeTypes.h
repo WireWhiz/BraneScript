@@ -6,41 +6,17 @@
 #define BRANESCRIPT_NATIVETYPES_H
 
 #include "typeDef.h"
+#include "robin_hood.h"
 #include <vector>
+#include <cstdarg>
+
 namespace BraneScript
 {
     std::vector<TypeDef*> getNativeTypes();
 
     TypeDef* getNativeTypeDef(ValueType type);
 
-    class BoolDef : public TypeDef
-    {
-    public:
-        const char* name() const override;
-
-        uint16_t size() const override;
-
-        ValueType type() const override;
-    };
-
-    class IntDef : public TypeDef
-    {
-    public:
-        const char* name() const override;
-
-        uint16_t size() const override;
-
-        ValueType type() const override;
-    };
-
-    class FloatDef : public TypeDef
-    {
-    public:
-        const char* name() const override;
-
-        uint16_t size() const override;
-
-        ValueType type() const override;
-    };
+    class Operator;
+    const robin_hood::unordered_map<std::string, Operator*>& nativeOperators();
 }
 #endif //BRANESCRIPT_NATIVETYPES_H

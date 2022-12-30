@@ -13,11 +13,11 @@
 #include "../typeInfo.h"
 namespace BraneScript
 {
-    class AotConst : public AotNode
+    class AotConstNode : public AotNode
     {
         std::any _value;
     public:
-        AotConst(std::any value, const TypeDef* resType);
+        AotConstNode(std::any value, const TypeDef* resType);
 
         AotNode* optimize() override;
 
@@ -29,13 +29,13 @@ namespace BraneScript
 
         bool isBool() const;
 
-        AotConst* operator+(const AotConst&);
+        AotConstNode* operator+(const AotConstNode&);
 
-        AotConst* operator-(const AotConst&);
+        AotConstNode* operator-(const AotConstNode&);
 
-        AotConst* operator*(const AotConst&);
+        AotConstNode* operator*(const AotConstNode&);
 
-        AotConst* operator/(const AotConst&);
+        AotConstNode* operator/(const AotConstNode&);
 
         AotNode* cast(const TypeDef* type) const;
     };

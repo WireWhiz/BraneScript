@@ -8,25 +8,29 @@
 #include "aotNode.h"
 #include <memory>
 #include <vector>
+#include <string>
+
 namespace BraneScript
 {
-    class AotSingleArgNode : public AotNode
+    class Linker;
+
+    class AotUnaryArgNode : public AotNode
     {
     public:
         std::unique_ptr<AotNode> arg;
 
-        explicit AotSingleArgNode(AotNode* arg, const TypeDef* resType, NodeType type);
+        explicit AotUnaryArgNode(AotNode* arg, const TypeDef* resType, NodeType type);
 
         AotNode* optimize() override;
     };
 
-    class AotDualArgNode : public AotNode
+    class AotBinaryArgNode : public AotNode
     {
     public:
         std::unique_ptr<AotNode> argA;
         std::unique_ptr<AotNode> argB;
 
-        explicit AotDualArgNode(AotNode* argA, AotNode* argB, const TypeDef* resType, NodeType type);
+        explicit AotBinaryArgNode(AotNode* argA, AotNode* argB, const TypeDef* resType, NodeType type);
 
         AotNode* optimize() override;
 
@@ -45,7 +49,7 @@ namespace BraneScript
         AotValue* generateBytecode(CompilerCtx& ctx) const override;
     };
 
-    class AotReturnValueNode : public AotSingleArgNode
+    class AotReturnValueNode : public AotUnaryArgNode
     {
     public:
         AotReturnValueNode(AotNode* arg);
@@ -53,17 +57,27 @@ namespace BraneScript
         AotValue* generateBytecode(CompilerCtx& ctx) const override;
     };
 
-    class AotCastNode : public AotSingleArgNode
+
+    class Operator;
+    class AotUnaryOperatorNode : public AotUnaryArgNode
     {
+        const Operator* _opr;
     public:
-        explicit AotCastNode(AotNode* arg, const TypeDef* castType);
-
+        AotUnaryOperatorNode(const Operator* opr, AotNode* arg);
         AotNode* optimize() override;
-
         AotValue* generateBytecode(CompilerCtx& ctx) const override;
     };
 
-    class AotAssignNode : public AotDualArgNode
+    class AotBinaryOperatorNode : public AotBinaryArgNode
+    {
+        const Operator* _opr;
+    public:
+        AotBinaryOperatorNode(const Operator* opr, AotNode* arg1, AotNode* arg2);
+        AotNode* optimize() override;
+        AotValue* generateBytecode(CompilerCtx& ctx) const override;
+    };
+
+    class AotAssignNode : public AotBinaryArgNode
     {
     public:
         AotAssignNode(AotNode* lvalue, AotNode* rvalue);
@@ -71,43 +85,7 @@ namespace BraneScript
         AotValue* generateBytecode(CompilerCtx& ctx) const override;
     };
 
-    class AotAddNode : public AotDualArgNode
-    {
-    public:
-        AotAddNode(AotNode* argA, AotNode* argB);
-
-        AotNode* optimize() override;
-
-        AotValue* generateBytecode(CompilerCtx& ctx) const override;
-    };
-
-    class AotSubNode : public AotDualArgNode
-    {
-    public:
-        AotSubNode(AotNode* argA, AotNode* argB);
-
-        AotNode* optimize() override;
-
-        AotValue* generateBytecode(CompilerCtx& ctx) const override;
-    };
-
-    class AotMulNode : public AotDualArgNode
-    {
-    public:
-        AotMulNode(AotNode* argA, AotNode* argB);
-
-        AotValue* generateBytecode(CompilerCtx& ctx) const override;
-    };
-
-    class AotDivNode : public AotDualArgNode
-    {
-    public:
-        AotDivNode(AotNode* argA, AotNode* argB);
-
-        AotValue* generateBytecode(CompilerCtx& ctx) const override;
-    };
-
-    class AotCompareNode : public AotDualArgNode
+    class AotCompareNode : public AotBinaryArgNode
     {
     public:
         enum Mode

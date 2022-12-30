@@ -57,11 +57,11 @@ expression  : INT                                                           #con
             | base=expression '.' name=ID '(' argumentPack ')'              #memberFunctionCall
             | ID                                                            #id
             | base=expression '.' member=ID                                 #memberAccess
+            | '(' ID ')' expression                                         #cast
             | left=expression op=(MUL | DIV) right=expression               #muldiv
             | left=expression op=(ADD | SUB) right=expression               #addsub
             | left=expression op=('==' | '!=' | '<' | '>' | '<=' | '>=') right=expression #comparison
             | '(' expression ')'                                            #inlineScope
-            | '(' ID ')' expression                                         #cast
             | dest=expression '=' expr=expression                           #assignment
             ;
 

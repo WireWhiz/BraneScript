@@ -8,16 +8,16 @@
 
 namespace BraneScript
 {
-    AotConst::AotConst(std::any value, const TypeDef* resType) : AotNode(resType, NodeType::Const), _value(std::move(value))
+    AotConstNode::AotConstNode(std::any value, const TypeDef* resType) : AotNode(resType, NodeType::Const), _value(std::move(value))
     {
     }
 
-    AotNode* AotConst::optimize()
+    AotNode* AotConstNode::optimize()
     {
         return this;
     }
 
-    AotValue* AotConst::generateBytecode(CompilerCtx& ctx) const
+    AotValue* AotConstNode::generateBytecode(CompilerCtx& ctx) const
     {
         auto value = ctx.newConst(_resType->type());
         switch (_resType->type())
@@ -45,12 +45,12 @@ namespace BraneScript
         return value;
     }
 
-    const std::any& AotConst::value() const
+    const std::any& AotConstNode::value() const
     {
         return _value;
     }
 
-    bool AotConst::isNumber() const
+    bool AotConstNode::isNumber() const
     {
         if (_value.type() == typeid(int32_t))
             return true;
@@ -63,18 +63,18 @@ namespace BraneScript
         return false;
     }
 
-    bool AotConst::isBool() const
+    bool AotConstNode::isBool() const
     {
         return _value.type() == typeid(bool);
     }
 
 #define CONST_OP(operator, t1, t2, rt, other) \
     if(_value.type() == typeid(t1) && other._value.type() == typeid(t2)) \
-        return new AotConst((rt)(std::any_cast<t1>(_value) operator std::any_cast<t2>(other._value)), dominantArgType(_resType, other._resType)); \
+        return new AotConstNode((rt)(std::any_cast<t1>(_value) operator std::any_cast<t2>(other._value)), dominantArgType(_resType, other._resType)); \
     if(_value.type() == typeid(t2) && other._value.type() == typeid(t1)) \
-        return new AotConst((rt)(std::any_cast<t2>(_value) operator std::any_cast<t1>(other._value)), dominantArgType(_resType, other._resType));
+        return new AotConstNode((rt)(std::any_cast<t2>(_value) operator std::any_cast<t1>(other._value)), dominantArgType(_resType, other._resType));
 
-    AotConst* AotConst::operator+(const AotConst& o)
+    AotConstNode* AotConstNode::operator+(const AotConstNode& o)
     {
         CONST_OP(+, int32_t, int32_t, int32_t, o);
         CONST_OP(+, int32_t, float, float, o);
@@ -84,7 +84,7 @@ namespace BraneScript
         return nullptr;
     }
 
-    AotConst* AotConst::operator-(const AotConst& o)
+    AotConstNode* AotConstNode::operator-(const AotConstNode& o)
     {
         CONST_OP(-, int32_t, int32_t, int32_t, o);
         CONST_OP(-, int32_t, float, float, o);
@@ -94,7 +94,7 @@ namespace BraneScript
         return nullptr;
     }
 
-    AotConst* AotConst::operator*(const AotConst& o)
+    AotConstNode* AotConstNode::operator*(const AotConstNode& o)
     {
         CONST_OP(*, int32_t, int32_t, int32_t, o);
         CONST_OP(*, int32_t, float, float, o);
@@ -104,7 +104,7 @@ namespace BraneScript
         return nullptr;
     }
 
-    AotConst* AotConst::operator/(const AotConst& o)
+    AotConstNode* AotConstNode::operator/(const AotConstNode& o)
     {
         CONST_OP(/, int32_t, int32_t, int32_t, o);
         CONST_OP(/, int32_t, float, float, o);
@@ -114,10 +114,10 @@ namespace BraneScript
         return nullptr;
     }
 
-    AotNode* AotConst::cast(const TypeDef* type) const
+    AotNode* AotConstNode::cast(const TypeDef* type) const
     {
         if (type == _resType)
-            return new AotConst(_value, _resType);
+            return new AotConstNode(_value, _resType);
         switch (_resType->type())
         {
             case Int32:
@@ -126,7 +126,7 @@ namespace BraneScript
                 switch (type->type())
                 {
                     case Float32:
-                        return new AotConst((float)(value), type);
+                        return new AotConstNode((float)(value), type);
                 }
                 break;
             }
@@ -136,7 +136,7 @@ namespace BraneScript
                 switch (type->type())
                 {
                     case Int32:
-                        return new AotConst((int32_t)value, type);
+                        return new AotConstNode((int32_t)value, type);
                 }
             }
         }
