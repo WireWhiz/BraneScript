@@ -84,24 +84,5 @@ namespace BraneScript
 
         AotValue* generateBytecode(CompilerCtx& ctx) const override;
     };
-
-    class AotCompareNode : public AotBinaryArgNode
-    {
-    public:
-        enum Mode
-        {
-            Equal = AotValue::EqualRes,
-            NotEqual = AotValue::NotEqualRes,
-            Greater = AotValue::GreaterRes,
-            GreaterEqual = AotValue::GreaterEqualRes
-        };
-    private:
-        Mode _mode;
-    public:
-
-        AotCompareNode(Mode mode, AotNode* a, AotNode* b);
-
-        AotValue* generateBytecode(CompilerCtx& ctx) const override;
-    };
 }
 #endif //BRANESCRIPT_AOTOPERATIONNODES_H

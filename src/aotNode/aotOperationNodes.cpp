@@ -214,40 +214,10 @@ namespace BraneScript
 
     AotValue* AotBinaryOperatorNode::generateBytecode(CompilerCtx& ctx) const
     {
-        return _opr->generateBytecode(ctx, argA->generateBytecode(ctx), argB->generateBytecode(ctx));
-    }
-
-    AotCompareNode::AotCompareNode(Mode mode, AotNode* a, AotNode* b) : _mode(mode), AotBinaryArgNode(a, b, getNativeTypeDef(ValueType::Bool), NodeType::Compare)
-    {
-        auto castType = dominantArgType(a->resType(), b->resType());
-    }
-
-    AotValue* AotCompareNode::generateBytecode(CompilerCtx& ctx) const
-    {
-        auto a = ctx.castReg(argA->generateBytecode(ctx));
-        auto b = argB->generateBytecode(ctx);
-
-        AotValue* result = ctx.blankValue();
-        bool sign = a->def->type() == Int32 || a->def->type() == Int64;
-        switch (_mode)
-        {
-            case Equal:
-            case NotEqual:
-                result->compareType = (AotValue::CompareType)_mode;
-                break;
-            case Greater:
-                result->compareType = sign ? AotValue::GreaterRes : AotValue::AboveRes;
-                break;
-            case GreaterEqual:
-                result->compareType = sign ? AotValue::GreaterEqualRes : AotValue::AboveEqualRes;
-                break;
-        }
-
-        result->def = resType();
-
-        ctx.function->appendCode(CMP, a->value(ctx), b->value(ctx));
-
-        return result;
+        auto a = argA->generateBytecode(ctx);
+        if(a->isCompare())
+            a = ctx.castReg(a);
+        return _opr->generateBytecode(ctx, a, argB->generateBytecode(ctx));
     }
 
     AotAssignNode::AotAssignNode(AotNode* lvalue, AotNode* rvalue) : AotBinaryArgNode(lvalue, rvalue, lvalue->resType(), NodeType::Assign)

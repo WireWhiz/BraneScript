@@ -512,31 +512,23 @@ namespace BraneScript
 
     std::any Compiler::visitComparison(braneParser::ComparisonContext* context)
     {
-        auto* a = std::any_cast<AotNode*>(visit(context->left));
-        auto* b = std::any_cast<AotNode*>(visit(context->right));
+        auto* left = std::any_cast<AotNode*>(visit(context->left));
+        auto* right = std::any_cast<AotNode*>(visit(context->right));
 
-        AotCompareNode::Mode mode = AotCompareNode::Mode::Equal;
         std::string symbol = context->op->getText();
-        if (symbol == "==")
-            mode = AotCompareNode::Equal;
-        else if (symbol == "!=")
-            mode = AotCompareNode::NotEqual;
-        else if (symbol == ">")
-            mode = AotCompareNode::Greater;
-        else if (symbol == ">=")
-            mode = AotCompareNode::GreaterEqual;
-        else if (symbol == "<")
+        auto* opr = _linker->getOperator(oprSig(context->op->getText(), left->resType(), right->resType()));
+        if(!opr)
         {
-            std::swap(a, b);
-            mode = AotCompareNode::Greater;
-        } else if (symbol == "<=")
+            castSameScalarType(left, right);
+            opr = _linker->getOperator(oprSig(context->op->getText(), left->resType(), right->resType()));
+        }
+        if(!opr)
         {
-            std::swap(a, b);
-            mode = AotCompareNode::GreaterEqual;
+            throwError(context, "Could not find operator \"" + context->op->getText() + "\" with args " + left->resType()->name() + " and " + right->resType()->name());
+            RETURN_NULL;
         }
 
-
-        return (AotNode*)new AotCompareNode(mode, a, b);
+        return (AotNode*)new AotBinaryOperatorNode(opr, left, right);
     }
 
     std::any Compiler::visitExprStatement(braneParser::ExprStatementContext* context)

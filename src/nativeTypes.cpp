@@ -352,6 +352,117 @@ namespace BraneScript
         }
     };
 
+    class CompareOpr : public ConstexprOperator
+    {
+        enum Mode
+        {
+            Equal = AotValue::EqualRes,
+            NotEqual = AotValue::NotEqualRes,
+            Greater = AotValue::GreaterRes,
+            GreaterEqual = AotValue::GreaterEqualRes
+        } _mode;
+        bool _swapOperands;
+
+#define PRECALCULATE_COMPARE(operator) \
+        switch(arg1->resType()->type())\
+        {\
+            case UInt32:\
+                return new AotConstNode(std::any_cast<uint32_t>(arg1->value()) operator std::any_cast<uint32_t>(arg2->value()), getNativeTypeDef(Bool));\
+            case UInt64:\
+                return new AotConstNode(std::any_cast<uint64_t>(arg1->value()) operator std::any_cast<uint64_t>(arg2->value()), getNativeTypeDef(Bool));\
+            case Int32:\
+                return new AotConstNode(std::any_cast<int32_t>(arg1->value()) operator std::any_cast<int32_t>(arg2->value()), getNativeTypeDef(Bool));\
+            case Int64:\
+                return new AotConstNode(std::any_cast<int64_t>(arg1->value()) operator std::any_cast<int64_t>(arg2->value()), getNativeTypeDef(Bool));\
+            case Float32:\
+                return new AotConstNode(std::any_cast<float>(arg1->value()) operator std::any_cast<float>(arg2->value()), getNativeTypeDef(Bool));\
+            case Float64:\
+                return new AotConstNode(std::any_cast<double>(arg1->value()) operator std::any_cast<double>(arg2->value()), getNativeTypeDef(Bool));\
+            default:\
+                throw std::runtime_error("tried to precalculate compare with unknown type");\
+        }
+
+    public:
+        CompareOpr(const std::string& symbol) : ConstexprOperator(symbol)
+        {
+            _swapOperands = false;
+            if(symbol == "==")
+                _mode = Equal;
+            else if(symbol == "!=")
+                _mode = NotEqual;
+            else if(symbol == ">")
+                _mode = Greater;
+            else if(symbol == ">=")
+                _mode = GreaterEqual;
+            else if(symbol == "<")
+            {
+                _mode = Greater;
+                _swapOperands = true;
+            }
+            else if(symbol == "<=")
+            {
+                _mode = GreaterEqual;
+                _swapOperands = true;
+            }
+            else
+                assert(false);
+        }
+
+        AotValue* generateBytecode(CompilerCtx& ctx, AotValue* left, AotValue* right) const override
+        {
+            if(_swapOperands)
+                std::swap(left, right);
+            left = ctx.castReg(left);
+
+            AotValue* result = ctx.blankValue();
+            bool sign = left->def->type() == Int32 || right->def->type() == Int64;
+            switch (_mode)
+            {
+                case Equal:
+                case NotEqual:
+                    result->compareType = (AotValue::CompareType)_mode;
+                    break;
+                case Greater:
+                    result->compareType = sign ? AotValue::GreaterRes : AotValue::AboveRes;
+                    break;
+                case GreaterEqual:
+                    result->compareType = sign ? AotValue::GreaterEqualRes : AotValue::AboveEqualRes;
+                    break;
+            }
+
+            result->def = resType();
+
+            ctx.function->appendCode(CMP, left->value(ctx), right->value(ctx));
+            return result;
+        }
+
+        AotNode* precalculate(AotConstNode* arg1, AotConstNode* arg2) const override
+        {
+            if(_swapOperands)
+                std::swap(arg1, arg2);
+            switch (_mode)
+            {
+                case Equal:
+                    PRECALCULATE_COMPARE(==)
+                    break;
+                case NotEqual:
+                    PRECALCULATE_COMPARE(!=)
+                    break;
+                case Greater:
+                    PRECALCULATE_COMPARE(>)
+                    break;
+                case GreaterEqual:
+                    PRECALCULATE_COMPARE(>=)
+                    break;
+            }
+            return nullptr;
+        }
+        const TypeDef* resType() const override
+        {
+            return getNativeTypeDef(Bool);
+        }
+    };
+
     robin_hood::unordered_map<std::string, Operator*> setupNativeOperators()
     {
         robin_hood::unordered_map<std::string, Operator*> oprs;
@@ -366,6 +477,8 @@ namespace BraneScript
             oprs.insert({oprSig("-", type, type), new SubtractionOpr(type)});
             oprs.insert({oprSig("*", type, type), new MultiplicationOpr(type)});
             oprs.insert({oprSig("/", type, type), new DivisionOpr(type)});
+            for(const char* cmpOp : {"==", "!=", "<", ">", "<=", ">="})
+                oprs.insert({oprSig(cmpOp, type, type), new CompareOpr(cmpOp)});
             for(auto type2 : scalarTypes)
             {
                 if(type == type2)
