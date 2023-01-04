@@ -5,61 +5,55 @@
 #include "../src/scriptRuntime.h"
 #include "../src/script.h"
 #include "../src/linker.h"
+#include <limits>
 
 using namespace BraneScript;
+
+template<typename... Args>
+std::string sformat(const char* format, Args... args)
+{
+    int size = std::snprintf(nullptr, 0, format, args...);
+    if(size <= 0)
+        throw std::runtime_error("String format error!");
+    std::string output;
+    output.resize(size - 1);
+    std::snprintf(output.data(), size, format, args...);
+    return std::move(output);
+}
 
 #define TEST_DUAL_ARG_OPERATOR(operator, function, argList)     \
     for(auto& argPair : argList)                                \
         EXPECT_EQ(function(argPair.first, argPair.second), argPair.first operator argPair.second) << "Operation args: " << argPair.first << ", " << argPair.second << std::endl;
 
+void addScalarTestFunctions(const std::string& typeName, std::string& script)
+{
+    script += "\n" + sformat("%s add(%s a, %s b){return a + b;}%s sub(%s a, %s b){return a - b;}%s mul(%s a, %s b){return a * b;}%s div(%s a, %s b){return a / b;})",
+                            typeName.c_str(), typeName.c_str(), typeName.c_str(),
+                            typeName.c_str(), typeName.c_str(), typeName.c_str(),
+                            typeName.c_str(), typeName.c_str(), typeName.c_str(),
+                            typeName.c_str(), typeName.c_str(), typeName.c_str());
+}
+
+template<typename T>
+void runScalarTestFunctions(const std::string& typeName, const Script* testScript, const std::vector<std::pair<T, T>>& testArgs)
+{
+    auto add = testScript->getFunction<T, T, T>("add");
+    ASSERT_TRUE(add);
+    TEST_DUAL_ARG_OPERATOR(+, add, testArgs);
+    auto sub = testScript->getFunction<T, T, T>("sub");
+    ASSERT_TRUE(sub);
+    TEST_DUAL_ARG_OPERATOR(-, sub, testArgs);
+    auto mul = testScript->getFunction<T, T, T>("mul");
+    ASSERT_TRUE(mul);
+    TEST_DUAL_ARG_OPERATOR(*, mul, testArgs);
+    auto div = testScript->getFunction<T, T, T>("div");
+    ASSERT_TRUE(div);
+    TEST_DUAL_ARG_OPERATOR(/, div, testArgs);
+}
+
 TEST(BraneScript, Operators)
 {
     std::string testString = R"(
-
-    //Addition/Subtraction
-    int testIntAdd(int a, int b)
-    {
-        return a + b;
-    }
-    float testFloatAdd(float a, float b)
-    {
-        return a + b;
-    }
-    float testIntFloatAdd(int a, float b)
-    {
-        return a + b;
-    }
-    int testIntSub(int a, int b)
-    {
-        return a - b;
-    }
-    float testFloatSub(float a, float b)
-    {
-        return a - b;
-    }
-    float testIntFloatSub(int a, float b)
-    {
-        return a - b;
-    }
-
-    //Multiplication/division
-    int testIntMul(int a, int b)
-    {
-        return a * b;
-    }
-    float testFloatMul(float a, float b)
-    {
-        return a * b;
-    }
-    int testIntDiv(int a, int b)
-    {
-        return a / b;
-    }
-    float testFloatDiv(float a, float b)
-    {
-        return a / b;
-    }
-
     //Casting
     bool testBoolCast(int a, int b)
     {
@@ -75,6 +69,13 @@ TEST(BraneScript, Operators)
     }
 )";
 
+    addScalarTestFunctions("int", testString);
+    addScalarTestFunctions("int64", testString);
+    addScalarTestFunctions("uint", testString);
+    addScalarTestFunctions("uint64", testString);
+    addScalarTestFunctions("float", testString);
+    addScalarTestFunctions("double", testString);
+
     Linker l;
     Compiler compiler(&l);
     auto* ir = compiler.compile(testString);
@@ -84,49 +85,6 @@ TEST(BraneScript, Operators)
     ScriptRuntime rt;
     Script* testScript = rt.assembleScript(ir);
     ASSERT_TRUE(testScript);
-
-    std::vector<std::pair<int32_t, int32_t>>     intTestArgs =   {{0, 1},{1, 1},{2, 3}, {3, 3}, {123451, 12332169}, {0, -1}, {-1234123, 12341612}};
-    std::vector<std::pair<float, float>>         floatTestArgs = {{0.0f, 1.0f},{1.0f, 1.0f},{2.4f, 3.2f}, {3.0f, 3.0f}, {123451.0f, 12332169.0f}, {0.0f, -1.0f}, {-1234123.126414f, 12341612.4123f}};
-    std::vector<std::pair<int32_t, float>>       intFloatTestArgs = {{0, 1.0f},{1, 1.0f},{2, 3.0f}, {3, 3.0f}, {123451, 12332169.0f}, {0, -1.0f}, {-1234123, 12341612.0f}};
-
-    //Addition/subtraction
-    auto testIntAdd = testScript->getFunction<int, int, int>("testIntAdd");
-    ASSERT_TRUE(testIntAdd);
-    TEST_DUAL_ARG_OPERATOR(+, testIntAdd, intTestArgs);
-    auto testIntSub = testScript->getFunction<int, int, int>("testIntSub");
-    ASSERT_TRUE(testIntSub);
-    TEST_DUAL_ARG_OPERATOR(-, testIntSub, intTestArgs);
-
-    auto testFloatAdd = testScript->getFunction<float, float, float>("testFloatAdd");
-    ASSERT_TRUE(testFloatAdd);
-    TEST_DUAL_ARG_OPERATOR(+, testFloatAdd, floatTestArgs);
-    auto testFloatSub = testScript->getFunction<float, float, float>("testFloatSub");
-    ASSERT_TRUE(testFloatSub);
-    TEST_DUAL_ARG_OPERATOR(-, testFloatSub, floatTestArgs);
-
-    auto testIntFloatAdd = testScript->getFunction<float, int, float>("testIntFloatAdd");
-    ASSERT_TRUE(testIntFloatAdd);
-    TEST_DUAL_ARG_OPERATOR(+, testIntFloatAdd, intFloatTestArgs);
-    auto testIntFloatSub = testScript->getFunction<float, int, float>("testIntFloatSub");
-    ASSERT_TRUE(testIntFloatSub);
-    TEST_DUAL_ARG_OPERATOR(-, testIntFloatSub, intFloatTestArgs);
-
-    //Multiplication/division
-    auto testIntMul = testScript->getFunction<int, int, int>("testIntMul");
-    EXPECT_TRUE(testIntMul);
-    TEST_DUAL_ARG_OPERATOR(*, testIntMul, intTestArgs);
-    auto testIntDiv = testScript->getFunction<int, int, int>("testIntDiv");
-    EXPECT_TRUE(testIntDiv);
-    for(auto& argPair : intTestArgs)
-        testIntDiv(argPair.first, argPair.second);
-    TEST_DUAL_ARG_OPERATOR(/, testIntDiv, intTestArgs);
-
-    auto testFloatMul = testScript->getFunction<float, float, float>("testFloatMul");
-    EXPECT_TRUE(testFloatMul);
-    TEST_DUAL_ARG_OPERATOR(*, testFloatMul, floatTestArgs);
-    auto testFloatDiv = testScript->getFunction<float, float, float>("testFloatDiv");
-    EXPECT_TRUE(testFloatDiv);
-    TEST_DUAL_ARG_OPERATOR(/, testFloatDiv, floatTestArgs);
 
     //Casting
     auto testBoolCast = testScript->getFunction<bool, int, int>("testBoolCast");
@@ -140,5 +98,52 @@ TEST(BraneScript, Operators)
     auto testIntCast = testScript->getFunction<int, float>("testIntCast");
     EXPECT_TRUE(testIntCast);
     EXPECT_EQ(testIntCast(23.23f), 23);
+
+    //Arithmatic
+    runScalarTestFunctions<int32_t>("int", testScript, {
+        {0, 1},
+        {1, 1},
+        {2, 3},
+        {3, 3},
+        {123451, 12332169},
+        {0, -1},
+        {std::numeric_limits<int32_t>::min(), std::numeric_limits<int32_t>::max()}});
+    runScalarTestFunctions<int64_t>("int64", testScript, {
+        {0, 1},
+        {1, 1},
+        {2, 3},
+        {3, 3},
+        {123451, 12332169},
+        {0, -1},
+        {std::numeric_limits<int32_t>::min(), std::numeric_limits<int32_t>::max()},
+        {std::numeric_limits<int64_t>::min(), std::numeric_limits<int64_t>::max()}});
+    runScalarTestFunctions<uint32_t>("uint", testScript, {
+        {0u, 1u},
+        {1u, 1u},
+        {2u, 3u},
+        {3u, 3u},
+        {123451u, 12332169u}});
+    runScalarTestFunctions<uint64_t>("uint64", testScript, {
+        {0lu, 1lu},
+        {1lu, 1lu},
+        {2lu, 3lu},
+        {3lu, 3lu},
+        {123451lu, 12332169lu}});
+    runScalarTestFunctions<float>("float", testScript, {
+        {0.0f, 1.0f},
+        {1.0f, 1.0f},
+        {2.4f, 3.2f},
+        {3.0f, 3.0f},
+        {123451.0f, 12332169.0f},
+        {0.0f, -1.0f},
+        {-1234123.126414f, 12341612.4123f}});
+    runScalarTestFunctions<double>("double", testScript, {
+        {0.0, 1.0},
+        {1.0, 1.0},
+        {2.4, 3.2},
+        {3.0, 3.0},
+        {123451.0, 12332169.0},
+        {0.0, -1.0},
+        {-1234123.126414, 12341612.4123}});
 
 }

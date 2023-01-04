@@ -20,7 +20,7 @@ namespace BraneScript
         std::unordered_map<std::string, size_t> functionNames;
 
         template<typename Ret, typename... Args>
-        FunctionHandle<Ret, Args...> getFunction(const std::string& name)
+        FunctionHandle<Ret, Args...> getFunction(const std::string& name) const
         {
             std::string arguments;
             //Check to see if arguments already have been filled in
