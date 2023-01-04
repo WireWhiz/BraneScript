@@ -64,6 +64,12 @@ namespace BraneScript
             name = "bool";
         if constexpr(std::is_same<T, int32_t>())
             name = "int";
+        if constexpr(std::is_same<T, uint32_t>())
+            name = "uint";
+        if constexpr(std::is_same<T, int64_t>())
+            name = "int64";
+        if constexpr(std::is_same<T, uint64_t>())
+            name = "uint64";
         if constexpr(std::is_same<T, float>())
             name = "float";
         if constexpr(std::is_same<T, double>())

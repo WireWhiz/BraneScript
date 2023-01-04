@@ -53,6 +53,17 @@ namespace BraneScript
         SUB,   // (ValueIndex value, ValueIndex value) subtract values.
         MUL,   // (ValueIndex value, ValueIndex value) multiply values.
         DIV,   // (ValueIndex value, ValueIndex value) divide values.
+
+        CU32I32, // (ValueIndex value, ValueIndex value) cast 32 bit unsigned int to 32 bit int
+        CU64I64, // (ValueIndex value, ValueIndex value) cast 64 bit unsigned int to 64 bit int
+
+        CI32I64, // (ValueIndex value, ValueIndex value) cast 32 bit int to 64 bit int
+        CF32F64, // (ValueIndex value, ValueIndex value) cast 32 bit int to 64 bit float
+        CF64F32, // (ValueIndex value, ValueIndex value) cast 64 bit int to 32 bit float
+        CI32F32, // (ValueIndex value, ValueIndex value) cast 32 bit int to 32 bit float
+        CI32F64, // (ValueIndex value, ValueIndex value) cast 32 bit int to 64 bit float
+        CF32I32, // (ValueIndex value, ValueIndex value) cast 32 bit float to 32 bit int
+        CF64I32, // (ValueIndex value, ValueIndex value) cast 64 bit float to 32 bit int
     };
 }
 #endif //BRANESCRIPT_OPERANDS_H

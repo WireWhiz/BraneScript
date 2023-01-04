@@ -68,6 +68,44 @@ namespace BraneScript
         }
     };
 
+    class UInt64Def : public TypeDef
+    {
+    public:
+        const char* name() const override
+        {
+            return "uint64";
+        }
+
+        uint16_t size() const override
+        {
+            return sizeof(uint64_t);
+        }
+
+        ValueType type() const override
+        {
+            return UInt64;
+        }
+    };
+
+    class Int64Def : public TypeDef
+    {
+    public:
+        const char* name() const override
+        {
+            return "int64";
+        }
+
+        uint16_t size() const override
+        {
+            return sizeof(int64_t);
+        }
+
+        ValueType type() const override
+        {
+            return Int64;
+        }
+    };
+
     class FloatDef : public TypeDef
     {
     public:
@@ -87,7 +125,26 @@ namespace BraneScript
         }
     };
 
-    std::vector<TypeDef*> nativeTypes({new BoolDef(), new UIntDef(), new IntDef(), new FloatDef()});
+    class Float64Def : public TypeDef
+    {
+    public:
+        const char* name() const override
+        {
+            return "double";
+        }
+
+        uint16_t size() const override
+        {
+            return sizeof(double);
+        }
+
+        ValueType type() const override
+        {
+            return Float64;
+        }
+    };
+
+    std::vector<TypeDef*> nativeTypes({new BoolDef(), new UIntDef(), new IntDef(), new UInt64Def(), new Int64Def(), new FloatDef(), new Float64Def()});
 
     std::vector<TypeDef*> getNativeTypes()
     {
@@ -106,13 +163,15 @@ namespace BraneScript
             case Int32:
                 return nativeTypes[2];
             case UInt64:
-                break;
-            case Int64:
-                break;
-            case Float32:
                 return nativeTypes[3];
+            case Int64:
+                return nativeTypes[4];
+            case Float32:
+                return nativeTypes[5];
             case Float64:
-                break;
+                return nativeTypes[6];
+            case Struct:
+                throw std::runtime_error("No native definition for struct type");
         }
         return nullptr;
     };
@@ -154,7 +213,168 @@ namespace BraneScript
 
             source = ctx.castReg(source);
             AotValue* castValue = ctx.newReg(_resType->name(), AotValue::Temp);
-            ctx.function->appendCode(MOV, castValue->value(ctx), source->value(ctx));
+
+            switch(_resType->type())
+            {
+                case UInt32:
+                    switch(source->def->type())
+                    {
+                        case UInt64:
+                        case Int32:
+                        case Int64:
+                            ctx.function->appendCode(Operand::MOV, castValue->value(ctx), source->value(ctx));
+                            break;
+                        case Float32:
+                            ctx.function->appendCode(Operand::CF32I32, castValue->value(ctx), source->value(ctx));
+                            break;
+                        case Float64:
+                            ctx.function->appendCode(Operand::CF64I32, castValue->value(ctx), source->value(ctx));
+                            break;
+                        default:
+                            assert(false);
+                    }
+                    break;
+                case UInt64:
+                    switch(source->def->type())
+                    {
+                        case UInt32:
+                        case Int32:
+                        case Int64:
+                            ctx.function->appendCode(Operand::MOV, castValue->value(ctx), source->value(ctx));
+                            ctx.function->appendCode(Operand::MOV, castValue->value(ctx), source->value(ctx));
+                            break;
+                        case Float32:
+                            ctx.function->appendCode(Operand::CF32I32, castValue->value(ctx), source->value(ctx));
+                            break;
+                        case Float64:
+                            ctx.function->appendCode(Operand::CF64I32, castValue->value(ctx), source->value(ctx));
+                            break;
+                        default:
+                            assert(false);
+                    }
+                    break;
+                case Int32:
+                    switch(source->def->type())
+                    {
+                        case UInt32:
+                        case UInt64:
+                            ctx.function->appendCode(Operand::CU32I32, castValue->value(ctx), source->value(ctx));
+                            break;
+                        case Int64:
+                            ctx.function->appendCode(Operand::MOV, castValue->value(ctx), source->value(ctx));
+                            break;
+                        case Float32:
+                            ctx.function->appendCode(Operand::CF32I32, castValue->value(ctx), source->value(ctx));
+                            break;
+                        case Float64:
+                            ctx.function->appendCode(Operand::CF64I32, castValue->value(ctx), source->value(ctx));
+                            break;
+                        default:
+                            assert(false);
+                    }
+                    break;
+                case Int64:
+                    switch(source->def->type())
+                    {
+                        case UInt32:
+                            ctx.function->appendCode(Operand::MOV, castValue->value(ctx), source->value(ctx));
+                            break;
+                        case UInt64:
+                            ctx.function->appendCode(Operand::CU64I64, castValue->value(ctx), source->value(ctx));
+                            break;
+                        case Int32:
+                            ctx.function->appendCode(Operand::CI32I64, castValue->value(ctx), source->value(ctx));
+                            break;
+                        case Float32:
+                        {
+                            auto temp = ctx.newReg(getNativeTypeDef(Int32), 0);
+                            ctx.function->appendCode(Operand::CF32I32, temp->value(ctx), source->value(ctx));
+                            ctx.function->appendCode(Operand::CI32I64, castValue->value(ctx), temp->value(ctx));
+                        }
+                            break;
+                        case Float64:
+                        {
+                            auto temp = ctx.newReg(getNativeTypeDef(Int32), 0);
+                            ctx.function->appendCode(Operand::CF64I32, temp->value(ctx), source->value(ctx));
+                            ctx.function->appendCode(Operand::CI32I64, castValue->value(ctx), temp->value(ctx));
+                        }
+                            break;
+                        default:
+                            assert(false);
+                    }
+                    break;
+                case Float32:
+                    switch(source->def->type())
+                    {
+                        case UInt32:
+                        {
+                            auto temp = ctx.newReg(getNativeTypeDef(Int32), 0);
+                            ctx.function->appendCode(Operand::CU32I32, temp->value(ctx), source->value(ctx));
+                            ctx.function->appendCode(Operand::CI32F32, castValue->value(ctx), temp->value(ctx));
+                        }
+                            break;
+                        case UInt64:
+                        {
+                            auto temp = ctx.newReg(getNativeTypeDef(Int32), 0);
+                            ctx.function->appendCode(Operand::CU32I32, temp->value(ctx), source->value(ctx));
+                            ctx.function->appendCode(Operand::CI32F32, castValue->value(ctx), temp->value(ctx));
+                        }
+                            break;
+                        case Int32:
+                            ctx.function->appendCode(Operand::CI32F32, castValue->value(ctx), source->value(ctx));
+                            break;
+                        case Int64:
+                        {
+                            auto temp = ctx.newReg(getNativeTypeDef(Int32), 0);
+                            ctx.function->appendCode(Operand::MOV, temp->value(ctx), source->value(ctx));
+                            ctx.function->appendCode(Operand::CI32F32, castValue->value(ctx), temp->value(ctx));
+                        }
+                            break;
+                        case Float64:
+                            ctx.function->appendCode(Operand::CF64F32, castValue->value(ctx), source->value(ctx));
+                            break;
+                        default:
+                            assert(false);
+                    }
+                    break;
+                case Float64:
+                    switch(source->def->type())
+                    {
+                        case UInt32:
+                        {
+                            auto temp = ctx.newReg(getNativeTypeDef(Int32), 0);
+                            ctx.function->appendCode(Operand::CU32I32, temp->value(ctx), source->value(ctx));
+                            ctx.function->appendCode(Operand::CI32F64, castValue->value(ctx), temp->value(ctx));
+                        }
+                            break;
+                        case UInt64:
+                        {
+                            auto temp = ctx.newReg(getNativeTypeDef(Int32), 0);
+                            ctx.function->appendCode(Operand::CU32I32, temp->value(ctx), source->value(ctx));
+                            ctx.function->appendCode(Operand::CI32F64, castValue->value(ctx), temp->value(ctx));
+                        }
+                            break;
+                        case Int32:
+                            ctx.function->appendCode(Operand::CI32F64, castValue->value(ctx), source->value(ctx));
+                            break;
+                        case Int64:
+                        {
+                            auto temp = ctx.newReg(getNativeTypeDef(Int32), 0);
+                            ctx.function->appendCode(Operand::MOV, temp->value(ctx), source->value(ctx));
+                            ctx.function->appendCode(Operand::CI32F64, castValue->value(ctx), temp->value(ctx));
+                        }
+                            break;
+                        case Float64:
+                            ctx.function->appendCode(Operand::CF32F64, castValue->value(ctx), source->value(ctx));
+                            break;
+                        default:
+                            assert(false);
+                    }
+                    break;
+                default:
+                    assert(false);
+            }
+            assert(castValue);
             return castValue;
         }
         const TypeDef* resType() const override
@@ -469,7 +689,10 @@ namespace BraneScript
         auto scalarTypes = {
                 getNativeTypeDef(UInt32),
                 getNativeTypeDef(Int32),
-                getNativeTypeDef(Float32)
+                getNativeTypeDef(UInt64),
+                getNativeTypeDef(Int64),
+                getNativeTypeDef(Float32),
+                getNativeTypeDef(Float64)
         };
         for(auto type : scalarTypes)
         {
@@ -479,6 +702,7 @@ namespace BraneScript
             oprs.insert({oprSig("/", type, type), new DivisionOpr(type)});
             for(const char* cmpOp : {"==", "!=", "<", ">", "<=", ">="})
                 oprs.insert({oprSig(cmpOp, type, type), new CompareOpr(cmpOp)});
+            //Add cast operators
             for(auto type2 : scalarTypes)
             {
                 if(type == type2)

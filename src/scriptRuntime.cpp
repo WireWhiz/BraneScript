@@ -52,9 +52,12 @@ namespace BraneScript
     {
         if (str == "void") return asmjit::TypeId::kVoid;
         if (str == "bool") return asmjit::TypeId::kUInt8;
-        if (str == "int") return asmjit::TypeId::kInt32;
-        if (str == "float") return asmjit::TypeId::kFloat32;
         if (str == "uint") return asmjit::TypeId::kUInt32;
+        if (str == "uint64") return asmjit::TypeId::kUInt64;
+        if (str == "int") return asmjit::TypeId::kInt32;
+        if (str == "int64") return asmjit::TypeId::kInt64;
+        if (str == "float") return asmjit::TypeId::kFloat32;
+        if (str == "double") return asmjit::TypeId::kFloat64;
         return asmjit::TypeId::kIntPtr;
     }
 
@@ -95,6 +98,8 @@ namespace BraneScript
         switch (value.valueType)
         {
             case Bool:
+            case UInt32:
+            case UInt64:
             case Int32:
             case Int64:
                 return ValueRegType::gp;
@@ -167,11 +172,21 @@ namespace BraneScript
                 case ValueType::Bool:
                     registers.push_back(cc.newUInt8());
                     break;
+                case ValueType::UInt32:
+                    registers.push_back(cc.newUInt32());
                 case ValueType::Int32:
                     registers.push_back(cc.newInt32());
                     break;
+                case ValueType::UInt64:
+                    registers.push_back(cc.newUInt64());
+                case ValueType::Int64:
+                    registers.push_back(cc.newInt64());
+                    break;
                 case ValueType::Float32:
                     registers.push_back(cc.newXmmSs());
+                    break;
+                case ValueType::Float64:
+                    registers.push_back(cc.newXmmSd());
                     break;
                 case ValueType::Struct:
                     registers.push_back(cc.newIntPtr());
@@ -346,11 +361,23 @@ namespace BraneScript
                     case asmjit::TypeId::kUInt8:
                         ctx.registers.push_back(cc.newGpb());
                         break;
+                    case asmjit::TypeId::kUInt32:
+                        ctx.registers.push_back(cc.newUInt32());
+                        break;
+                    case asmjit::TypeId::kUInt64:
+                        ctx.registers.push_back(cc.newUInt64());
+                        break;
                     case asmjit::TypeId::kInt32:
                         ctx.registers.push_back(cc.newInt32());
                         break;
+                    case asmjit::TypeId::kInt64:
+                        ctx.registers.push_back(cc.newInt64());
+                        break;
                     case asmjit::TypeId::kFloat32:
                         ctx.registers.push_back(cc.newXmmSs());
+                        break;
+                    case asmjit::TypeId::kFloat64:
+                        ctx.registers.push_back(cc.newXmmSd());
                         break;
                     case asmjit::TypeId::kIntPtr:
                         ctx.registers.push_back(cc.newIntPtr());
@@ -465,25 +492,53 @@ namespace BraneScript
                         {
                             case Bool:
                             {
-                                int32_t val = ctx.readCode<uint8_t>();
+                                auto val = ctx.readCode<uint8_t>();
                                 printf("bool %i\n", val);
                                 ctx.constants.push_back(cc.newByteConst(asmjit::ConstPoolScope::kLocal, val));
                                 break;
                             }
+                            case UInt32:
+                            {
+                                auto val = ctx.readCode<uint32_t>();
+                                printf("uint32 %u\n", val);
+                                ctx.constants.push_back(cc.newUInt32Const(asmjit::ConstPoolScope::kLocal, val));
+                                break;
+                            }
                             case Int32:
                             {
-                                int32_t val = ctx.readCode<int32_t>();
-                                printf("int %i\n", val);
+                                auto val = ctx.readCode<int32_t>();
+                                printf("int32 %i\n", val);
                                 ctx.constants.push_back(cc.newInt32Const(asmjit::ConstPoolScope::kLocal, val));
-                            }
                                 break;
+                            }
+                            case UInt64:
+                            {
+                                auto val = ctx.readCode<uint64_t>();
+                                printf("uint64 %llu\n", val);
+                                ctx.constants.push_back(cc.newUInt64Const(asmjit::ConstPoolScope::kLocal, val));
+                                break;
+                            }
+                            case Int64:
+                            {
+                                auto val = ctx.readCode<int64_t>();
+                                printf("int64 %lli\n", val);
+                                ctx.constants.push_back(cc.newInt64Const(asmjit::ConstPoolScope::kLocal, val));
+                                break;
+                            }
                             case Float32:
                             {
-                                float val = ctx.readCode<float>();
+                                auto val = ctx.readCode<float>();
                                 printf("float %f\n", val);
                                 ctx.constants.push_back(cc.newFloatConst(asmjit::ConstPoolScope::kLocal, val));
-                            }
                                 break;
+                            }
+                            case Float64:
+                            {
+                                auto val = ctx.readCode<double>();
+                                printf("double %f\n", val);
+                                ctx.constants.push_back(cc.newDoubleConst(asmjit::ConstPoolScope::kLocal, val));
+                                break;
+                            }
                             default:
                                 assert(false);
                         }
@@ -733,28 +788,15 @@ namespace BraneScript
                                 cc.mov(destMem, srcReg);
                             }
                                 break;
-                            case gp_xmm:
-                            {
-                                printf("gp%hu xmm%hu\n", dest.index, src.index);
-                                auto destReg = ctx.getReg<Gp>(dest);
-                                auto srcReg = ctx.getReg<Xmm>(src);
-                                cc.cvttss2si(destReg, srcReg);
-                            }
-                                break;
                             case xmm_xmm:
                             {
                                 printf("xmm%hu xmm%hu\n", dest.index, src.index);
                                 auto destReg = ctx.getReg<Xmm>(dest);
                                 auto srcReg = ctx.getReg<Xmm>(src);
-                                cc.movss(destReg, srcReg);
-                            }
-                                break;
-                            case xmm_gp:
-                            {
-                                printf("xmm%hu gp%hu\n", dest.index, src.index);
-                                auto destReg = ctx.getReg<Xmm>(dest);
-                                auto srcReg = ctx.getReg<Gp>(src);
-                                cc.cvtsi2ss(destReg, srcReg);
+                                if(dest.valueType == Float32)
+                                    cc.movss(destReg, srcReg);
+                                else
+                                    cc.movsd(destReg, srcReg);
                             }
                                 break;
                             case xmm_mem:
@@ -762,7 +804,10 @@ namespace BraneScript
                                 printf("xmm%hu mem%hu (+%hu)\n", dest.index, src.index, src.offset);
                                 auto destReg = ctx.getReg<Xmm>(dest);
                                 auto srcMem = ctx.getReg<Mem>(src);
-                                cc.movss(destReg, srcMem);
+                                if(dest.valueType == Float32)
+                                    cc.movss(destReg, srcMem);
+                                else
+                                    cc.movsd(destReg, srcMem);
                             }
                                 break;
                             case mem_xmm:
@@ -770,7 +815,10 @@ namespace BraneScript
                                 printf("mem%hu (+%hu) xmm%hu\n", dest.index, dest.offset, src.index);
                                 auto destMem = ctx.getReg<Mem>(dest);
                                 auto srcReg = ctx.getReg<Xmm>(src);
-                                cc.movss(destMem, srcReg);
+                                if(src.valueType == Float32)
+                                    cc.movss(destMem, srcReg);
+                                else
+                                    cc.movsd(destMem, srcReg);
                                 break;
                             }
                             case mem_mem:
@@ -784,10 +832,12 @@ namespace BraneScript
                                     case Bool:
                                         tempReg = cc.newGpb();
                                         break;
+                                    case UInt32:
                                     case Int32:
                                     case Float32:
                                         tempReg = cc.newGpd();
                                         break;
+                                    case UInt64:
                                     case Int64:
                                     case Float64:
                                         tempReg = cc.newGpq();
@@ -842,6 +892,94 @@ namespace BraneScript
                         }
                         break;
                     }
+                    case CI32I64:
+                    {
+                        auto dest = ctx.readCode<Value>();
+                        auto src = ctx.readCode<Value>();
+                        ctx.verifyValue(dest, cc);
+
+                        printf("CI32I64 gp%hu gp%hu\n", dest.index, src.index);
+                        auto destReg = ctx.getReg<Gpq>(dest);
+                        auto srcReg = ctx.getReg<Gp>(src);
+
+                        cc.mov(destReg, srcReg);
+                        cc.cdqe(destReg);
+                        break;
+                    }
+                    case CU32I32:
+                    {
+                        auto dest = ctx.readCode<Value>();
+                        auto src = ctx.readCode<Value>();
+                        ctx.verifyValue(dest, cc);
+
+                        printf("CU32I32 gp%hu gp%hu\n", dest.index, src.index);
+                        auto destReg = ctx.getReg<Gpd>(dest);
+                        auto srcReg = ctx.getReg<Gpw>(src);
+
+                        cc.movzx(destReg, srcReg);
+                        break;
+                    }
+                    case CU64I64:
+                    {
+                        auto dest = ctx.readCode<Value>();
+                        auto src = ctx.readCode<Value>();
+                        ctx.verifyValue(dest, cc);
+
+                        printf("CU64I64 gp%hu gp%hu\n", dest.index, src.index);
+                        auto destReg = ctx.getReg<Gpq>(dest);
+                        auto srcReg = ctx.getReg<Gpd>(src);
+
+                        cc.movzx(destReg, srcReg);
+                        break;
+                    }
+                    case CF32I32:
+                    {
+                        auto dest = ctx.readCode<Value>();
+                        auto src = ctx.readCode<Value>();
+                        ctx.verifyValue(dest, cc);
+
+                        printf("CI32F32 gp%hu xmm%hu\n", dest.index, src.index);
+                        auto destReg = ctx.getReg<Gp>(dest);
+                        auto srcReg = ctx.getReg<Xmm>(src);
+                        cc.cvttss2si(destReg, srcReg);
+                    }
+                        break;
+                    case CF64I32:
+                    {
+                        auto dest = ctx.readCode<Value>();
+                        auto src = ctx.readCode<Value>();
+                        ctx.verifyValue(dest, cc);
+
+                        printf("CI32F64 gp%hu xmm%hu\n", dest.index, src.index);
+                        auto destReg = ctx.getReg<Gp>(dest);
+                        auto srcReg = ctx.getReg<Xmm>(src);
+                        cc.cvttsd2si(destReg, srcReg);
+                    }
+                        break;
+                    case CI32F32:
+                    {
+                        auto dest = ctx.readCode<Value>();
+                        auto src = ctx.readCode<Value>();
+                        ctx.verifyValue(dest, cc);
+
+                        printf("CI32F32 xmm%hu gp%hu\n", dest.index, src.index);
+                        auto destReg = ctx.getReg<Xmm>(dest);
+                        auto srcReg = ctx.getReg<Gp>(src);
+                        cc.cvtsi2ss(destReg, srcReg);
+                    }
+                        break;
+                    case CI32F64:
+                    {
+                        auto dest = ctx.readCode<Value>();
+                        auto src = ctx.readCode<Value>();
+                        ctx.verifyValue(dest, cc);
+
+                        printf("CI32F64 xmm%hu gp%hu\n", dest.index, src.index);
+                        auto destReg = ctx.getReg<Xmm>(dest);
+                        auto srcReg = ctx.getReg<Gp>(src);
+                        cc.cvtsi2sd(destReg, srcReg);
+                    }
+                        break;
                     case SETE:
                     {
                         auto regIndex = ctx.readCode<Value>();
@@ -912,33 +1050,39 @@ namespace BraneScript
                             case gp_gp:
                             {
                                 printf("gp%hu gp%hu\n", a.index, b.index);
-                                auto destReg = ctx.getReg<Gp>(a);
-                                auto srcReg = ctx.getReg<Gp>(b);
-                                cc.add(destReg, srcReg);
+                                auto aReg = ctx.getReg<Gp>(a);
+                                auto bReg = ctx.getReg<Gp>(b);
+                                cc.add(aReg, bReg);
                             }
                                 break;
                             case gp_mem:
                             {
                                 printf("gp%hu mem%hu\n", a.index, b.index);
-                                auto destReg = ctx.getReg<Gp>(a);
-                                auto srcMem = ctx.getReg<Mem>(b);
-                                cc.add(destReg, srcMem);
+                                auto aReg = ctx.getReg<Gp>(a);
+                                auto mem = ctx.getReg<Mem>(b);
+                                cc.add(aReg, mem);
                             }
                                 break;
                             case xmm_xmm:
                             {
                                 printf("xmm%hu xmm%hu\n", a.index, b.index);
-                                auto destReg = ctx.getReg<Xmm>(a);
-                                auto srcReg = ctx.getReg<Xmm>(b);
-                                cc.addss(destReg, srcReg);
+                                auto aReg = ctx.getReg<Xmm>(a);
+                                auto bReg = ctx.getReg<Xmm>(b);
+                                if(a.valueType == Float32)
+                                    cc.addss(aReg, bReg);
+                                else
+                                    cc.addsd(aReg, bReg);
                             }
                                 break;
                             case xmm_mem:
                             {
                                 printf("xmm%hu mem%hu\n", a.index, b.index);
-                                auto destReg = ctx.getReg<Xmm>(a);
-                                auto srcReg = ctx.getReg<Mem>(b);
-                                cc.addss(destReg, srcReg);
+                                auto aReg = ctx.getReg<Xmm>(a);
+                                auto mem = ctx.getReg<Mem>(b);
+                                if(a.valueType == Float32)
+                                    cc.addss(aReg, mem);
+                                else
+                                    cc.addsd(aReg, mem);
                             }
                                 break;
                             default:
@@ -991,33 +1135,39 @@ namespace BraneScript
                             case gp_gp:
                             {
                                 printf("gp%hu gp%hu\n", a.index, b.index);
-                                auto destReg = ctx.getReg<Gp>(a);
-                                auto srcReg = ctx.getReg<Gp>(b);
-                                cc.sub(destReg, srcReg);
+                                auto aReg = ctx.getReg<Gp>(a);
+                                auto bReg = ctx.getReg<Gp>(b);
+                                cc.sub(aReg, bReg);
                             }
                                 break;
                             case gp_mem:
                             {
                                 printf("gp%hu mem%hu\n", a.index, b.index);
-                                auto destReg = ctx.getReg<Gp>(a);
-                                auto srcMem = ctx.getReg<Mem>(b);
-                                cc.sub(destReg, srcMem);
+                                auto aReg = ctx.getReg<Gp>(a);
+                                auto mem = ctx.getReg<Mem>(b);
+                                cc.sub(aReg, mem);
                             }
                                 break;
                             case xmm_xmm:
                             {
                                 printf("xmm%hu xmm%hu\n", a.index, b.index);
-                                auto destReg = ctx.getReg<Xmm>(a);
-                                auto srcReg = ctx.getReg<Xmm>(b);
-                                cc.subss(destReg, srcReg);
+                                auto aReg = ctx.getReg<Xmm>(a);
+                                auto bReg = ctx.getReg<Xmm>(b);
+                                if(a.valueType == Float32)
+                                    cc.subss(aReg, bReg);
+                                else
+                                    cc.subsd(aReg, bReg);
                             }
                                 break;
                             case xmm_mem:
                             {
                                 printf("xmm%hu mem%hu\n", a.index, b.index);
-                                auto destReg = ctx.getReg<Xmm>(a);
-                                auto srcMem = ctx.getReg<Mem>(b);
-                                cc.subss(destReg, srcMem);
+                                auto aReg = ctx.getReg<Xmm>(a);
+                                auto mem = ctx.getReg<Mem>(b);
+                                if(a.valueType == Float32)
+                                    cc.subss(aReg, mem);
+                                else
+                                    cc.subsd(aReg, mem);
                             }
                                 break;
                             default:
@@ -1035,33 +1185,105 @@ namespace BraneScript
                             case gp_gp:
                             {
                                 printf("gp%hu gp%hu\n", a.index, b.index);
-                                auto destReg = ctx.getReg<Gp>(a);
-                                auto srcReg = ctx.getReg<Gp>(b);
-                                cc.imul(destReg, srcReg);
+                                auto aReg = ctx.getReg<Gp>(a);
+                                auto bReg = ctx.getReg<Gp>(b);
+                                switch(a.valueType)
+                                {
+                                    case UInt32:
+                                    {
+                                        auto upper = cc.newUInt32();
+                                        cc.xor_(upper, upper);
+                                        cc.mul(upper, aReg, bReg);
+                                    }
+                                        break;
+                                    case UInt64:
+                                    {
+                                        auto upper = cc.newUInt64();
+                                        cc.xor_(upper, upper);
+                                        cc.mul(upper, aReg, bReg);
+                                    }
+                                        break;
+                                    case Int32:
+                                    {
+                                        auto upper = cc.newInt32();
+                                        cc.cdq(upper, aReg);
+                                        cc.imul(upper, aReg, bReg);
+                                    }
+                                        break;
+                                    case Int64:
+                                    {
+                                        auto upper = cc.newInt64();
+                                        cc.cqo(upper, aReg);
+                                        cc.imul(aReg, bReg);
+                                    }
+                                        break;
+                                    default:
+                                        assert(false);
+                                        break;
+                                }
                             }
                                 break;
                             case gp_mem:
                             {
                                 printf("gp%hu mem%hu\n", a.index, b.index);
-                                auto destReg = ctx.getReg<Gp>(a);
-                                auto srcMem = ctx.getReg<Mem>(b);
-                                cc.imul(destReg, srcMem);
+                                auto aReg = ctx.getReg<Gp>(a);
+                                auto mem = ctx.getReg<Mem>(b);
+                                switch(a.valueType)
+                                {
+                                    case UInt32:
+                                    {
+                                        auto upper = cc.newUInt32();
+                                        cc.xor_(upper, upper);
+                                        cc.mul(upper, aReg, mem);
+                                    }
+                                        break;
+                                    case UInt64:
+                                    {
+                                        auto upper = cc.newUInt64();
+                                        cc.xor_(upper, upper);
+                                        cc.mul(upper, aReg, mem);
+                                    }
+                                        break;
+                                    case Int32:
+                                    {
+                                        auto upper = cc.newInt32();
+                                        cc.cdq(upper, aReg);
+                                        cc.imul(upper, aReg, mem);
+                                    }
+                                        break;
+                                    case Int64:
+                                    {
+                                        auto upper = cc.newInt64();
+                                        cc.cqo(upper, aReg);
+                                        cc.imul(aReg, mem);
+                                    }
+                                        break;
+                                    default:
+                                        assert(false);
+                                        break;
+                                }
                             }
                                 break;
                             case xmm_xmm:
                             {
                                 printf("xmm%hu xmm%hu\n", a.index, b.index);
-                                auto destReg = ctx.getReg<Xmm>(a);
-                                auto srcReg = ctx.getReg<Xmm>(b);
-                                cc.mulss(destReg, srcReg);
+                                auto aReg = ctx.getReg<Xmm>(a);
+                                auto bReg = ctx.getReg<Xmm>(b);
+                                if(a.valueType == Float32)
+                                    cc.mulss(aReg, bReg);
+                                else
+                                    cc.mulsd(aReg, bReg);
                             }
                                 break;
                             case xmm_mem:
                             {
                                 printf("xmm%hu mem%hu\n", a.index, b.index);
-                                auto destReg = ctx.getReg<Xmm>(a);
-                                auto srcMem = ctx.getReg<Mem>(b);
-                                cc.mulss(destReg, srcMem);
+                                auto aReg = ctx.getReg<Xmm>(a);
+                                auto mem = ctx.getReg<Mem>(b);
+                                if(a.valueType == Float32)
+                                    cc.mulss(aReg, mem);
+                                else
+                                    cc.mulsd(aReg, mem);
                             }
                                 break;
                             default:
@@ -1079,37 +1301,104 @@ namespace BraneScript
                             case gp_gp:
                             {
                                 printf("gp%hu gp%hu\n", a.index, b.index);
-                                auto destReg = ctx.getReg<Gp>(a);
-                                auto srcReg = ctx.getReg<Gp>(b);
-                                auto remainder = cc.newInt32();
-                                cc.cdq(remainder, destReg);
-                                cc.idiv(remainder, destReg, srcReg);
+                                auto aReg = ctx.getReg<Gp>(a);
+                                auto bReg = ctx.getReg<Gp>(b);
+                                switch(a.valueType)
+                                {
+                                    case UInt32:
+                                    {
+                                        auto remainder = cc.newUInt32();
+                                        cc.xor_(remainder, remainder);
+                                        cc.div(remainder, aReg, bReg);
+                                    }
+                                        break;
+                                    case UInt64:
+                                    {
+                                        auto remainder = cc.newUInt64();
+                                        cc.xor_(remainder, remainder);
+                                        cc.div(remainder, aReg, bReg);
+                                    }
+                                        break;
+                                    case Int32:
+                                    {
+                                        auto remainder = cc.newInt32();
+                                        cc.cdq(remainder, aReg);
+                                        cc.idiv(remainder, aReg, bReg);
+                                    }
+                                        break;
+                                    case Int64:
+                                    {
+                                        auto remainder = cc.newInt64();
+                                        cc.cqo(remainder, aReg);
+                                        cc.idiv(remainder, aReg, bReg);
+                                    }
+                                        break;
+                                    default:
+                                        assert(false);
+                                }
+
                             }
                                 break;
                             case gp_mem:
                             {
                                 printf("gp%hu mem%hu\n", a.index, b.index);
-                                auto destReg = ctx.getReg<Gp>(a);
-                                auto srcMem = ctx.getReg<Mem>(b);
-                                auto remainder = cc.newInt32();
-                                cc.cdq(remainder, destReg);
-                                cc.idiv(remainder, destReg, srcMem);
+                                auto aReg = ctx.getReg<Gp>(a);
+                                auto mem = ctx.getReg<Mem>(b);
+                                switch(a.valueType)
+                                {
+                                    case UInt32:
+                                    {
+                                        auto remainder = cc.newUInt32();
+                                        cc.xor_(remainder, remainder);
+                                        cc.div(remainder, aReg, mem);
+                                    }
+                                        break;
+                                    case UInt64:
+                                    {
+                                        auto remainder = cc.newUInt64();
+                                        cc.xor_(remainder, remainder);
+                                        cc.div(remainder, aReg, mem);
+                                    }
+                                        break;
+                                    case Int32:
+                                    {
+                                        auto remainder = cc.newInt32();
+                                        cc.cdq(remainder, aReg);
+                                        cc.idiv(remainder, aReg, mem);
+                                    }
+                                        break;
+                                    case Int64:
+                                    {
+                                        auto remainder = cc.newInt64();
+                                        cc.cqo(remainder, aReg);
+                                        cc.idiv(remainder, aReg, mem);
+                                    }
+                                        break;
+                                    default:
+                                        assert(false);
+                                }
                             }
                                 break;
                             case xmm_xmm:
                             {
                                 printf("xmm%hu xmm%hu\n", a.index, b.index);
-                                auto destReg = ctx.getReg<Xmm>(a);
-                                auto srcReg = ctx.getReg<Xmm>(b);
-                                cc.divss(destReg, srcReg);
+                                auto aReg = ctx.getReg<Xmm>(a);
+                                auto bReg = ctx.getReg<Xmm>(b);
+                                if(a.valueType == Float32)
+                                    cc.divss(aReg, bReg);
+                                else
+                                    cc.divsd(aReg, bReg);
                             }
                                 break;
                             case xmm_mem:
                             {
                                 printf("xmm%hu mem%hu\n", a.index, b.index);
-                                auto destReg = ctx.getReg<Xmm>(a);
-                                auto srcMem = ctx.getReg<Mem>(b);
-                                cc.divss(destReg, srcMem);
+                                auto aReg = ctx.getReg<Xmm>(a);
+                                auto mem = ctx.getReg<Mem>(b);
+                                if(a.valueType == Float32)
+                                    cc.divss(aReg, mem);
+                                else
+                                    cc.divsd(aReg, mem);
                             }
                                 break;
                             default:
