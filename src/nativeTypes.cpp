@@ -30,6 +30,25 @@ namespace BraneScript
         }
     };
 
+    class CharDef : public TypeDef
+    {
+    public:
+        const char* name() const override
+        {
+            return "char";
+        }
+
+        uint16_t size() const override
+        {
+            return sizeof(char);
+        }
+
+        ValueType type() const override
+        {
+            return Char;
+        }
+    };
+
     class UIntDef : public TypeDef
     {
     public:
@@ -144,7 +163,32 @@ namespace BraneScript
         }
     };
 
-    std::vector<TypeDef*> nativeTypes({new BoolDef(), new UIntDef(), new IntDef(), new UInt64Def(), new Int64Def(), new FloatDef(), new Float64Def()});
+    class StringDef : public StructDef
+    {
+    public:
+        StringDef() : StructDef("string"){
+            setConstructor([](void* data){
+                new (data)std::string;
+            });
+            setCopyConstructor([](void* dest, void* source){
+                *(std::string*)dest = *(std::string*)source;
+            });
+            setMoveConstructor([](void* dest, void* source){
+                *(std::string*)dest = std::move(*(std::string*)source);
+            });
+            setDestructor([](void* data)
+            {
+                delete (std::string*)data;
+            });
+        };
+
+        uint16_t size() const override
+        {
+            return sizeof(std::string);
+        }
+    };
+
+    std::vector<TypeDef*> nativeTypes({new BoolDef(), new CharDef(), new UIntDef(), new IntDef(), new UInt64Def(), new Int64Def(), new FloatDef(), new Float64Def(), new StringDef()});
 
     std::vector<TypeDef*> getNativeTypes()
     {
@@ -158,18 +202,20 @@ namespace BraneScript
         {
             case Bool:
                 return nativeTypes[0];
-            case UInt32:
+            case Char:
                 return nativeTypes[1];
-            case Int32:
+            case UInt32:
                 return nativeTypes[2];
-            case UInt64:
+            case Int32:
                 return nativeTypes[3];
-            case Int64:
+            case UInt64:
                 return nativeTypes[4];
-            case Float32:
+            case Int64:
                 return nativeTypes[5];
-            case Float64:
+            case Float32:
                 return nativeTypes[6];
+            case Float64:
+                return nativeTypes[7];
             case Struct:
                 throw std::runtime_error("No native definition for struct type");
         }
@@ -585,7 +631,9 @@ namespace BraneScript
 
 #define PRECALCULATE_COMPARE(operator) \
         switch(arg1->resType()->type())\
-        {\
+        {                              \
+            case Char:                 \
+                return new AotConstNode(std::any_cast<char>(arg1->value()) operator std::any_cast<char>(arg2->value()), getNativeTypeDef(Bool));\
             case UInt32:\
                 return new AotConstNode(std::any_cast<uint32_t>(arg1->value()) operator std::any_cast<uint32_t>(arg2->value()), getNativeTypeDef(Bool));\
             case UInt64:\
@@ -683,9 +731,114 @@ namespace BraneScript
         }
     };
 
+    class StringCmp : public ConstexprOperator
+    {
+        bool _equals;
+    public:
+        StringCmp(bool equals) : ConstexprOperator(equals ? "==" : "!=")
+        {
+            _equals = equals;
+        }
+
+        AotValue* generateBytecode(CompilerCtx& ctx, AotValue* left, AotValue* right) const override
+        {
+            AotValue* result = ctx.newReg(getNativeTypeDef(Bool), AotValue::Temp);
+            result->def = resType();
+
+            int16_t fIndex;
+            if(_equals)
+                fIndex = ctx.script->linkFunction("opr ==(string,string)");
+            else
+                fIndex = ctx.script->linkFunction("opr !=(string,string)");
+            fIndex = -1 - fIndex;
+            ctx.function->appendCode(CALL, fIndex);
+            ctx.function->appendCode(result->value(ctx));
+            ctx.function->appendCode(left->value(ctx));
+            ctx.function->appendCode(right->value(ctx));
+            return result;
+        }
+
+        AotNode* precalculate(AotConstNode* arg1, AotConstNode* arg2) const override
+        {
+            if(_equals)
+                return new AotConstNode(std::any_cast<std::string>(arg1->value()) == std::any_cast<std::string>(arg2->value()), getNativeTypeDef(Bool));
+            return new AotConstNode(std::any_cast<std::string>(arg1->value()) != std::any_cast<std::string>(arg2->value()),  getNativeTypeDef(Bool));
+
+            return nullptr;
+        }
+
+        const TypeDef* resType() const override
+        {
+            return getNativeTypeDef(Bool);
+        }
+    };
+
+    class StringConcat : public ConstexprOperator
+    {
+    public:
+        StringConcat() : ConstexprOperator("+")
+        {
+        }
+
+        AotValue* generateBytecode(CompilerCtx& ctx, AotValue* left, AotValue* right) const override
+        {
+            AotValue* result = ctx.newReg(nativeTypes[8], AotValue::Temp | AotValue::HeapRef);
+            result->def = resType();
+
+            int16_t fIndex = -ctx.script->linkFunction("opr +(string,string)") -1;
+            ctx.function->appendCode(CALL, fIndex);
+            ctx.function->appendCode(result->value(ctx));
+            ctx.function->appendCode(left->value(ctx));
+            ctx.function->appendCode(right->value(ctx));
+            return result;
+        }
+
+        AotNode* precalculate(AotConstNode* arg1, AotConstNode* arg2) const override
+        {
+            return new AotConstNode(std::any_cast<std::string>(arg1->value()) + std::any_cast<std::string>(arg2->value()), nativeTypes[8]);
+        }
+
+        const TypeDef* resType() const override
+        {
+            return getNativeTypes()[8];
+        }
+    };
+
+    class StringIndex : public ConstexprOperator
+    {
+    public:
+        StringIndex() : ConstexprOperator("[]")
+        {
+        }
+
+        AotValue* generateBytecode(CompilerCtx& ctx, AotValue* left, AotValue* right) const override
+        {
+            AotValue* result = ctx.newReg(getNativeTypeDef(Char), AotValue::Temp | AotValue::HeapRef);
+            result->def = resType();
+
+            int16_t fIndex = -ctx.script->linkFunction("opr [](string,uint)") -1;
+            ctx.function->appendCode(CALL, fIndex);
+            ctx.function->appendCode(result->value(ctx));
+            ctx.function->appendCode(left->value(ctx));
+            ctx.function->appendCode(right->value(ctx));
+            return result;
+        }
+
+        AotNode* precalculate(AotConstNode* arg1, AotConstNode* arg2) const override
+        {
+            return new AotConstNode(std::any_cast<std::string>(arg1->value())[std::any_cast<uint32_t>(arg2->value())], getNativeTypeDef(Char));
+        }
+
+        const TypeDef* resType() const override
+        {
+            return getNativeTypeDef(Char);
+        }
+    };
+
     robin_hood::unordered_map<std::string, Operator*> setupNativeOperators()
     {
         robin_hood::unordered_map<std::string, Operator*> oprs;
+
         auto scalarTypes = {
                 getNativeTypeDef(UInt32),
                 getNativeTypeDef(Int32),
@@ -694,6 +847,13 @@ namespace BraneScript
                 getNativeTypeDef(Float32),
                 getNativeTypeDef(Float64)
         };
+        auto charDef = getNativeTypeDef(Char);
+        for(const char* cmpOp : {"==", "!=", "<", ">", "<=", ">="})
+            oprs.insert({oprSig(cmpOp, charDef, charDef), new CompareOpr(cmpOp)});
+        oprs.insert({"opr ==(string,string)", new StringCmp(true)});
+        oprs.insert({"opr !=(string,string)", new StringCmp(false)});
+        oprs.insert({"opr +(string,string)", new StringConcat()});
+        oprs.insert({"opr [](string,uint)", new StringIndex()});
         for(auto type : scalarTypes)
         {
             oprs.insert({oprSig("+", type, type), new AdditionOpr(type)});
@@ -719,5 +879,23 @@ namespace BraneScript
     const robin_hood::unordered_map<std::string, Operator*>& nativeOperators()
     {
         return _nativeOperators;
+    }
+
+    std::vector<FunctionData> getNativeFunctions()
+    {
+        std::vector<FunctionData> output;
+        output.emplace_back("opr ==(string,string)", "string", (FunctionHandle<bool, const std::string*, const std::string*>)[](const std::string* a, const std::string* b){
+            return *a == *b;
+        });
+        output.emplace_back("opr !=(string,string)", "string", (FunctionHandle<bool, const std::string*, const std::string*>)[](const std::string* a, const std::string* b){
+            return *a != *b;
+        });
+        output.emplace_back("opr +(string,string)", "string", (FunctionHandle<std::string*, const std::string*, const std::string*>)[](const std::string* a, const std::string* b){
+            return new std::string(*a + *b);
+        });
+        output.emplace_back("opr [](string,uint)", "char", (FunctionHandle<char, const std::string*, uint32_t>)[](const std::string* str, uint32_t index){
+            return (*str)[index];
+        });
+        return output;
     }
 }

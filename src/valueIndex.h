@@ -11,13 +11,14 @@ namespace BraneScript
     enum ValueType : uint8_t
     {
         Bool    = 1,
-        UInt32  = 2,
-        UInt64  = 3,
-        Int32   = 4,
-        Int64   = 5,
-        Float32 = 6,
-        Float64 = 7,
-        Struct  = 8
+        Char    = 2,
+        UInt32  = 3,
+        UInt64  = 4,
+        Int32   = 5,
+        Int64   = 6,
+        Float32 = 7,
+        Float64 = 8,
+        Struct  = 9
     };
 
     enum ValueStorageType : uint8_t
@@ -27,7 +28,6 @@ namespace BraneScript
         ValueStorageType_Const = 2,
         ValueStorageType_Ptr = 3,
         ValueStorageType_DerefPtr = 5
-
     };
 
     struct alignas(2) Value

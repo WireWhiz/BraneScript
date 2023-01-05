@@ -19,22 +19,6 @@ namespace BraneScript
             code.push_back(c);
     }
 
-
-    std::string IRFunction::readString(size_t& index)
-    {
-        if(index >= code.size())
-            throw std::runtime_error("Tried to read past end of data");
-        size_t strSize = code[index];
-        ++index;
-        if(index + strSize > code.size())
-            throw std::runtime_error("Tried to read past end of data");
-        std::string string;
-        string.resize(strSize);
-        std::memcpy(string.data(), code.data() + index, strSize);
-        index += strSize;
-        return std::move(string);
-    }
-
     void IRFunction::appendCode(Operand op, Value a)
     {
         size_t index = code.size();

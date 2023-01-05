@@ -166,7 +166,7 @@ namespace BraneScript
         {
             returnValue = ctx.newReg(_resType, AotValue::Temp | AotValue::Initialized);
             if(returnValue->def->type() == Struct)
-                returnValue->flags |= AotValue::ExternalRef;
+                returnValue->flags |= AotValue::HeapRef;
         }
 
         ctx.function->appendCode(Operand::CALL, _functionIndex);

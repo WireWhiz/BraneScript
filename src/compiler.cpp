@@ -107,9 +107,16 @@ namespace BraneScript
         return braneBaseVisitor::visitInclude(context);
     }
 
+    std::any Compiler::visitConstChar(braneParser::ConstCharContext* context)
+    {
+        std::string text = context->getText();
+        return (AotNode*)new AotConstNode(text[1], getNativeTypes()[7]);
+    }
+
     std::any Compiler::visitConstString(braneParser::ConstStringContext* context)
     {
-        return braneBaseVisitor::visitConstString(context);
+        std::string text = context->getText();
+        return (AotNode*)new AotConstNode(std::string(text.data() + 1, text.size() - 2), getNativeTypes()[8]);
     }
 
     std::any Compiler::visitInlineScope(braneParser::InlineScopeContext* context)
@@ -235,8 +242,7 @@ namespace BraneScript
     std::any Compiler::visitMemberAccess(braneParser::MemberAccessContext* context)
     {
         auto base = std::any_cast<AotNode*>(visit(context->base));
-        if(!base)
-            RETURN_NULL;
+        PROPAGATE_NULL(base);
 
         auto structDef = dynamic_cast<const StructDef*>(base->resType());
         if(!structDef)
@@ -253,6 +259,32 @@ namespace BraneScript
         }
 
         return (AotNode*)new AotDerefNode(base, structMemberDef->type, structMemberDef->offset);
+    }
+
+    std::any Compiler::visitIndexAccess(braneParser::IndexAccessContext* context)
+    {
+        auto base = std::any_cast<AotNode*>(visit(context->base));
+        auto index = std::any_cast<AotNode*>(visit(context->arg));
+        PROPAGATE_NULL(base);
+
+        auto* indexOpr = _linker->getOperator(oprSig("[]", base->resType(), index->resType()));
+        if(!indexOpr)
+        {
+            auto* castOpr = _linker->getOperator(oprSig(getNativeTypeDef(UInt32)->name(), index->resType()));
+            if(!castOpr)
+            {
+                throwError(context, "Could not automatically cast " + std::string(index->resType()->name()) + " to index type");
+                RETURN_NULL;
+            }
+            index = new AotUnaryOperatorNode(castOpr, index);
+            indexOpr = _linker->getOperator(oprSig("[]", base->resType(), index->resType()));
+            if(!indexOpr)
+            {
+                throwError(context, "Could not automatically cast " + std::string(index->resType()->name()) + " to index type");
+                RETURN_NULL;
+            }
+        }
+        return (AotNode*)new AotBinaryOperatorNode(indexOpr, base, index);
     }
 
     std::any Compiler::visitDecl(braneParser::DeclContext* context)

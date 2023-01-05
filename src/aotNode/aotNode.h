@@ -21,8 +21,9 @@ namespace BraneScript
             Constexpr  = 1 << 1,
             Temp       = 1 << 2,
             StackRef   = 1 << 3,
-            ExternalRef    = 1 << 4,
-            Initialized    = 1 << 5,
+            HeapRef    = 1 << 4,
+            ExternalRef = 1 << 5,
+            Initialized    = 1 << 6,
 
         };
         enum CompareType : uint8_t
@@ -47,9 +48,10 @@ namespace BraneScript
         inline bool isCompare() const { return compareType != NoRes; }
         inline bool isVoid() const { return def == nullptr; }
         inline bool isTemp() const { return flags & Temp; }
-        inline bool isRef() const { return storageType == ValueStorageType_Ptr && flags & (StackRef | ExternalRef); }
+        inline bool isRef() const { return storageType == ValueStorageType_Ptr && flags & (StackRef | HeapRef | ExternalRef); }
         inline bool isStackRef() const { return storageType == ValueStorageType_Ptr && flags & StackRef; }
-        inline bool isExternalRef() const { return storageType == ValueStorageType_Ptr &&  flags & ExternalRef; }
+        inline bool isHeapRef() const { return storageType == ValueStorageType_Ptr && flags & HeapRef; }
+        inline bool isExternalRef() const { return storageType == ValueStorageType_Ptr && flags & ExternalRef; }
     };
 
     class CompilerCtx;

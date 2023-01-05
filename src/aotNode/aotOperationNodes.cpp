@@ -117,11 +117,12 @@ namespace BraneScript
     {
         auto value = ctx.castReg(arg->generateBytecode(ctx));
 
-        if(value->isStackRef())
+        if(value->isStackRef() || value->isExternalRef())
         {
             //This is where a move/copy constructor would go
             auto* sDef = static_cast<const StructDef*>(value->def);
             auto ptr = ctx.newReg(value->def, 0);
+            bool shouldMove = !value->isExternalRef();
             int16_t sIndex;
             int16_t cIndex;
             int16_t mcIndex;
@@ -129,14 +130,20 @@ namespace BraneScript
             {
                 sIndex = ctx.localStructIndices.at(sDef);
                 cIndex = ctx.script->findLocalFuncIndex(std::string(sDef->name()) + "::_construct()");
-                mcIndex = ctx.script->findLocalFuncIndex(std::string(sDef->name()) + "::_move(ref " + sDef->name() + ")");
+                if(shouldMove)
+                    mcIndex = ctx.script->findLocalFuncIndex(std::string(sDef->name()) + "::_move(ref " + sDef->name() + ")");
+                else
+                    mcIndex = ctx.script->findLocalFuncIndex(std::string(sDef->name()) + "::_copy(const ref " + sDef->name() + ")");
                 assert(mcIndex >= 0);
             }
             else
             {
                 sIndex = int16_t{-1} - ctx.script->linkStruct(sDef->name());
                 cIndex = int16_t{-1} -  ctx.script->linkFunction(std::string(sDef->name()) + "::_construct()");
-                mcIndex = int16_t{-1} -  ctx.script->linkFunction(std::string(sDef->name()) + "::_move(ref " + sDef->name() + ")");
+                if(shouldMove)
+                    mcIndex = int16_t{-1} -  ctx.script->linkFunction(std::string(sDef->name()) + "::_move(ref " + sDef->name() + ")");
+                else
+                    mcIndex = int16_t{-1} -  ctx.script->linkFunction(std::string(sDef->name()) + "::_copy(const ref " + sDef->name() + ")");
             }
             //Allocate memory to return
             ctx.function->appendCode(Operand::MALLOC, ptr->value(ctx), sIndex);
@@ -156,7 +163,7 @@ namespace BraneScript
         //Call destructors for local values
         for(auto& v : ctx.values)
         {
-            if(!v->isStackRef())
+            if(!v->isStackRef() || v->isExternalRef())
                 continue;
 
             auto sDef = static_cast<const StructDef*>(v->def);
@@ -233,7 +240,7 @@ namespace BraneScript
         if(lValue->isRef() && lValue->flags & AotValue::Initialized && rValue->isRef())
         {
             auto s = static_cast<const StructDef*>(lValue->def);
-            bool shouldMove = rValue->isExternalRef() && rValue->isTemp();
+            bool shouldMove = rValue->isHeapRef() && rValue->isTemp();
             std::string cName;
             if(shouldMove)
                 cName = std::string(s->name()) + "::_move(ref " + s->name() + ")";

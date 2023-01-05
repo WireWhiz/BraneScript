@@ -58,8 +58,6 @@ namespace BraneScript
             index += sizeof(T);
             return value;
         }
-
-        std::string readString(size_t& index);
     };
 }
 

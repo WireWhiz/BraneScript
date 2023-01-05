@@ -51,6 +51,7 @@ namespace BraneScript
     asmjit::TypeId strToASMType(std::string_view str)
     {
         if (str == "void") return asmjit::TypeId::kVoid;
+        if (str == "char") return asmjit::TypeId::kUInt8;
         if (str == "bool") return asmjit::TypeId::kUInt8;
         if (str == "uint") return asmjit::TypeId::kUInt32;
         if (str == "uint64") return asmjit::TypeId::kUInt64;
@@ -98,6 +99,7 @@ namespace BraneScript
         switch (value.valueType)
         {
             case Bool:
+            case Char:
             case UInt32:
             case UInt64:
             case Int32:
@@ -151,11 +153,6 @@ namespace BraneScript
             return currentFunction->readCode<T>(iptr);
         }
 
-        inline std::string readString()
-        {
-            return currentFunction->readString(iptr);
-        }
-
         bool endOfCode() const
         {
             return iptr >= currentFunction->code.size();
@@ -170,15 +167,18 @@ namespace BraneScript
             switch (value.valueType)
             {
                 case ValueType::Bool:
+                case ValueType::Char:
                     registers.push_back(cc.newUInt8());
                     break;
                 case ValueType::UInt32:
                     registers.push_back(cc.newUInt32());
+                    break;
                 case ValueType::Int32:
                     registers.push_back(cc.newInt32());
                     break;
                 case ValueType::UInt64:
                     registers.push_back(cc.newUInt64());
+                    break;
                 case ValueType::Int64:
                     registers.push_back(cc.newInt64());
                     break;
@@ -490,10 +490,11 @@ namespace BraneScript
                         assert(ctx.constants.size() == constant.index);
                         switch (constant.valueType)
                         {
+                            case Char:
                             case Bool:
                             {
                                 auto val = ctx.readCode<uint8_t>();
-                                printf("bool %i\n", val);
+                                printf("uint8 (char/bool) %u\n", val);
                                 ctx.constants.push_back(cc.newByteConst(asmjit::ConstPoolScope::kLocal, val));
                                 break;
                             }
@@ -545,6 +546,21 @@ namespace BraneScript
 
                         break;
                     }
+                    case LOADS:
+                    {
+                        auto reg = ctx.readCode<Value>();
+                        ctx.verifyValue(reg, cc);
+                        auto size = ctx.readCode<uint32_t>();
+                        auto* text = new std::string();
+                        text->resize(size);
+                        for(char& c : *text)
+                            c = ctx.readCode<char>();
+
+                        printf("LOADS reg%u %s", reg.index, text->c_str());
+                        script->constStrings.push_back(std::unique_ptr<std::string>(text));
+                        cc.mov(ctx.getReg<Gp>(reg), asmjit::Imm(text));
+                    }
+                        break;
                     case MARK:
                     {
                         auto markIndex = ctx.readCode<uint32_t>();
@@ -830,6 +846,7 @@ namespace BraneScript
                                 switch(src.valueType)
                                 {
                                     case Bool:
+                                    case Char:
                                         tempReg = cc.newGpb();
                                         break;
                                     case UInt32:
@@ -863,6 +880,7 @@ namespace BraneScript
                         printf("MOVI \n");
                         switch(dest.valueType)
                         {
+                            case Char:
                             case Bool:
                                 cc.mov(ctx.getReg<Gp>(dest), asmjit::imm(ctx.readCode<uint8_t>()));
                                 break;

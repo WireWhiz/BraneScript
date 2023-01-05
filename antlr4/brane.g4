@@ -8,6 +8,7 @@ SPACE   : (' '|'\t') -> skip;
 BOOL    : ('true'|'false');
 INT     : [0-9]+;
 FLOAT   : INT('.'([0-9]*))?'f';
+CHAR    : '\''.'\'';
 STRING  : '"'.*?'"';
 
 ID      : [a-zA-Z_]([a-zA-Z0-9_]*);
@@ -49,6 +50,7 @@ statement   : expression ';'                                                #exp
 
 expression  : INT                                                           #constInt
             | FLOAT                                                         #constFloat
+            | CHAR                                                          #constChar
             | STRING                                                        #constString
             | BOOL                                                          #constBool
             | declaration                                                   #decl
@@ -56,6 +58,7 @@ expression  : INT                                                           #con
             | name=ID '(' argumentPack ')'                                  #functionCall
             | base=expression '.' name=ID '(' argumentPack ')'              #memberFunctionCall
             | ID                                                            #id
+            | base=expression '[' arg=expression ']'                        #indexAccess
             | base=expression '.' member=ID                                 #memberAccess
             | '(' ID ')' expression                                         #cast
             | left=expression op=(MUL | DIV) right=expression               #muldiv

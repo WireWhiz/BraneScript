@@ -25,7 +25,7 @@ namespace BraneScript
 
     std::string oprSig(const std::string& opr, const TypeDef* arg1, const TypeDef* arg2)
     {
-        return "opr " + opr + "(" + arg1->name() + ", " + arg2->name() + ")";
+        return "opr " + opr + "(" + arg1->name() + "," + arg2->name() + ")";
     }
 
     ConstexprOperator::ConstexprOperator(std::string symbol) : Operator(std::move(symbol))

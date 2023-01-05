@@ -18,6 +18,7 @@ void BS_API_CALL setRef(int newVal)
 
 TEST(BraneScript, Libraries)
 {
+    scriptMallocDiff = 0;
     std::string testString = R"(
     link "testLib" as "lib";
 

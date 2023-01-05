@@ -9,10 +9,12 @@
 #include "robin_hood.h"
 #include <vector>
 #include <cstdarg>
+#include "functionHandle.h"
 
 namespace BraneScript
 {
     std::vector<TypeDef*> getNativeTypes();
+    std::vector<FunctionData> getNativeFunctions();
 
     TypeDef* getNativeTypeDef(ValueType type);
 

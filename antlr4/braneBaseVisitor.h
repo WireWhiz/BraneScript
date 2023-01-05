@@ -1,5 +1,5 @@
 
-// Generated from C:/Users/eli/Documents/GitHub/BraneScript/antlr4\brane.g4 by ANTLR 4.10.1
+// Generated from C:/Users/eli/Documents/GitHub/BraneScript/antlr4\brane.g4 by ANTLR 4.11.1
 
 #pragma once
 
@@ -127,6 +127,10 @@ public:
     return visitChildren(ctx);
   }
 
+  virtual std::any visitIndexAccess(braneParser::IndexAccessContext *ctx) override {
+    return visitChildren(ctx);
+  }
+
   virtual std::any visitConstString(braneParser::ConstStringContext *ctx) override {
     return visitChildren(ctx);
   }
@@ -148,6 +152,10 @@ public:
   }
 
   virtual std::any visitId(braneParser::IdContext *ctx) override {
+    return visitChildren(ctx);
+  }
+
+  virtual std::any visitConstChar(braneParser::ConstCharContext *ctx) override {
     return visitChildren(ctx);
   }
 

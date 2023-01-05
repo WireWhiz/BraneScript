@@ -18,6 +18,7 @@ namespace BraneScript
     public:
         std::vector<void*> functions;
         std::unordered_map<std::string, size_t> functionNames;
+        std::vector<std::unique_ptr<std::string>> constStrings;
 
         template<typename Ret, typename... Args>
         FunctionHandle<Ret, Args...> getFunction(const std::string& name) const

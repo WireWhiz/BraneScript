@@ -14,6 +14,10 @@ namespace BraneScript
     {
         for(auto& t : getNativeTypes())
             _globalTypes.emplace(t->name(), t);
+        _global.addStruct(*dynamic_cast<const StructDef*>(getNativeTypes()[8]));
+        for(auto& f : getNativeFunctions())
+            _global.addFunction(f.name, f.ret, f.pointer);
+
         _operators = nativeOperators();
     }
 

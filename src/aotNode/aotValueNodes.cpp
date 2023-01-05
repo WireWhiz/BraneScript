@@ -19,11 +19,20 @@ namespace BraneScript
 
     AotValue* AotConstNode::generateBytecode(CompilerCtx& ctx) const
     {
-        auto value = ctx.newConst(_resType->type());
+        auto value = (_resType->name() == std::string_view("string")) ? ctx.newReg(_resType, AotValue::ExternalRef | AotValue::Initialized | AotValue::Temp) : ctx.newConst(_resType->type());
         switch (_resType->type())
         {
             case Bool:
                 ctx.function->appendCode(LOADC, value->value(ctx), (uint8_t)std::any_cast<bool>(_value));
+                break;
+            case Char:
+                ctx.function->appendCode(LOADC, value->value(ctx), (uint8_t)std::any_cast<char>(_value));
+                break;
+            case UInt32:
+                ctx.function->appendCode(LOADC, value->value(ctx), std::any_cast<uint32_t>(_value));
+                break;
+            case UInt64:
+                ctx.function->appendCode(LOADC, value->value(ctx), std::any_cast<uint64_t>(_value));
                 break;
             case Int32:
                 ctx.function->appendCode(LOADC, value->value(ctx), std::any_cast<int32_t>(_value));
@@ -38,7 +47,12 @@ namespace BraneScript
                 ctx.function->appendCode(LOADC, value->value(ctx), std::any_cast<double>(_value));
                 break;
             case Struct:
-                assert(false);
+                if(std::string_view(_resType->name()) != "string")
+                    throw std::runtime_error("Unknown type");
+                auto str = std::any_cast<std::string>(_value);
+                ctx.function->appendCode(LOADS, value->value(ctx), (uint32_t)str.size());
+                for(char c : str)
+                    ctx.function->appendCode(c);
                 break;
         }
         value->flags |= AotValue::Initialized;
@@ -180,7 +194,7 @@ namespace BraneScript
             if(_ctx->info.stackRef)
                 flags |= AotValue::StackRef;
             else
-                flags |= AotValue::ExternalRef;
+                flags |= AotValue::HeapRef;
         }
         _ctx->value = ctx.newReg(_resType, flags);
         if(!_ctx->info.isRef && _resType->type() != ValueType::Struct)

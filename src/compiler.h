@@ -48,6 +48,8 @@ namespace BraneScript
 
         std::any visitInclude(braneParser::IncludeContext* context) override;
 
+        std::any visitConstChar(braneParser::ConstCharContext *context) override;
+
         std::any visitConstString(braneParser::ConstStringContext* context) override;
 
         std::any visitInlineScope(braneParser::InlineScopeContext* context) override;
@@ -99,6 +101,8 @@ namespace BraneScript
         std::any visitLink(braneParser::LinkContext *context) override;
 
         std::any visitMemberAccess(braneParser::MemberAccessContext *context) override;
+
+        std::any visitIndexAccess(braneParser::IndexAccessContext *context) override;
 
         std::any visitDelete(braneParser::DeleteContext *context) override;
 

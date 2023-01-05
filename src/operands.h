@@ -15,7 +15,8 @@ namespace BraneScript
         // Waiting until we are near feature complete to manually set enum values
         RET,    //Exit function
         RETV,   // (ValueIndex value) Return int32 value
-        LOADC,  // (ValueIndex value, uint32_t constantIndex) load constant defined by byte array into the value
+        LOADC,  // (ValueIndex value, T constant) load constant defined by byte array into the value
+        LOADS,  // (ValueIndex value, uint32_t size, char[]) load constant string
 
         ALLOC,     // (ValueIndex ptr, int16_t structDef) allocate local struct on the stack
         MALLOC,    // (ValueIndex ptr, int16_t structDef) allocate local struct on the heap

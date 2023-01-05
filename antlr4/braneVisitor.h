@@ -1,5 +1,5 @@
 
-// Generated from C:/Users/eli/Documents/GitHub/BraneScript/antlr4\brane.g4 by ANTLR 4.10.1
+// Generated from C:/Users/eli/Documents/GitHub/BraneScript/antlr4\brane.g4 by ANTLR 4.11.1
 
 #pragma once
 
@@ -75,6 +75,8 @@ public:
 
     virtual std::any visitMuldiv(braneParser::MuldivContext *context) = 0;
 
+    virtual std::any visitIndexAccess(braneParser::IndexAccessContext *context) = 0;
+
     virtual std::any visitConstString(braneParser::ConstStringContext *context) = 0;
 
     virtual std::any visitCast(braneParser::CastContext *context) = 0;
@@ -86,6 +88,8 @@ public:
     virtual std::any visitConstFloat(braneParser::ConstFloatContext *context) = 0;
 
     virtual std::any visitId(braneParser::IdContext *context) = 0;
+
+    virtual std::any visitConstChar(braneParser::ConstCharContext *context) = 0;
 
 
 };
