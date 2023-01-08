@@ -10,7 +10,9 @@ using namespace BraneScript;
 
 TEST(BraneScript, Strings)
 {
+#ifndef NDEBUG
     scriptMallocDiff = 0;
+#endif
     std::string testString = R"(
         string testConst()
         {
@@ -75,7 +77,7 @@ TEST(BraneScript, Strings)
     EXPECT_FALSE(strNEQ(&argA, &argA));
     EXPECT_TRUE(strNEQ(&argA, &argB));
 
-    #ifndef NDEBUG
+#ifndef NDEBUG
     EXPECT_EQ(scriptMallocDiff, 1);
-    #endif
+#endif
 }

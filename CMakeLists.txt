@@ -4,7 +4,10 @@ project(BraneScript)
 set(CMAKE_CXX_STANDARD 17)
 option(BS_BUILD_EXECUTABLE "Build standalone compiler/interpreter" ON)
 option(BS_BUILD_TESTS "Build tests" ON)
-option(BS_FETCH_GTEST "Turn off if your project already includes gtest" ON)
+
+execute_process(COMMAND conan install ..
+                WORKING_DIRECTORY ${CMAKE_BINARY_DIR})
+include(${CMAKE_BINARY_DIR}/conan_paths.cmake)
 
 if(BS_BUILD_EXECUTABLE)
     add_executable(BraneScriptCompiler main.cpp)
@@ -13,10 +16,6 @@ endif()
 
 add_subdirectory(antlr4)
 add_subdirectory(src)
-
-set(ASMJIT_STATIC TRUE)
-set(ASMJIT_TEST)
-add_subdirectory(asmjit)
 
 if(BS_BUILD_TESTS)
     add_subdirectory(tests)

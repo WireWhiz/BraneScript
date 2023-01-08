@@ -4,7 +4,7 @@
 
 #include "compiler.h"
 #include "../antlr4/braneLexer.h"
-#include "antlr4/ANTLRInputStream.h"
+#include "ANTLRInputStream.h"
 #include "nativeTypes.h"
 #include "aotNode/aotOperationNodes.h"
 #include "aotNode/aotValueNodes.h"
