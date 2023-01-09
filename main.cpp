@@ -1,10 +1,11 @@
 #include <iostream>
 
-#include "scripting/compiler.h"
-#include "scripting/scriptRuntime.h"
-#include "scripting/script.h"
+#include "compiler.h"
+#include "scriptRuntime.h"
+#include "script.h"
+#include "linker.h"
 
- using namespace BraneScript;
+using namespace BraneScript;
 
  int countLoop(int target)
  {
@@ -35,8 +36,8 @@ int main(int target) {
     return counter;
 }
 )";
-
-    Compiler compiler;
+    Linker l;
+    Compiler compiler(&l);
     auto* ir = compiler.compile(testString);
     if(!ir)
     {

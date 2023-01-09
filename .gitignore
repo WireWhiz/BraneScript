@@ -5,3 +5,8 @@ cmake-build-linux-debug
 docs/*
 
 .idea
+/conaninfo.txt
+/graph_info.json
+/conanbuildinfo.txt
+/conanbuildinfo.cmake
+/conan.lock

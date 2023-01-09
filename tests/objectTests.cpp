@@ -44,7 +44,9 @@ struct NestedStructBase
 
 TEST(BraneScript, Objects)
 {
+#ifndef NDEBUG
     scriptMallocDiff = 0;
+#endif
     std::string testString = R"(
     float getMember1(ref TestStruct1 s)
     {

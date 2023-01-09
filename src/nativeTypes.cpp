@@ -884,16 +884,16 @@ namespace BraneScript
     std::vector<FunctionData> getNativeFunctions()
     {
         std::vector<FunctionData> output;
-        output.emplace_back("opr ==(string,string)", "string", (FunctionHandle<bool, const std::string*, const std::string*>)[](const std::string* a, const std::string* b){
+        output.emplace_back("opr ==(string,string)", "string", (void*)(FunctionHandle<bool, const std::string*, const std::string*>)[](const std::string* a, const std::string* b){
             return *a == *b;
         });
-        output.emplace_back("opr !=(string,string)", "string", (FunctionHandle<bool, const std::string*, const std::string*>)[](const std::string* a, const std::string* b){
+        output.emplace_back("opr !=(string,string)", "string", (void*)(FunctionHandle<bool, const std::string*, const std::string*>)[](const std::string* a, const std::string* b){
             return *a != *b;
         });
-        output.emplace_back("opr +(string,string)", "string", (FunctionHandle<std::string*, const std::string*, const std::string*>)[](const std::string* a, const std::string* b){
+        output.emplace_back("opr +(string,string)", "string", (void*)(FunctionHandle<std::string*, const std::string*, const std::string*>)[](const std::string* a, const std::string* b){
             return new std::string(*a + *b);
         });
-        output.emplace_back("opr [](string,uint)", "char", (FunctionHandle<char, const std::string*, uint32_t>)[](const std::string* str, uint32_t index){
+        output.emplace_back("opr [](string,uint)", "char", (void*)(FunctionHandle<char, const std::string*, uint32_t>)[](const std::string* str, uint32_t index){
             return (*str)[index];
         });
         return output;
