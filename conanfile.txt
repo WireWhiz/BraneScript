@@ -2,6 +2,7 @@
 asmjit/cci.20221111
 antlr4-cppruntime/4.11.1
 gtest/cci.20210126
+robin-hood-hashing/3.11.5
 
 [generators]
 cmake_find_package
