@@ -6,7 +6,7 @@
 #define BRANESCRIPT_NATIVETYPES_H
 
 #include "typeDef.h"
-#include "robin_hood.h"
+#include <robin_hood.h>
 #include <vector>
 #include <cstdarg>
 #include "functionHandle.h"

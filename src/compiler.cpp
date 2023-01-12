@@ -323,7 +323,11 @@ namespace BraneScript
         }
         if(!typeInfo.isRef && type->type() == Struct)
             typeInfo.stackRef = true;
-        registerLocalValue(name, typeInfo);
+        if(_ctx->function)
+            registerLocalValue(name, typeInfo);
+        else
+            registerGlobalValue(name, type);
+
         return getValueNode(name);
     }
 
@@ -334,7 +338,7 @@ namespace BraneScript
 
     std::any Compiler::visitArgumentList(braneParser::ArgumentListContext* ctx)
     {
-        return braneBaseVisitor::visitArgumentList(ctx);
+        return {};
     }
 
     std::any Compiler::visitFunction(braneParser::FunctionContext* ctx)
@@ -507,6 +511,10 @@ namespace BraneScript
             if (v != i->localValues.end())
                 return new AotValueNode(v->second);
         }
+        //Globals after locals so that locals can hide globals
+        auto v = _globalValues.find(name);
+        if (v != _globalValues.end())
+            return new AotGlobalValueNode(v->second);
         return nullptr;
     }
 
@@ -707,11 +715,11 @@ namespace BraneScript
             throwError("Library \"" + libraryName + "\" not found");
             return {};
         }
-        _ctx->script->linkedLibraries.push_back(libraryName);
+        auto libIndex = _ctx->script->linkLibrary(libraryName);
         if(context->alias)
-            _ctx->libraryAliases.insert({removePars(context->alias->getText()), (uint32_t)_ctx->libraryAliases.size()});
+            _ctx->libraryAliases.insert({removePars(context->alias->getText()), libIndex});
         else
-            _ctx->libraryAliases.insert({libraryName, (uint32_t)_ctx->libraryAliases.size()});
+            _ctx->libraryAliases.insert({libraryName, libIndex});
         return {};
     }
 
@@ -762,7 +770,6 @@ namespace BraneScript
         //We need to store a copy of this info in the ir script for the runtime
         IRScript::IRStructDef irDef;
         irDef.name = newDef->name();
-        irDef.packed = context->packed;
         irDef.isPublic = context->isPublic;
 
         for(auto& m : newDef->memberVars())
@@ -1122,6 +1129,13 @@ namespace BraneScript
             a = new AotUnaryOperatorNode(castOpr, a);
     }
 
+    void Compiler::registerGlobalValue(std::string name, const TypeDef* type)
+    {
+        assert(type);
+        auto glob = _ctx->newGlobal(type, 0);
+        _globalValues.emplace(std::move(name), AotGlobalValueNode(glob));
+    }
+
     CompilerCtx::CompilerCtx(Compiler& c, IRScript* s) : compiler(c), script(s)
     {
 
@@ -1140,7 +1154,6 @@ namespace BraneScript
         value->flags = flags;
         if (!value->isVoid())
             value->storageType = (type->type() != ValueType::Struct) ? ValueStorageType_Reg : ValueStorageType_Ptr;
-        value->compileIndex = values.size();
         values.push_back(std::unique_ptr<AotValue>(value));
         return value;
     }
@@ -1149,19 +1162,33 @@ namespace BraneScript
     {
         if (value->isCompare())
             return castReg(value);
+        if(value->isGlobal())
+            return derefPtr(value, value->def, value->ptrOffset);
         assert(value->storageType != ValueStorageType_Null);
         return value;
     }
 
-    AotValue* CompilerCtx::newConst(ValueType type, uint8_t flags)
+    AotValue* CompilerCtx::newConst(const TypeDef* type, uint8_t flags)
     {
+        assert(type);
         auto* value = new AotValue();
-        value->def = getNativeTypeDef(type);
-        assert(value->def);
+        value->def = type;
         value->flags = flags;
         value->storageType = ValueStorageType_Const;
-        value->compileIndex = values.size();
         values.push_back(std::unique_ptr<AotValue>(value));
+        return value;
+    }
+
+    AotValue* CompilerCtx::newGlobal(const TypeDef* type, uint8_t flags)
+    {
+        assert(type);
+        auto value = new AotValue();
+        value->def = type;
+        value->flags = flags;
+        value->storageType = ValueStorageType_Global;
+        value->ptrOffset = script->globalVarAllocSize;
+        script->globalVarAllocSize += type->size();
+        globalValues.push_back(std::unique_ptr<AotValue>(value));
         return value;
     }
 
@@ -1179,6 +1206,8 @@ namespace BraneScript
     {
         if (value->storageType == ValueStorageType_Reg || value->storageType == ValueStorageType_Ptr)
             return value;
+        if(value->isGlobal())
+            return castReg(derefPtr(value, value->def, value->ptrOffset));
         auto* regValue = newReg(value->def, AotValue::Temp | value->flags);
         if(!value->isCompare())
         {
@@ -1226,14 +1255,26 @@ namespace BraneScript
 
     AotValue* CompilerCtx::derefPtr(AotValue* value, const TypeDef* type, uint16_t offset)
     {
+        assert(offset == 0 || value->def->type() == ValueType::Struct || value->isGlobal());
+        bool global = value->isGlobal();
+        if(global) {
+            auto temp = newReg(value->def, value->flags);
+            temp->storageType = ValueStorageType_Ptr;
+            temp->ptrOffset = value->ptrOffset;
+            function->appendCode(Operand::MOV, temp->value(*this), value->value(*this));
+            value = temp;
+        }
         assert(value->storageType == ValueStorageType_Ptr);
         assert(value->valueIndex != (uint16_t)-1);
         assert(type);
-        assert(offset == 0 || value->def->type() == ValueType::Struct);
         if(type->type() == Struct)
         {
-            auto* offsetPtr = newReg(type, AotValue::Initialized & value->flags);
-            function->appendCode(Operand::MOV, offsetPtr->value(*this), value->value(*this));
+            auto* offsetPtr = value;
+            if(!global)
+            {
+                offsetPtr = newReg(type, AotValue::Initialized & value->flags);
+                function->appendCode(Operand::MOV, offsetPtr->value(*this), value->value(*this));
+            }
             function->appendCode(Operand::ADDI, offsetPtr->value(*this), (int32_t)offset);
             return offsetPtr;
         }
@@ -1242,7 +1283,6 @@ namespace BraneScript
         drefValue->storageType = ValueStorageType_DerefPtr;
         drefValue->def = type;
         drefValue->ptrOffset = offset;
-        value->compileIndex = values.size();
         values.push_back(std::unique_ptr<AotValue>(drefValue));
         return drefValue;
     }
@@ -1264,7 +1304,6 @@ namespace BraneScript
     AotValue* CompilerCtx::blankValue()
     {
         auto* value = new AotValue();
-        value->compileIndex = values.size();
         values.push_back(std::unique_ptr<AotValue>(value));
         return value;
     }

@@ -19,7 +19,7 @@ namespace BraneScript
 
     AotValue* AotConstNode::generateBytecode(CompilerCtx& ctx) const
     {
-        auto value = (_resType->name() == std::string_view("string")) ? ctx.newReg(_resType, AotValue::ExternalRef | AotValue::Initialized | AotValue::Temp) : ctx.newConst(_resType->type());
+        auto value = ctx.newConst(_resType, AotValue::Const | AotValue::Initialized | AotValue::ExternalRef | AotValue::Constexpr);
         switch (_resType->type())
         {
             case Bool:
@@ -50,7 +50,8 @@ namespace BraneScript
                 if(std::string_view(_resType->name()) != "string")
                     throw std::runtime_error("Unknown type");
                 auto str = std::any_cast<std::string>(_value);
-                ctx.function->appendCode(LOADS, value->value(ctx), (uint32_t)str.size());
+                value->value(ctx); //Reserve index
+                ctx.function->appendCode(LOADS, (uint32_t)str.size());
                 for(char c : str)
                     ctx.function->appendCode(c);
                 break;
@@ -247,7 +248,7 @@ namespace BraneScript
 
     AotValue* AotDerefNode::generateBytecode(CompilerCtx& ctx) const
     {
-        AotValue* ptr = _value->generateBytecode(ctx);
+        AotValue* ptr = ctx.castReg(_value->generateBytecode(ctx));
         return ctx.derefPtr(ptr, _resType, _offset);
     }
 
@@ -323,5 +324,21 @@ namespace BraneScript
     {
         assert(false);
         return nullptr;
+    }
+
+    AotGlobalValueNode::AotGlobalValueNode(AotValue* global) : AotNode(global->def, NodeType::Value)
+    {
+        assert(global->storageType == ValueStorageType_Global);
+        _global = global;
+    }
+
+    AotNode* AotGlobalValueNode::optimize()
+    {
+        return this;
+    }
+
+    AotValue* AotGlobalValueNode::generateBytecode(CompilerCtx& ctx) const
+    {
+        return ctx.derefPtr(_global, _resType, _global->ptrOffset);
     }
 }

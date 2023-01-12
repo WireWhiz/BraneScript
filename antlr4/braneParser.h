@@ -1,5 +1,5 @@
 
-// Generated from C:/Users/eli/Documents/GitHub/BraneScript/antlr4\brane.g4 by ANTLR 4.11.1
+// Generated from /home/wirewhiz/CLionProjects/BraneEngine/libraries/internal/BraneScript/antlr4/brane.g4 by ANTLR 4.11.1
 
 #pragma once
 
@@ -22,10 +22,10 @@ public:
   };
 
   enum {
-    RuleProgram = 0, RuleProgSegment = 1, RuleType = 2, RuleDeclaration = 3, 
-    RuleArgumentList = 4, RuleArgumentPack = 5, RuleFunction = 6, RulePreprocessor = 7, 
-    RuleLink = 8, RuleStructMember = 9, RuleStructMembers = 10, RuleStructDef = 11, 
-    RuleStatement = 12, RuleExpression = 13
+    RuleProgram = 0, RuleProgSegment = 1, RuleGlobal = 2, RuleType = 3, 
+    RuleDeclaration = 4, RuleArgumentList = 5, RuleArgumentPack = 6, RuleFunction = 7, 
+    RulePreprocessor = 8, RuleLink = 9, RuleStructMember = 10, RuleStructMembers = 11, 
+    RuleStructDef = 12, RuleStatement = 13, RuleExpression = 14
   };
 
   explicit braneParser(antlr4::TokenStream *input);
@@ -47,6 +47,7 @@ public:
 
   class ProgramContext;
   class ProgSegmentContext;
+  class GlobalContext;
   class TypeContext;
   class DeclarationContext;
   class ArgumentListContext;
@@ -84,6 +85,7 @@ public:
     antlr4::tree::TerminalNode *NEWLINE();
     LinkContext *link();
     StructDefContext *structDef();
+    GlobalContext *global();
 
 
     virtual std::any accept(antlr4::tree::ParseTreeVisitor *visitor) override;
@@ -91,6 +93,19 @@ public:
   };
 
   ProgSegmentContext* progSegment();
+
+  class  GlobalContext : public antlr4::ParserRuleContext {
+  public:
+    GlobalContext(antlr4::ParserRuleContext *parent, size_t invokingState);
+    virtual size_t getRuleIndex() const override;
+    DeclarationContext *declaration();
+
+
+    virtual std::any accept(antlr4::tree::ParseTreeVisitor *visitor) override;
+   
+  };
+
+  GlobalContext* global();
 
   class  TypeContext : public antlr4::ParserRuleContext {
   public:

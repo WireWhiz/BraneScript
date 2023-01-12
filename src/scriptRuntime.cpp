@@ -90,6 +90,7 @@ namespace BraneScript
                 break; //goto next switch statement
             case ValueStorageType_Ptr:
                 return ValueRegType::gp;
+            case ValueStorageType_Global:
             case ValueStorageType_DerefPtr:
             case ValueStorageType_Const:
                 return ValueRegType::mem;
@@ -143,6 +144,7 @@ namespace BraneScript
 
         IRFunction* currentFunction = nullptr;
 
+        asmjit::x86::Mem globalsPtr;
         std::vector<asmjit::x86::Reg> registers;
         std::vector<asmjit::x86::Mem> constants;
         std::vector<asmjit::Label> labels;
@@ -164,6 +166,11 @@ namespace BraneScript
                 return;
             if (value.index != registers.size())
                 throw std::runtime_error("Can only create next register index in sequence");
+            if(value.storageType == ValueStorageType_Ptr)
+            {
+                registers.push_back(cc.newIntPtr());
+                return;
+            }
             switch (value.valueType)
             {
                 case ValueType::Bool:
@@ -206,6 +213,8 @@ namespace BraneScript
                     assert(value.index < constants.size());
                     return constants[value.index];
                 }
+                if(value.storageType == ValueStorageType_Global)
+                    return globalsPtr;
                 //If this isn't a constant, it's safe to assume that it's a dereferenced pointer
                 assert(value.storageType == ValueStorageType_DerefPtr);
                 assert(value.index < registers.size());
@@ -321,6 +330,10 @@ namespace BraneScript
             linkedFunctions.push_back(funcData);
         }
 
+        //Allocate memory for globals
+        if(irScript->globalVarAllocSize > 0)
+            script->globalVars.resize(irScript->globalVarAllocSize);
+
         JitErrorHandler errorHandler;
         for (auto& func: irScript->localFunctions)
         {
@@ -331,11 +344,12 @@ namespace BraneScript
             ch.init(_runtime.environment());
             ch.setErrorHandler(&errorHandler);
             Compiler cc(&ch);
-            cc.addDiagnosticOptions(
-                    asmjit::DiagnosticOptions::kValidateAssembler | asmjit::DiagnosticOptions::kRADebugAll);
+            cc.addDiagnosticOptions(asmjit::DiagnosticOptions::kValidateAssembler | asmjit::DiagnosticOptions::kRADebugAll);
             cc.addEncodingOptions(asmjit::EncodingOptions::kOptimizedAlign);
 
             printf("Assembling function: %s\n", ctx.currentFunction->name.c_str());
+            auto globalsPtr = script->globalVars.data();
+            ctx.globalsPtr = cc.newConst(asmjit::ConstPoolScope::kGlobal, &globalsPtr, sizeof(globalsPtr));
 
             asmjit::FuncSignatureBuilder sigBuilder;
             std::vector<asmjit::TypeId> argTypes;
@@ -548,17 +562,15 @@ namespace BraneScript
                     }
                     case LOADS:
                     {
-                        auto reg = ctx.readCode<Value>();
-                        ctx.verifyValue(reg, cc);
                         auto size = ctx.readCode<uint32_t>();
                         auto* text = new std::string();
                         text->resize(size);
                         for(char& c : *text)
                             c = ctx.readCode<char>();
 
-                        printf("LOADS reg%u %s", reg.index, text->c_str());
+                        printf("LOADS %s", text->c_str());
                         script->constStrings.push_back(std::unique_ptr<std::string>(text));
-                        cc.mov(ctx.getReg<Gp>(reg), asmjit::Imm(text));
+                        ctx.constants.push_back(cc.newConst(asmjit::ConstPoolScope::kLocal, &text, sizeof(text)));
                     }
                         break;
                     case MARK:
@@ -956,7 +968,7 @@ namespace BraneScript
                         auto src = ctx.readCode<Value>();
                         ctx.verifyValue(dest, cc);
 
-                        printf("CI32F32 gp%hu xmm%hu\n", dest.index, src.index);
+                        printf("CF32I32 gp%hu xmm%hu\n", dest.index, src.index);
                         auto destReg = ctx.getReg<Gp>(dest);
                         auto srcReg = ctx.getReg<Xmm>(src);
                         cc.cvttss2si(destReg, srcReg);
@@ -968,7 +980,7 @@ namespace BraneScript
                         auto src = ctx.readCode<Value>();
                         ctx.verifyValue(dest, cc);
 
-                        printf("CI32F64 gp%hu xmm%hu\n", dest.index, src.index);
+                        printf("CF64I32 gp%hu xmm%hu\n", dest.index, src.index);
                         auto destReg = ctx.getReg<Gp>(dest);
                         auto srcReg = ctx.getReg<Xmm>(src);
                         cc.cvttsd2si(destReg, srcReg);

@@ -1,5 +1,5 @@
 
-// Generated from C:/Users/eli/Documents/GitHub/BraneScript/antlr4\brane.g4 by ANTLR 4.11.1
+// Generated from /home/wirewhiz/CLionProjects/BraneEngine/libraries/internal/BraneScript/antlr4/brane.g4 by ANTLR 4.11.1
 
 #pragma once
 
@@ -20,6 +20,10 @@ public:
   }
 
   virtual std::any visitProgSegment(braneParser::ProgSegmentContext *ctx) override {
+    return visitChildren(ctx);
+  }
+
+  virtual std::any visitGlobal(braneParser::GlobalContext *ctx) override {
     return visitChildren(ctx);
   }
 

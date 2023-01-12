@@ -65,6 +65,8 @@ namespace BraneScript
                 assert(valueIndex != (uint16_t)-1);
                 value.offset = ptrOffset;
                 break;
+            case ValueStorageType_Global:
+                break;
             default:
                 assert(false);
         }

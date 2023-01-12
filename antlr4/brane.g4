@@ -24,8 +24,10 @@ progSegment : function
             | preprocessor NEWLINE
             | link
             | structDef
-            //Possibly globals here as well
+            | global
             ;
+
+global      : declaration ';';
 
 type        : isConst='const'? isRef='ref'? id=ID;
 declaration : type id=ID;
