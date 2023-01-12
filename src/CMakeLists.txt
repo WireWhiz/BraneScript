@@ -16,7 +16,9 @@ add_library(BraneScript STATIC
         library.cpp
         functionHandle.cpp
         linker.cpp
-        structDefinition.cpp operator.cpp operator.h)
+        structDefinition.cpp
+        operator.cpp
+        script.cpp)
 
 target_link_libraries(BraneScript PUBLIC antlr4 asmjit::asmjit)
 target_compile_definitions(BraneScript PUBLIC ${asmjit_COMPILE_DEFINITIONS})

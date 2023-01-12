@@ -13,7 +13,7 @@ add_executable(bs_tests
         speedTests.cpp
         funcDefTests.cpp
         stringTests.cpp
-        globalVariables.cpp)
+        globalVariableTests.cpp)
 target_link_libraries(bs_tests PUBLIC GTest::gtest_main BraneScript)
 target_compile_definitions(bs_tests PUBLIC TESTS)
 

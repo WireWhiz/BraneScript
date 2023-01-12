@@ -8,6 +8,7 @@
 #include <vector>
 #include <unordered_map>
 #include <string>
+#include <memory>
 #include <asmjit/core/codeholder.h>
 #include "functionHandle.h"
 
@@ -41,6 +42,10 @@ namespace BraneScript
                 return nullptr;
             return (FunctionHandle<Ret, Args...>)functions[f->second];
         }
+
+        /** @brief DO NOT CALL! Called automatically by script runtime upon creation */
+        void init();
+        ~Script();
     };
 }
 

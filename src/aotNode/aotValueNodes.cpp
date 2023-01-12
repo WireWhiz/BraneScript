@@ -209,7 +209,7 @@ namespace BraneScript
         {
             auto s = dynamic_cast<const StructDef*>(_resType);
 
-            int16_t sIndex = 0;
+            int16_t sIndex;
             int16_t cIndex;
             if(ctx.localStructIndices.count(s))
             {
@@ -339,6 +339,9 @@ namespace BraneScript
 
     AotValue* AotGlobalValueNode::generateBytecode(CompilerCtx& ctx) const
     {
-        return ctx.derefPtr(_global, _resType, _global->ptrOffset);
+        auto value = ctx.derefPtr(_global, _resType, _global->ptrOffset);
+        if(value->def->type() == Struct)
+            value->flags |= AotValue::Initialized | AotValue::ExternalRef;
+        return value;
     }
 }
