@@ -1,6 +1,6 @@
 # Brane Script
 
-Embeddable scripting language in development with and intended for use in Brane Engine.
+Embeddable scripting language in development with and intended for use in [Brane Engine](https://github.com/WireWhiz/BraneEngine).
 
 ## Justifications for not just using LuaJit or some other scripting language
 * Allows for a mix of aot (Ahead of time) optimization and jit compilation to optimize things that would have otherwise 
