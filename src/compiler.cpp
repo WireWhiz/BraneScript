@@ -99,7 +99,53 @@ namespace BraneScript
 
     std::any Compiler::visitProgram(braneParser::ProgramContext* context)
     {
-        return braneBaseVisitor::visitProgram(context);
+        braneBaseVisitor::visitProgram(context);
+        //Create constructors for globals
+        IRFunction scriptConstructor;
+        scriptConstructor.name = "_construct()";
+        _ctx->setFunction(&scriptConstructor);
+        for(auto& global : _globalValues)
+        {
+            if(global.second.resType()->type() != Struct)
+                continue;
+            auto s = dynamic_cast<const StructDef*>(global.second.resType());
+
+            int16_t cIndex;
+            if(_ctx->localStructIndices.count(s))
+                cIndex = _ctx->script->findLocalFuncIndex(std::string(s->name()) + "::_construct()");
+            else
+                cIndex = int16_t{-1} - _ctx->script->linkFunction(std::string(s->name()) + "::_construct()");
+
+            //Call constructor
+            auto structPtr = global.second.generateBytecode(*_ctx);
+            _ctx->function->appendCode(Operand::CALL, cIndex);
+            _ctx->function->appendCode(structPtr->value(*_ctx));
+        }
+        _ctx->script->localFunctions.push_back(std::move(scriptConstructor));
+
+        //Create destructors for globals
+        IRFunction scriptDestructor;
+        scriptDestructor.name = "_destruct()";
+        _ctx->setFunction(&scriptDestructor);
+        for(auto& global : _globalValues)
+        {
+            if(global.second.resType()->type() != Struct)
+                continue;
+            auto s = dynamic_cast<const StructDef*>(global.second.resType());
+
+            int16_t dIndex;
+            if(_ctx->localStructIndices.count(s))
+                dIndex = _ctx->script->findLocalFuncIndex(std::string(s->name()) + "::_destruct()");
+            else
+                dIndex = int16_t{-1} - _ctx->script->linkFunction(std::string(s->name()) + "::_destruct()");
+
+            //Call destructor
+            auto structPtr = global.second.generateBytecode(*_ctx);
+            _ctx->function->appendCode(Operand::CALL, dIndex);
+            _ctx->function->appendCode(structPtr->value(*_ctx));
+        }
+        _ctx->script->localFunctions.push_back(std::move(scriptDestructor));
+        return {};
     }
 
     std::any Compiler::visitInclude(braneParser::IncludeContext* context)
@@ -1132,7 +1178,7 @@ namespace BraneScript
     void Compiler::registerGlobalValue(std::string name, const TypeDef* type)
     {
         assert(type);
-        auto glob = _ctx->newGlobal(type, 0);
+        auto glob = _ctx->newGlobal(type, AotValue::Initialized);
         _globalValues.emplace(std::move(name), AotGlobalValueNode(glob));
     }
 

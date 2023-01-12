@@ -20,6 +20,7 @@ TEST(BraneScript, GlobalVariables)
         int var;
     }
     GlobalStruct globalStruct;
+    string globalString;
 
     void setInt(int v)
     {
@@ -33,6 +34,10 @@ TEST(BraneScript, GlobalVariables)
     {
         globalStruct.var = v;
     }
+    void setStringVar(ref string v)
+    {
+        globalString = v;
+    }
     int getInt()
     {
         return globalInt;
@@ -44,6 +49,10 @@ TEST(BraneScript, GlobalVariables)
     int getStructVar()
     {
         return globalStruct.var;
+    }
+    string getStringVar()
+    {
+        return globalString;
     }
 )";
 
@@ -72,6 +81,11 @@ TEST(BraneScript, GlobalVariables)
     ASSERT_TRUE(setStructVar);
     setStructVar(32);
 
+    auto setStringVar = testScript->getFunction<void, std::string*>("setStringVar(ref string)");
+    ASSERT_TRUE(setStringVar);
+    std::string str = "Hello world!";
+    setStringVar(&str);
+
     auto getInt = testScript->getFunction<int>("getInt");
     ASSERT_TRUE(getInt);
     EXPECT_EQ(getInt(), 42);
@@ -83,4 +97,10 @@ TEST(BraneScript, GlobalVariables)
     auto getStructVar = testScript->getFunction<int>("getStructVar");
     ASSERT_TRUE(getStructVar);
     EXPECT_EQ(getStructVar(), 32);
+
+    auto getStringVar = testScript->getFunction<std::string*>("getStringVar()");
+    ASSERT_TRUE(getStringVar);
+    auto strRet = getStringVar();
+    EXPECT_EQ(*strRet, str);
+    delete strRet;
 }

@@ -1451,6 +1451,8 @@ namespace BraneScript
 
         auto scriptPtr = script.get();
         _scripts.push_back(std::move(script));
+
+        scriptPtr->init();
         return scriptPtr;
     }
 
