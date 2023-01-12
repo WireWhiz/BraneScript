@@ -41,14 +41,14 @@ namespace BraneScript
         CompareType compareType = NoRes;
         ValueStorageType storageType = ValueStorageType_Null;
         const TypeDef* def = nullptr;
-        uint16_t compileIndex = 0;
         uint16_t valueIndex = (uint16_t)-1;
         uint16_t ptrOffset = 0;
         Value value(CompilerCtx& ctx);
         inline bool isCompare() const { return compareType != NoRes; }
         inline bool isVoid() const { return def == nullptr; }
         inline bool isTemp() const { return flags & Temp; }
-        inline bool isRef() const { return storageType == ValueStorageType_Ptr && flags & (StackRef | HeapRef | ExternalRef); }
+        inline bool isGlobal() const { return storageType == ValueStorageType_Global; }
+        inline bool isRef() const { return storageType == ValueStorageType_Ptr; }
         inline bool isStackRef() const { return storageType == ValueStorageType_Ptr && flags & StackRef; }
         inline bool isHeapRef() const { return storageType == ValueStorageType_Ptr && flags & HeapRef; }
         inline bool isExternalRef() const { return storageType == ValueStorageType_Ptr && flags & ExternalRef; }

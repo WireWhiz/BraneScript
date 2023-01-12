@@ -18,6 +18,7 @@
 #include "aotNode/aotNode.h"
 #include "aotNode/aotValueNodes.h"
 #include "structDefinition.h"
+#include "robin_hood.h"
 
 namespace BraneScript
 {
@@ -34,15 +35,15 @@ namespace BraneScript
         Linker* _linker = nullptr;
         std::vector<std::string> _errors;
 
-        std::unordered_map<std::string, TypeDef*> _privateTypes;
+        robin_hood::unordered_map<std::string, TypeDef*> _privateTypes;
 
         uint16_t _lValueIDCount = 0;
-
         struct Scope
         {
-            std::unordered_map<std::string, AotValueNode> localValues;
+            robin_hood::unordered_map<std::string, AotValueNode> localValues;
         };
         std::list<Scope> _scopes;
+        robin_hood::unordered_map<std::string, AotGlobalValueNode> _globalValues;
 
         std::any visitProgram(braneParser::ProgramContext* context) override;
 
@@ -112,6 +113,7 @@ namespace BraneScript
 
         bool localValueExists(const std::string& name);
 
+        void registerGlobalValue(std::string name, const TypeDef* type);
         void registerLocalValue(std::string name, const TypeInfo& type);
         void registerLocalValue(std::string name, AotValue* value, const TypeInfo& type);
         AotNode* getValueNode(const std::string& name);
@@ -168,10 +170,11 @@ namespace BraneScript
         StructDef* structDef = nullptr;
         bool returnCalled = false;
         std::vector<std::unique_ptr<AotValue>> values;
+        std::vector<std::unique_ptr<AotValue>> globalValues;
         std::vector<std::unique_ptr<StructDef>>  localStructDefs;
-        std::unordered_map<const StructDef*, int16_t> localStructIndices;
+        robin_hood::unordered_map<const StructDef*, int16_t> localStructIndices;
 
-        std::unordered_map<std::string, uint32_t> libraryAliases;
+        robin_hood::unordered_map<std::string, uint32_t> libraryAliases;
 
         CompilerCtx(Compiler& c, IRScript* s);
 
@@ -181,7 +184,8 @@ namespace BraneScript
 
         AotValue* newReg(const std::string& type, uint8_t flags);
         AotValue* newReg(const TypeDef* type, uint8_t flags);
-        AotValue* newConst(ValueType type, uint8_t flags = AotValue::Const | AotValue::Constexpr);
+        AotValue* newConst(const TypeDef* type, uint8_t flags = AotValue::Const | AotValue::Constexpr);
+        AotValue* newGlobal(const TypeDef* type, uint8_t flags = 0);
         AotValue* castValue(AotValue* value);
         AotValue* castTemp(AotValue* value);
         AotValue* castReg(AotValue* value);

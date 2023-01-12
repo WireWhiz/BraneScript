@@ -117,7 +117,7 @@ namespace BraneScript
     {
         auto value = ctx.castReg(arg->generateBytecode(ctx));
 
-        if(value->isStackRef() || value->isExternalRef())
+        if(value->def->type() == Struct && (value->isStackRef() || value->isExternalRef()))
         {
             //This is where a move/copy constructor would go
             auto* sDef = static_cast<const StructDef*>(value->def);
@@ -201,7 +201,7 @@ namespace BraneScript
 
     AotValue* AotUnaryOperatorNode::generateBytecode(CompilerCtx& ctx) const
     {
-        return _opr->generateBytecode(ctx, arg->generateBytecode(ctx), nullptr);
+        return _opr->generateBytecode(ctx, ctx.castReg(arg->generateBytecode(ctx)), nullptr);
     }
 
     AotBinaryOperatorNode::AotBinaryOperatorNode(const Operator* opr, AotNode* arg1, AotNode* arg2) : _opr(opr), AotBinaryArgNode(arg1, arg2, opr->resType(), NodeType::Operator)
@@ -235,7 +235,7 @@ namespace BraneScript
     AotValue* AotAssignNode::generateBytecode(CompilerCtx& ctx) const
     {
         auto rValue = ctx.castValue(argB->generateBytecode(ctx));
-        auto lValue = argA->generateBytecode(ctx);
+        auto lValue = ctx.castValue(argA->generateBytecode(ctx));
 
         if(lValue->isRef() && lValue->flags & AotValue::Initialized && rValue->isRef())
         {

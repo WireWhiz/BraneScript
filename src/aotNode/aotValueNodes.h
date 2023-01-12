@@ -57,6 +57,15 @@ namespace BraneScript
         AotValue* generateBytecode(CompilerCtx& ctx) const override;
     };
 
+    class AotGlobalValueNode : public AotNode
+    {
+        AotValue* _global;
+    public:
+        AotGlobalValueNode(AotValue* global);
+        AotNode* optimize() override;
+        AotValue* generateBytecode(CompilerCtx& ctx) const override;
+    };
+
     class AotDerefNode : public AotNode
     {
         std::unique_ptr<AotNode> _value;

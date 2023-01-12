@@ -744,6 +744,8 @@ namespace BraneScript
         {
             AotValue* result = ctx.newReg(getNativeTypeDef(Bool), AotValue::Temp);
             result->def = resType();
+            left = ctx.castReg(left);
+            right = ctx.castReg(right);
 
             int16_t fIndex;
             if(_equals)
@@ -784,6 +786,8 @@ namespace BraneScript
         {
             AotValue* result = ctx.newReg(nativeTypes[8], AotValue::Temp | AotValue::HeapRef);
             result->def = resType();
+            left = ctx.castReg(left);
+            right = ctx.castReg(right);
 
             int16_t fIndex = -ctx.script->linkFunction("opr +(string,string)") -1;
             ctx.function->appendCode(CALL, fIndex);
@@ -815,6 +819,8 @@ namespace BraneScript
         {
             AotValue* result = ctx.newReg(getNativeTypeDef(Char), AotValue::Temp | AotValue::HeapRef);
             result->def = resType();
+            left = ctx.castReg(left);
+            right = ctx.castReg(right);
 
             int16_t fIndex = -ctx.script->linkFunction("opr [](string,uint)") -1;
             ctx.function->appendCode(CALL, fIndex);

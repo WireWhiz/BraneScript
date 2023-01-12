@@ -1,5 +1,5 @@
 
-// Generated from C:/Users/eli/Documents/GitHub/BraneScript/antlr4\brane.g4 by ANTLR 4.11.1
+// Generated from /home/wirewhiz/CLionProjects/BraneEngine/libraries/internal/BraneScript/antlr4/brane.g4 by ANTLR 4.11.1
 
 #pragma once
 
@@ -22,6 +22,8 @@ public:
     virtual std::any visitProgram(braneParser::ProgramContext *context) = 0;
 
     virtual std::any visitProgSegment(braneParser::ProgSegmentContext *context) = 0;
+
+    virtual std::any visitGlobal(braneParser::GlobalContext *context) = 0;
 
     virtual std::any visitType(braneParser::TypeContext *context) = 0;
 

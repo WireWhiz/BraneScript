@@ -14,6 +14,7 @@ namespace BraneScript
     {
         std::string namespace_;
         std::vector<IRFunction> localFunctions;
+        uint32_t globalVarAllocSize = 0;
 
         struct IRStructDef
         {
@@ -25,8 +26,6 @@ namespace BraneScript
             };
             std::string name;
             std::vector<Member> members;
-            uint16_t functions;
-            bool packed = false;
             bool isPublic = false;
         };
         std::vector<IRStructDef> localStructs;
