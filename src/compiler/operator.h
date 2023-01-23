@@ -6,7 +6,7 @@
 #define BRANESCRIPT_OPERATOR_H
 
 #include <string>
-#include "aotNode/aotNode.h"
+#include "aotNodes/aotNode.h"
 
 namespace BraneScript
 {
@@ -28,7 +28,7 @@ namespace BraneScript
          * @param arg2 second arg (leave as nullptr for unary operators)
          */
         virtual AotValue* generateBytecode(CompilerCtx& ctx, AotValue* arg1, AotValue* arg2) const = 0;
-        const std::string& symbol();
+        const std::string& symbol() const;
         virtual const TypeDef* resType() const = 0;
     };
 

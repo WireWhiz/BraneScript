@@ -27,7 +27,7 @@ namespace BraneScript
         uint16_t _size;
 
         FunctionHandle<void, void*> _constructor = nullptr;
-        FunctionHandle<void, void*, void*> _copyConstructor = nullptr;
+        FunctionHandle<void, void*, const void*> _copyConstructor = nullptr;
         FunctionHandle<void, void*, void*> _moveConstructor = nullptr;
         FunctionHandle<void, void*> _destructor = nullptr;
     public:
@@ -60,11 +60,11 @@ namespace BraneScript
         void packMembers();
 
         void setConstructor(FunctionHandle<void, void*> f);
-        void setCopyConstructor(FunctionHandle<void, void*, void*> f);
+        void setCopyConstructor(FunctionHandle<void, void*, const void*> f);
         void setMoveConstructor(FunctionHandle<void, void*, void*> f);
         void setDestructor(FunctionHandle<void, void*> f);
         FunctionHandle<void, void*> constructor() const;
-        FunctionHandle<void, void*, void*> copyConstructor() const;
+        FunctionHandle<void, void*, const void*> copyConstructor() const;
         FunctionHandle<void, void*, void*> moveConstructor() const;
         FunctionHandle<void, void*> destructor() const;
 

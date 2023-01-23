@@ -5,9 +5,10 @@ Language: Cpp
 ColumnLimit: 120
 
 # Indents
-IndentWidth: 2
-PPIndentWidth: 2
+IndentWidth: 4
+PPIndentWidth: 4
 NamespaceIndentation: All
+LambdaBodyIndentation: OuterScope
 
 # Breaking
 BreakBeforeBraces: Stroustrup
@@ -15,8 +16,8 @@ AlwaysBreakAfterReturnType: None
 AlwaysBreakAfterDefinitionReturnType: None
 
 # Alignments
-PointerAlignment: Right
-ReferenceAlignment: Right
+PointerAlignment: Left
+ReferenceAlignment: Left
 
 # Break parameters to each line
 AlignAfterOpenBracket: AlwaysBreak
@@ -28,6 +29,3 @@ SpaceBeforeParens: Never
 
 # Tabs
 UseTab: Never
-
----
-Language: CSharp

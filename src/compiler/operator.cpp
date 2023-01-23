@@ -13,7 +13,7 @@ namespace BraneScript
 
     }
 
-    const std::string& Operator::symbol()
+    const std::string& Operator::symbol() const
     {
         return _symbol;
     }

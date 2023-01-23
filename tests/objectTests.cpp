@@ -145,7 +145,7 @@ TEST(BraneScript, Objects)
         new(data) TestStruct1();
         constructorCalled = true;
     });
-    testStruct1Def.setCopyConstructor([](void* dest, void* src){
+    testStruct1Def.setCopyConstructor([](void* dest, const void* src){
         *((TestStruct1*)dest) = *((TestStruct1*)src);
         copyConstructorCalled = true;
     });

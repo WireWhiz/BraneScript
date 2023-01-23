@@ -36,7 +36,7 @@ namespace BraneScript
         void appendCode(Operand op, Value a, T value)
         {
             appendCode(op, a);
-            static_assert(!std::is_same<AotValue, T>());
+            static_assert(!std::is_pointer<T>());
             size_t index = code.size();
             code.resize(code.size() + sizeof(T));
             *(T*)(code.data() + index) = value;
@@ -45,7 +45,7 @@ namespace BraneScript
         template<typename T>
         void appendCode(T value)
         {
-            static_assert(!std::is_same<AotValue, T>());
+            static_assert(!std::is_pointer<T>());
             size_t index = code.size();
             code.resize(code.size() + sizeof(T));
             *(T*)(code.data() + index) = value;

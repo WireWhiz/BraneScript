@@ -24,13 +24,15 @@ namespace BraneScript
         return _name;
     }
 
-    void Library::addFunction(const std::string& sig, std::string ret, void* f)
+    void Library::addFunction(const std::string& sig, const std::string &ret, void* f)
     {
-        _functions.insert({sig, FunctionData(sig, std::move(ret), f)});
+        _functions.insert({sig, FunctionData(sig, ret, f)});
     }
 
     void Library::addStruct(StructDef def)
     {
+        if(_structs.count(def.name()))
+            return;
         std::string name = def.name();
         if(def.constructor())
             addFunction(name + "::_construct()", "void", (void*)def.constructor());

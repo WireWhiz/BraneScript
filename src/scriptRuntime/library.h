@@ -5,14 +5,15 @@
 #include <string>
 #include "functionHandle.h"
 #include "structDefinition.h"
+#include "robin_hood.h"
 
 namespace BraneScript
 {
 
     class Library
     {
-        std::unordered_map<std::string, StructDef> _structs;
-        std::unordered_map<std::string, FunctionData> _functions;
+        robin_hood::unordered_map<std::string, StructDef> _structs;
+        robin_hood::unordered_map<std::string, FunctionData> _functions;
         std::string _name;
     public:
         Library(std::string name);
@@ -25,7 +26,7 @@ namespace BraneScript
             std::string decl = std::move(name) + "(" + argsToString<Args...>() + ")";
             addFunction(decl, typeName<Ret>(), (void*)f);
         }
-        void addFunction(const std::string& sig, std::string ret, void*);
+        void addFunction(const std::string& sig, const std::string &ret, void *f);
         void addStruct(StructDef def);
 
         const FunctionData* getFunction(const std::string& name) const;

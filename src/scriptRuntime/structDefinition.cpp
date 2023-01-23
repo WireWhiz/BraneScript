@@ -91,7 +91,7 @@ namespace BraneScript
         _constructor = f;
     }
 
-    void StructDef::setCopyConstructor(FunctionHandle<void, void*, void*> f)
+    void StructDef::setCopyConstructor(FunctionHandle<void, void*, const void*> f)
     {
         _copyConstructor = f;
     }
@@ -111,7 +111,7 @@ namespace BraneScript
         return _constructor;
     }
 
-    FunctionHandle<void, void*, void*> StructDef::copyConstructor() const
+    FunctionHandle<void, void*, const void*> StructDef::copyConstructor() const
     {
         return _copyConstructor;
     }

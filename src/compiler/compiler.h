@@ -12,11 +12,11 @@
 #include <exception>
 #include <memory>
 
-#include "../antlr4/braneBaseVisitor.h"
+#include "antlr4/braneBaseVisitor.h"
 #include "irFunction.h"
 #include "irScript.h"
-#include "aotNode/aotNode.h"
-#include "aotNode/aotValueNodes.h"
+#include "aotNodes/aotNode.h"
+#include "aotNodes/aotValueNodes.h"
 #include "structDefinition.h"
 #include "robin_hood.h"
 
