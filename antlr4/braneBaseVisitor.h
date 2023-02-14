@@ -1,5 +1,5 @@
 
-// Generated from /home/wirewhiz/CLionProjects/BraneEngine/libraries/internal/BraneScript/antlr4/brane.g4 by ANTLR 4.11.1
+// Generated from /home/wirewhiz/Documents/git/BraneEngine/libraries/internal/BraneScript/antlr4/brane.g4 by ANTLR 4.11.1
 
 #pragma once
 
@@ -43,15 +43,23 @@ public:
     return visitChildren(ctx);
   }
 
+  virtual std::any visitFunctionStub(braneParser::FunctionStubContext *ctx) override {
+    return visitChildren(ctx);
+  }
+
   virtual std::any visitFunction(braneParser::FunctionContext *ctx) override {
     return visitChildren(ctx);
   }
 
-  virtual std::any visitInclude(braneParser::IncludeContext *ctx) override {
+  virtual std::any visitLink(braneParser::LinkContext *ctx) override {
     return visitChildren(ctx);
   }
 
-  virtual std::any visitLink(braneParser::LinkContext *ctx) override {
+  virtual std::any visitExport(braneParser::ExportContext *ctx) override {
+    return visitChildren(ctx);
+  }
+
+  virtual std::any visitExportSegment(braneParser::ExportSegmentContext *ctx) override {
     return visitChildren(ctx);
   }
 
@@ -71,15 +79,15 @@ public:
     return visitChildren(ctx);
   }
 
+  virtual std::any visitAssignment(braneParser::AssignmentContext *ctx) override {
+    return visitChildren(ctx);
+  }
+
   virtual std::any visitScope(braneParser::ScopeContext *ctx) override {
     return visitChildren(ctx);
   }
 
-  virtual std::any visitReturnVal(braneParser::ReturnValContext *ctx) override {
-    return visitChildren(ctx);
-  }
-
-  virtual std::any visitReturnVoid(braneParser::ReturnVoidContext *ctx) override {
+  virtual std::any visitReturn(braneParser::ReturnContext *ctx) override {
     return visitChildren(ctx);
   }
 
@@ -103,14 +111,6 @@ public:
     return visitChildren(ctx);
   }
 
-  virtual std::any visitInlineScope(braneParser::InlineScopeContext *ctx) override {
-    return visitChildren(ctx);
-  }
-
-  virtual std::any visitAssignment(braneParser::AssignmentContext *ctx) override {
-    return visitChildren(ctx);
-  }
-
   virtual std::any visitAddsub(braneParser::AddsubContext *ctx) override {
     return visitChildren(ctx);
   }
@@ -120,10 +120,6 @@ public:
   }
 
   virtual std::any visitConstBool(braneParser::ConstBoolContext *ctx) override {
-    return visitChildren(ctx);
-  }
-
-  virtual std::any visitDelete(braneParser::DeleteContext *ctx) override {
     return visitChildren(ctx);
   }
 
@@ -143,6 +139,10 @@ public:
     return visitChildren(ctx);
   }
 
+  virtual std::any visitParen(braneParser::ParenContext *ctx) override {
+    return visitChildren(ctx);
+  }
+
   virtual std::any visitMemberFunctionCall(braneParser::MemberFunctionCallContext *ctx) override {
     return visitChildren(ctx);
   }
@@ -156,6 +156,10 @@ public:
   }
 
   virtual std::any visitId(braneParser::IdContext *ctx) override {
+    return visitChildren(ctx);
+  }
+
+  virtual std::any visitLogic(braneParser::LogicContext *ctx) override {
     return visitChildren(ctx);
   }
 

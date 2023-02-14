@@ -1,0 +1,72 @@
+#ifndef BRANESCRIPT_STATICANALYZER_H
+#define BRANESCRIPT_STATICANALYZER_H
+
+#include "documentContext.h"
+#include "textPos.h"
+#include <filesystem>
+#include <string>
+#include <vector>
+#include <mutex>
+
+namespace BraneScript
+{
+
+    struct AnalyzationMessage
+    {
+        TextRange range;
+        std::string message;
+    };
+
+    class StaticAnalyzer
+    {
+      public:
+        struct AnalyzationContext
+        {
+            std::string document;
+            std::unique_ptr<ScriptContext> scriptContext;
+            std::vector<AnalyzationMessage> errors;
+            std::vector<AnalyzationMessage> warnings;
+            bool complete = false;
+            uint16_t version = 0;
+            std::mutex lock;
+        };
+      private:
+        struct IdentifierContext
+        {
+            std::vector<DocumentContext*> identifiers;
+        };
+
+        std::vector<std::string> _workspaceRoots;
+        robin_hood::unordered_map<std::string, std::unique_ptr<LibrarySet>> _libraries;
+        robin_hood::unordered_map<std::string, std::unique_ptr<AnalyzationContext>> _analyzationContexts;
+
+      public:
+        /** @brief Register a workspace
+         * This folder and it's children will be searched for brane script related files and scanned so that references
+         * can be made correctly
+         */
+        void addWorkspace(const std::string& path);
+
+        bool isLoaded(const std::string& path);
+        void load(const std::string& path, bool cacheDocument);
+        void load(const std::string& path, std::string document, bool cacheDocument);
+        void reload(const std::string& path);
+
+        AnalyzationContext* getCtx(const std::string& path);
+
+        void registerLibrary(LibraryContext* lib);
+        void deregisterLibrary(LibraryContext* lib);
+        LibrarySet* getLibrary(const std::string& id);
+
+
+        /**
+         * @brief Validates a document will successfully compile, and populates all the fields of AnalyzationResult
+         * @return Document will compile
+         * */
+        bool validate(const std::string& path);
+
+    };
+
+} // namespace BraneScript
+
+#endif // BRANESCRIPT_STATICANALYZER_H

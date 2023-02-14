@@ -3,9 +3,10 @@
 
 #include "asio.hpp"
 #include "lspMessage.h"
-#include <thread>
-#include <functional>
 #include "robin_hood.h"
+#include "staticAnalysis/staticAnalyzer.h"
+#include <functional>
+#include <thread>
 
 namespace lsp
 {
@@ -32,6 +33,8 @@ namespace lsp
         robin_hood::unordered_map<std::string, std::function<void(std::unique_ptr<LspResponseMessage> response)>> responseListeners;
         std::recursive_mutex lock;
         bool initialized = false;
+
+        BraneScript::StaticAnalyzer analyzer;
     };
 
     class LspServer

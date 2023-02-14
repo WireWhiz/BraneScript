@@ -1,5 +1,5 @@
 
-// Generated from /home/wirewhiz/CLionProjects/BraneEngine/libraries/internal/BraneScript/antlr4/brane.g4 by ANTLR 4.11.1
+// Generated from /home/wirewhiz/Documents/git/BraneEngine/libraries/internal/BraneScript/antlr4/brane.g4 by ANTLR 4.11.1
 
 #pragma once
 
@@ -33,11 +33,15 @@ public:
 
     virtual std::any visitArgumentPack(braneParser::ArgumentPackContext *context) = 0;
 
+    virtual std::any visitFunctionStub(braneParser::FunctionStubContext *context) = 0;
+
     virtual std::any visitFunction(braneParser::FunctionContext *context) = 0;
 
-    virtual std::any visitInclude(braneParser::IncludeContext *context) = 0;
-
     virtual std::any visitLink(braneParser::LinkContext *context) = 0;
+
+    virtual std::any visitExport(braneParser::ExportContext *context) = 0;
+
+    virtual std::any visitExportSegment(braneParser::ExportSegmentContext *context) = 0;
 
     virtual std::any visitStructMember(braneParser::StructMemberContext *context) = 0;
 
@@ -47,11 +51,11 @@ public:
 
     virtual std::any visitExprStatement(braneParser::ExprStatementContext *context) = 0;
 
+    virtual std::any visitAssignment(braneParser::AssignmentContext *context) = 0;
+
     virtual std::any visitScope(braneParser::ScopeContext *context) = 0;
 
-    virtual std::any visitReturnVal(braneParser::ReturnValContext *context) = 0;
-
-    virtual std::any visitReturnVoid(braneParser::ReturnVoidContext *context) = 0;
+    virtual std::any visitReturn(braneParser::ReturnContext *context) = 0;
 
     virtual std::any visitIf(braneParser::IfContext *context) = 0;
 
@@ -63,17 +67,11 @@ public:
 
     virtual std::any visitDecl(braneParser::DeclContext *context) = 0;
 
-    virtual std::any visitInlineScope(braneParser::InlineScopeContext *context) = 0;
-
-    virtual std::any visitAssignment(braneParser::AssignmentContext *context) = 0;
-
     virtual std::any visitAddsub(braneParser::AddsubContext *context) = 0;
 
     virtual std::any visitConstInt(braneParser::ConstIntContext *context) = 0;
 
     virtual std::any visitConstBool(braneParser::ConstBoolContext *context) = 0;
-
-    virtual std::any visitDelete(braneParser::DeleteContext *context) = 0;
 
     virtual std::any visitMuldiv(braneParser::MuldivContext *context) = 0;
 
@@ -83,6 +81,8 @@ public:
 
     virtual std::any visitCast(braneParser::CastContext *context) = 0;
 
+    virtual std::any visitParen(braneParser::ParenContext *context) = 0;
+
     virtual std::any visitMemberFunctionCall(braneParser::MemberFunctionCallContext *context) = 0;
 
     virtual std::any visitFunctionCall(braneParser::FunctionCallContext *context) = 0;
@@ -90,6 +90,8 @@ public:
     virtual std::any visitConstFloat(braneParser::ConstFloatContext *context) = 0;
 
     virtual std::any visitId(braneParser::IdContext *context) = 0;
+
+    virtual std::any visitLogic(braneParser::LogicContext *context) = 0;
 
     virtual std::any visitConstChar(braneParser::ConstCharContext *context) = 0;
 

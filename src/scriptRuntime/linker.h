@@ -15,8 +15,6 @@ namespace BraneScript
     {
         Library _global;
         robin_hood::unordered_map<std::string, const TypeDef*> _globalTypes;
-        //TODO this list of operators only needed at compile type, refactor so they are only used in the compiler
-        robin_hood::unordered_map<std::string, Operator*> _operators;
         robin_hood::unordered_map<std::string, Library*> _libraries;
     public:
         Linker();
@@ -28,13 +26,11 @@ namespace BraneScript
         Library& globalLib();
 
         void addGlobalType(const TypeDef* type);
-        void addGlobalOperator(const std::string& sig, Operator* opr);
         void addGlobalFunction(const std::string& sig, const std::string& ret, void* func);
 
         const TypeDef* getType(const std::string& name) const;
         const StructDef* getStruct(const std::string& name) const;
         const FunctionData* getFunction(const std::string& name) const;
-        const Operator* getOperator(const std::string& name) const;
     };
 }
 

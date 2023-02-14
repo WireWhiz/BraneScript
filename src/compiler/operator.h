@@ -23,7 +23,6 @@ namespace BraneScript
         /***
          * Generate operator bytecode
          * @param ctx compiler context
-         * @param res value to store result in
          * @param arg1 first arg
          * @param arg2 second arg (leave as nullptr for unary operators)
          */

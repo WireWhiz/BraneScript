@@ -28,7 +28,7 @@ void lsp::LspMessageId::serialize(Json::Value& json)
     switch(type)
     {
     case null:
-        json["id"] = Json::nullValue;
+        //json["id"] = Json::nullValue;
         break;
     case integer:
         json["id"] = std::stoi(id);
