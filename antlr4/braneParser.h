@@ -175,12 +175,13 @@ public:
   public:
     antlr4::Token *id = nullptr;
     antlr4::Token *oprID = nullptr;
+    braneParser::TypeContext *castType = nullptr;
     braneParser::ArgumentListContext *arguments = nullptr;
     antlr4::Token *isConst = nullptr;
     FunctionStubContext(antlr4::ParserRuleContext *parent, size_t invokingState);
     virtual size_t getRuleIndex() const override;
-    TypeContext *type();
     ArgumentListContext *argumentList();
+    TypeContext *type();
     antlr4::tree::TerminalNode *ID();
     antlr4::tree::TerminalNode *ADD();
     antlr4::tree::TerminalNode *SUB();
@@ -200,16 +201,17 @@ public:
   public:
     antlr4::Token *id = nullptr;
     antlr4::Token *oprID = nullptr;
+    braneParser::TypeContext *castType = nullptr;
     braneParser::ArgumentListContext *arguments = nullptr;
     antlr4::Token *isConst = nullptr;
     braneParser::StatementContext *statements = nullptr;
     FunctionContext(antlr4::ParserRuleContext *parent, size_t invokingState);
     virtual size_t getRuleIndex() const override;
-    TypeContext *type();
     ArgumentListContext *argumentList();
-    antlr4::tree::TerminalNode *ID();
+    TypeContext *type();
     std::vector<StatementContext *> statement();
     StatementContext* statement(size_t i);
+    antlr4::tree::TerminalNode *ID();
     antlr4::tree::TerminalNode *ADD();
     antlr4::tree::TerminalNode *SUB();
     antlr4::tree::TerminalNode *MUL();
@@ -521,7 +523,7 @@ public:
   public:
     CastContext(ExpressionContext *ctx);
 
-    antlr4::tree::TerminalNode *ID();
+    TypeContext *type();
     ExpressionContext *expression();
 
     virtual std::any accept(antlr4::tree::ParseTreeVisitor *visitor) override;

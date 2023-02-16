@@ -338,7 +338,10 @@ namespace BraneScript
             return cost;
         }
 
-        bool resolveFunctionCall(const std::string& identifier, FunctionCallContext* context, std::string& error)
+        bool resolveFunctionCall(const std::string& identifier,
+                                 FunctionCallContext* context,
+                                 std::string& error,
+                                 bool autoCast = true)
         {
             DocumentContext* base = lastNode();
             // Extract library/struct name path
@@ -388,7 +391,7 @@ namespace BraneScript
                             break;
                         }
                         requiredCasts++;
-                        requiredCost += calculateCastCost(f->arguments[i], args[i]->returnType);
+                        requiredCost += calculateCastCost(args[i]->returnType, f->arguments[i]);
                     }
                     // Honor constness
                     if(args[i]->returnType.isConst && f->arguments[i].isRef && !f->arguments[i].isConst)
@@ -425,7 +428,44 @@ namespace BraneScript
 
             context->function = bestMatch;
             context->returnType = context->function->returnType;
+
+            if(castCount)
+            {
+                for(size_t i = 0; i < args.size(); ++i)
+                {
+                    if(context->function->arguments[i].type == args[i]->returnType.type)
+                        continue;
+                    auto* castCtx = new FunctionCallContext{};
+                    castCtx->arguments.push_back(std::unique_ptr<ExpressionContext>(args[i].release()));
+                    args[i].reset(castCtx);
+
+                    // Find the cast operator, should never return false ideally, but I can see configuration bugs
+                    // triggering this in the future.
+                    if(!resolveCast(castCtx, context->function->arguments[i].type, error))
+                        return false;
+                }
+            }
+
             return true;
+        }
+
+        bool resolveCast(FunctionCallContext* context, const TypeContext& targetType, std::string& error)
+        {
+            assert(context->arguments.size() == 1);
+            /* We want to insert the error at the position that would make the most sense, which would be right after
+             * the last one before a cast was attempted, but not after we get the error about the casting operator not
+             * being found.
+             */
+            size_t errorPos = error.size();
+            bool result = resolveFunctionCall("opr " + targetType.identifier, context, error);
+            if(!result)
+            {
+                std::string castError = "Could not cast " + context->arguments[0]->returnType.type.identifier + " to " +
+                                        targetType.identifier + "!\n";
+                error.insert(error.begin() + errorPos, castError.begin(), castError.end());
+            }
+
+            return result;
         }
 
       public:
@@ -565,17 +605,18 @@ namespace BraneScript
 
         virtual std::any visitFunctionStub(braneParser::FunctionStubContext* ctx) override
         {
-            ASSERT_EXISTS(ctx->type());
-            ASSERT_EXISTS(ctx->arguments);
-            ASSERT_EXISTS(ctx->id || ctx->oprID);
+            ASSERT_EXISTS(ctx->type() || ctx->castType);
+            ASSERT_EXISTS(ctx->id || ctx->oprID || ctx->castType);
             bool isMember = lastNode()->is<StructContext>();
 
+            auto returnType = std::any_cast<ValueContext>((ctx->castType) ? visit(ctx->castType) : visit(ctx->type()));
             std::string id;
             if(ctx->id)
                 id = safeGetText(ctx->id);
             else if(ctx->oprID)
                 id = "opr " + safeGetText(ctx->oprID);
-            auto returnType = std::any_cast<ValueContext>(visit(ctx->type()));
+            else if(ctx->castType)
+                id = "opr " + returnType.signature();
             auto arguments = std::move(std::any_cast<std::vector<LabeledValueContext>>(visit(ctx->arguments)));
 
             if(isMember)
@@ -609,17 +650,18 @@ namespace BraneScript
 
         std::any visitFunction(braneParser::FunctionContext* ctx) override
         {
-            ASSERT_EXISTS(ctx->type());
-            ASSERT_EXISTS(ctx->arguments);
-            ASSERT_EXISTS(ctx->id || ctx->oprID);
+            ASSERT_EXISTS(ctx->type() || ctx->castType);
+            ASSERT_EXISTS(ctx->id || ctx->oprID || ctx->castType);
             bool isMember = lastNode()->is<StructContext>();
 
+            auto returnType = std::any_cast<ValueContext>((ctx->castType) ? visit(ctx->castType) : visit(ctx->type()));
             std::string id;
             if(ctx->id)
                 id = safeGetText(ctx->id);
             else if(ctx->oprID)
                 id = "opr " + safeGetText(ctx->oprID);
-            auto returnType = std::any_cast<ValueContext>(visit(ctx->type()));
+            else if(ctx->castType)
+                id = "opr " + returnType.signature();
             auto arguments = std::move(std::any_cast<std::vector<LabeledValueContext>>(visit(ctx->arguments)));
 
             if(isMember)
@@ -877,16 +919,23 @@ namespace BraneScript
             RETURN_EXPR(constCtx);
         }
 
+        std::any visitParen(braneParser::ParenContext* ctx) override
+        {
+            EXPR_ASSERT_EXISTS(ctx->expression());
+            return visit(ctx->expression());
+        }
+
         std::any visitCast(braneParser::CastContext* ctx) override
         {
-            EXPR_ASSERT_EXISTS(ctx->ID());
+            EXPR_ASSERT_EXISTS(ctx->type());
             EXPR_ASSERT_EXISTS(ctx->expression());
             auto callCtx = new FunctionCallContext{};
             initDoc(callCtx, ctx);
+            auto returnType = std::any_cast<ValueContext>(visit(ctx->type()));
             callCtx->arguments.push_back(asExpr(visit(ctx->expression())));
             popDoc();
             std::string error;
-            if(!resolveFunctionCall("opr " + ctx->ID()->getText(), callCtx, error))
+            if(!resolveCast(callCtx, returnType.type, error))
                 recordError(ctx, error);
             RETURN_EXPR(callCtx);
         }

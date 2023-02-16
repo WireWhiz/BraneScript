@@ -37,11 +37,11 @@ type        : isConst='const'? isRef='ref'? id=ID;
 declaration : type id=ID;
 argumentList: (declaration (',' declaration)*)?;
 argumentPack: (expression (',' expression)*)?;
-functionStub: type (id=ID | ('opr' oprID=(ADD|SUB|MUL|DIV|COMPARE|LOGIC|'[]'))) '(' arguments=argumentList ')' isConst='const'? 'ext' ';';
-function    : type (id=ID | ('opr' oprID=(ADD|SUB|MUL|DIV|COMPARE|LOGIC|'[]'))) '(' arguments=argumentList ')' isConst='const'? '{' statements=statement* '}';
+functionStub: ((type (id=ID | ('opr' oprID=(ADD|SUB|MUL|DIV|COMPARE|LOGIC|'[]')))) | ('opr' castType=type)) '(' arguments=argumentList ')' isConst='const'? 'ext' ';';
+function    : ((type (id=ID | ('opr' oprID=(ADD|SUB|MUL|DIV|COMPARE|LOGIC|'[]')))) | ('opr' castType=type)) '(' arguments=argumentList ')' isConst='const'? '{' statements=statement* '}';
 
-link        : 'link' library=STRING ('as' alias=STRING)? ';';
-export      : 'export as' libID=STRING '{' exportSegment* '}';
+link          : 'link' library=STRING ('as' alias=STRING)? ';';
+export        : 'export as' libID=STRING '{' exportSegment* '}';
 exportSegment : function
               | functionStub
               | structDef
@@ -71,7 +71,7 @@ expression  : INT                                                           #con
             | ID                                                            #id
             | base=expression '[' arg=expression ']'                        #indexAccess
             | base=expression '.' member=ID                                 #memberAccess
-            | '(' ID ')' expression                                         #cast
+            | '(' type ')' expression                                       #cast
             | left=expression opr=(MUL | DIV) right=expression              #muldiv
             | left=expression opr=(ADD | SUB) right=expression              #addsub
             | left=expression opr=LOGIC       right=expression              #logic
