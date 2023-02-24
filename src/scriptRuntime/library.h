@@ -22,7 +22,6 @@ namespace BraneScript
         template<typename Ret, typename... Args>
         void addFunction(std::string name, FunctionHandle<Ret, Args...> f)
         {
-
             std::string decl = std::move(name) + "(" + argsToString<Args...>() + ")";
             addFunction(decl, typeName<Ret>(), (void*)f);
         }

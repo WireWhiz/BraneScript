@@ -14,7 +14,6 @@ namespace BraneScript
         std::string type;
         bool isConst = false;
         bool isRef = false;
-        uint8_t stackRef = false;
     };
 }
 

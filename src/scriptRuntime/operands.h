@@ -14,20 +14,21 @@ namespace BraneScript
     {
         // Waiting until we are near feature complete to manually set enum values
         RET,    //Exit function
-        RETV,   // (ValueIndex value) Return int32 value
-        LOADC,  // (ValueIndex value, T constant) load constant defined by byte array into the value
-        LOADS,  // (ValueIndex value, uint32_t size, char[]) load constant string
+        RETV,   // (Value value) Return int32 value
+        INITR,  // (Value value) Initialize or reset a register to a type used by this value
+        LOADC,  // (Value value, T constant) load constant defined by byte array into the value
+        LOADS,  // (Value value, uint32_t size, char[]) load constant string
 
-        ALLOC,     // (ValueIndex ptr, int16_t structDef) allocate local struct on the stack
-        MALLOC,    // (ValueIndex ptr, int16_t structDef) allocate local struct on the heap
-        FREE,      // (ValueIndex ptr, uint16_t structDef) deallocate struct memory
+        ALLOC,     // (Value ptr, uint16_t size) allocate local stack memory
+        MALLOC,    // (Value ptr, uint16_t size) allocate local struct on the heap
+        FREE,      // (Value ptr, uint16_t size) deallocate heap struct memory
 
-        SETE,  // (ValueIndex) set to 0 or 1 based on condition
-        SETNE, // (ValueIndex) set to 0 or 1 based on condition
-        SETA,  // (ValueIndex) set to 0 or 1 based on condition
-        SETG,  // (ValueIndex) set to 0 or 1 based on condition
-        SETAE, // (ValueIndex) set to 0 or 1 based on condition
-        SETGE, // (ValueIndex) set to 0 or 1 based on condition
+        SETE,  // (Value) set to 0 or 1 based on condition
+        SETNE, // (Value) set to 0 or 1 based on condition
+        SETA,  // (Value) set to 0 or 1 based on condition
+        SETG,  // (Value) set to 0 or 1 based on condition
+        SETAE, // (Value) set to 0 or 1 based on condition
+        SETGE, // (Value) set to 0 or 1 based on condition
 
         CMP,  // Compare
         TEST, // Test if 0
@@ -44,27 +45,30 @@ namespace BraneScript
         JGE,  // (uint32_t markIndex) jump to mark on condition
         JLE,  // (uint32_t markIndex) jump to mark on condition
 
-        CALL,   // (int16_t function, ValueIndex returnValue, ValueIndex...) call to another function within the script
+        CALL,   // (int16_t function, Value returnValue, Value...) call to another function within the script
 
-        MOV,   // (ValueIndex value, ValueIndex value) move value to another value.
-        MOVI,  // (ValueIndex value, T value) move an immediate value into a register.
+        MOV,   // (Value value, Value value) move value to another value.
+        MOVI,  // (Value value, T value) move an immediate value into a register.
 
-        ADD,   // (ValueIndex value, ValueIndex value) add values.
-        ADDI,  // (ValueIndex value, T value) add immediate value to register
-        SUB,   // (ValueIndex value, ValueIndex value) subtract values.
-        MUL,   // (ValueIndex value, ValueIndex value) multiply values.
-        DIV,   // (ValueIndex value, ValueIndex value) divide values.
+        ADD,   // (Value value, Value value) add values.
+        ADDI,  // (Value value, T value) add immediate value to register
+        SUB,   // (Value value, Value value) subtract values.
+        MUL,   // (Value value, Value value) multiply values.
+        DIV,   // (Value value, Value value) divide values.
 
-        CU32I32, // (ValueIndex value, ValueIndex value) cast 32 bit unsigned int to 32 bit int
-        CU64I64, // (ValueIndex value, ValueIndex value) cast 64 bit unsigned int to 64 bit int
+        CI64I32, // (Value value, Value value) down cast 64 bit int to 32 bit int
 
-        CI32I64, // (ValueIndex value, ValueIndex value) cast 32 bit int to 64 bit int
-        CF32F64, // (ValueIndex value, ValueIndex value) cast 32 bit int to 64 bit float
-        CF64F32, // (ValueIndex value, ValueIndex value) cast 64 bit int to 32 bit float
-        CI32F32, // (ValueIndex value, ValueIndex value) cast 32 bit int to 32 bit float
-        CI32F64, // (ValueIndex value, ValueIndex value) cast 32 bit int to 64 bit float
-        CF32I32, // (ValueIndex value, ValueIndex value) cast 32 bit float to 32 bit int
-        CF64I32, // (ValueIndex value, ValueIndex value) cast 64 bit float to 32 bit int
+        CU32I32, // (Value value, Value value) cast 32 bit unsigned int to 32 bit int
+        CU64I64, // (Value value, Value value) cast 64 bit unsigned int to 64 bit int
+
+        CI32I64, // (Value value, Value value) cast 32 bit int to 64 bit int
+        CU32U64, // (Value value, Value value) cast 32 bit int to 64 bit int
+        CF32F64, // (Value value, Value value) cast 32 bit int to 64 bit float
+        CF64F32, // (Value value, Value value) cast 64 bit int to 32 bit float
+        CI32F32, // (Value value, Value value) cast 32 bit int to 32 bit float
+        CI32F64, // (Value value, Value value) cast 32 bit int to 64 bit float
+        CF32I32, // (Value value, Value value) cast 32 bit float to 32 bit int
+        CF64I32, // (Value value, Value value) cast 64 bit float to 32 bit int
     };
 }
 #endif //BRANESCRIPT_OPERANDS_H

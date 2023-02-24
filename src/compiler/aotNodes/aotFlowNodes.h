@@ -13,59 +13,78 @@
 
 namespace BraneScript
 {
-
-    class AotScope : public AotNode
+    class AotNodeList : public AotNode
     {
-        std::vector<std::unique_ptr<AotNode>> _operations;
-    public:
-        explicit AotScope(std::vector<AotNode*> operations);
+      public:
+        AotNodeList();
+        std::vector<std::unique_ptr<AotNode>> operations;
+
+        void appendStatement(AotNode* stmt);
 
         AotNode* optimize() override;
 
-        AotValue* generateBytecode(CompilerCtx& ctx) const override;
+        AotValue* generateBytecode(FunctionCompilerCtx& ctx) const override;
+
     };
 
-    class AotConditionBase : public AotNode
+    class AotReturnNode : public AotNode
     {
-    protected:
-        static void jumpOnConditionFalse(AotValue* condition, uint32_t markIndex, CompilerCtx& ctx);
-
-    public:
-        AotConditionBase(TypeDef* resType, NodeType type);
+      public:
+        AotReturnNode();
+        AotNode* optimize() override;
+        AotValue* generateBytecode(FunctionCompilerCtx& ctx) const override;
     };
 
-    class AotIf : public AotConditionBase
+    class AotReturnValueNode : public AotUnaryArgNode
     {
-        std::unique_ptr<AotNode> _condition;
-        std::unique_ptr<AotNode> _operation;
-    public:
-        AotIf(AotNode* condition, AotNode* operation);
+      public:
+        AotReturnValueNode(AotNode* arg);
+
+        AotValue* generateBytecode(FunctionCompilerCtx& ctx) const override;
+    };
+
+    class AotJumpTarget : public AotNode
+    {
+        uint32_t _id = -1;
+      public:
+        AotJumpTarget(uint32_t id);
 
         AotNode* optimize() override;
 
-        AotValue* generateBytecode(CompilerCtx& ctx) const override;
+        AotValue* generateBytecode(FunctionCompilerCtx& ctx) const override;
+
+        uint32_t id() const;
     };
 
-    class AotWhile : public AotConditionBase
+    class AotJump : public AotNode
     {
-        std::unique_ptr<AotNode> _condition;
-        std::unique_ptr<AotNode> _operation;
-    public:
-        AotWhile(AotNode* condition, AotNode* operation);
+        uint32_t _target;
+      public:
+        AotJump(uint16_t target);
 
         AotNode* optimize() override;
 
-        AotValue* generateBytecode(CompilerCtx& ctx) const override;
+        AotValue* generateBytecode(FunctionCompilerCtx& ctx) const override;
+    };
+
+    class AotJumpFalse : public AotUnaryArgNode
+    {
+        uint32_t _target;
+      public:
+        AotJumpFalse(AotNode* condition, uint16_t target);
+        AotNode* optimize() override;
+
+        AotValue* generateBytecode(FunctionCompilerCtx& ctx) const override;
     };
 
     class AotFunctionCall : public AotNode
     {
-        int16_t _functionIndex;
+        std::string _signature;
         std::vector<std::unique_ptr<AotNode>> _arguments;
     public:
-        AotFunctionCall(int16_t functionIndex, const TypeDef* returnType, const std::vector<AotNode*>& arguments);
+        AotFunctionCall(std::string signature, const TypeDef* returnType, const std::vector<AotNode*>& arguments);
         AotNode* optimize() override;
-        AotValue* generateBytecode(CompilerCtx& ctx) const override;
+        AotValue* generateBytecode(FunctionCompilerCtx& ctx) const override;
     };
 }
 #endif //BRANESCRIPT_AOTFLOWNODES_H

@@ -364,6 +364,16 @@ namespace BraneScript
             std::list<FunctionContext*> overrides;
             base->getFunction(postfix, overrides);
 
+            for(auto& imp : _result.scriptContext->imports)
+            {
+                if(!imp.alias.empty())
+                    continue;
+                auto lib = _analyzer.getLibrary(imp.library);
+                if(!lib)
+                    continue;
+                lib->getFunction(identifier, overrides);
+            }
+
             /* We want to find the best match with the lowest amount of implicit casts. So we store the cast count for
              * each candidate function and try to find the closest one. Cast cost is a measure of the desirability of
              * casts the casts. For instance a cast from uint32 to uint64 is more desirable than a cast from uint32_t to
@@ -567,12 +577,12 @@ namespace BraneScript
         FunctionContext* getFunctionNode(const std::string& identifier, const std::vector<LabeledValueContext>& args)
         {
             LabeledNodeList<FunctionContext>* functions = nullptr;
-            if(lastNode()->is<StructContext>())
-                functions = &lastNode()->as<StructContext>()->functions;
-            else if(lastNode()->is<ScriptContext>())
-                functions = &lastNode()->as<ScriptContext>()->functions;
-            else if(lastNode()->is<LibraryContext>())
-                functions = &lastNode()->as<LibraryContext>()->functions;
+            if(auto* s = getLast<StructContext>())
+                functions = &s->functions;
+            else if(auto* l =  getLast<LibraryContext>())
+                functions = &l->functions;
+            else
+                functions = &_result.scriptContext->functions;
             assert(functions);
 
             // See if a function with this overload already exists
@@ -679,10 +689,15 @@ namespace BraneScript
             func->identifier.range = toRange(ctx->id);
             func->returnType = returnType;
             func->arguments = std::move(arguments);
-            for(auto& a : func->arguments)
+            for(size_t i = 0; i < func->arguments.size(); i++)
             {
+                auto& a = func->arguments[i];
                 a.parent = func;
                 a.isLValue = true;
+                if(a.type.storageType == ValueType::Struct && !a.isRef)
+                    recordError(
+                        ctx->arguments->declaration()[i]->type(),
+                        R"(Structs may only be passed by reference, consider adding the "ref" and "const" descriptors instead)");
             }
 
             if(func->version == _result.version)
@@ -765,6 +780,7 @@ namespace BraneScript
             auto structCtx = getNode(*structs, safeGetText(ctx->id));
             initDoc(structCtx, ctx);
             visitChildren(ctx);
+            structCtx->packed = ctx->packed;
             popDoc();
             pruneNodes(structCtx->variables);
             pruneNodes(structCtx->functions);
@@ -787,17 +803,26 @@ namespace BraneScript
 
         std::any visitReturn(braneParser::ReturnContext* ctx) override
         {
-            STMT_ASSERT_EXISTS(ctx->expression());
             auto retCtx = new ReturnContext{};
             initDoc(retCtx, ctx);
-            retCtx->value = asExpr(visit(ctx->expression()));
+            if(ctx->expression())
+                retCtx->value = asExpr(visit(ctx->expression()));
             popDoc();
 
             auto& functionType = lastNode()->getParent<FunctionContext>()->returnType.type;
             if(retCtx->value && retCtx->value->returnType.type != functionType)
-                recordError(ctx,
-                            "Returned value of type " + retCtx->value->returnType.type.identifier +
-                                " does not match the function's declared return type of " + functionType.identifier);
+            {
+                auto castCtx = std::make_unique<FunctionCallContext>();
+                std::string castError;
+                castCtx->arguments.push_back(std::move(retCtx->value));
+                if(!resolveCast(castCtx.get(), lastNode()->getParent<FunctionContext>()->returnType.type, castError))
+                    recordError(ctx,"Returned value of type " + castCtx->arguments[0]->returnType.type.identifier +
+                                    " does not match the function's declared return type of " +
+                                    functionType.identifier);
+
+                retCtx->value = std::move(castCtx);
+            }
+
             _functionHasReturn = true;
             RETURN_STMT(retCtx);
         }
@@ -836,16 +861,18 @@ namespace BraneScript
                 scope = lastNode()->getParent<ScopeContext>();
             assert(scope);
 
-            auto result = new LabeledValueAccessContext;
+            auto result = new LabeledValueConstructionContext{};
             initDoc(result, ctx);
             auto decl = std::make_unique<LabeledValueContext>(
                 std::any_cast<LabeledValueContext>(visitDeclaration(ctx->declaration())));
             decl->isLValue = true;
+
             scope->localVariables.push_back(std::move(decl));
             popDoc();
             result->value = (--scope->localVariables.end())->get();
             if(result->value)
                 result->returnType = *result->value;
+
             RETURN_EXPR(result);
         }
 
@@ -856,14 +883,23 @@ namespace BraneScript
             auto assignmentCtx = new AssignmentContext{};
             initDoc(assignmentCtx, ctx);
             assignmentCtx->lValue = asExpr(visit(ctx->lValue));
-            if(assignmentCtx->lValue)
-            {
-                if(!assignmentCtx->lValue->returnType.isLValue)
-                    recordError(ctx->lValue, "Expression is not an lValue!");
-                if(assignmentCtx->lValue->returnType.isConst)
-                    recordError(ctx->lValue, "Can not set constant value!");
-            }
+            if(!assignmentCtx->lValue->returnType.isLValue)
+                recordError(ctx->lValue, "Expression is not an lValue!");
+            if(assignmentCtx->lValue->returnType.isConst)
+                recordError(ctx->lValue, "Can not modify a constant value!");
+
+            if(assignmentCtx->lValue->is<LabeledValueReferenceContext>())
+                assignmentCtx->lValue->as<LabeledValueReferenceContext>()->isAssignment = true;
             assignmentCtx->rValue = asExpr(visit(ctx->rValue));
+            if(assignmentCtx->lValue->returnType.type != assignmentCtx->rValue->returnType.type)
+            {
+                auto castCtx = new FunctionCallContext{};
+                castCtx->arguments.push_back(std::unique_ptr<ExpressionContext>(assignmentCtx->rValue.release()));
+                assignmentCtx->rValue.reset(castCtx);
+                std::string error;
+                if(!resolveCast(castCtx, assignmentCtx->lValue->returnType.type, error))
+                    recordError(ctx->rValue, error);
+            }
             popDoc();
             RETURN_STMT(assignmentCtx);
         }
@@ -1038,12 +1074,15 @@ namespace BraneScript
             {
                 auto memberAccess = new MemberAccessContext{};
                 initDoc(memberAccess, ctx);
-                auto valueAccess = new LabeledValueAccessContext{};
+                auto valueAccess = new LabeledValueReferenceContext{};
                 initDoc(valueAccess, ctx);
 
                 valueAccess->value =
                     lastNode()->findIdentifier("this", IDSearchOptions_ParentsOnly)->as<LabeledValueContext>();
                 valueAccess->returnType = *valueAccess->value;
+
+                valueAccess->referenceIndex = valueAccess->value->references.size();
+                valueAccess->value->references.push_back(LabeledValueContext::Reference{valueAccess, false});
 
                 auto parent = node->parent->as<StructContext>();
                 for(auto& m : parent->variables)
@@ -1061,10 +1100,14 @@ namespace BraneScript
                 RETURN_EXPR(memberAccess);
             }
 
-            auto valueAccess = new LabeledValueAccessContext{};
+            auto valueAccess = new LabeledValueReferenceContext{};
             initDoc(valueAccess, ctx);
             popDoc();
             valueAccess->value = node->as<LabeledValueContext>();
+
+            valueAccess->referenceIndex = valueAccess->value->references.size();
+            valueAccess->value->references.push_back(LabeledValueContext::Reference{valueAccess, false});
+
             valueAccess->returnType = *valueAccess->value;
             RETURN_EXPR(valueAccess);
         }
@@ -1149,7 +1192,7 @@ namespace BraneScript
             // If a non-member function was not found and this scope is in a member function, try to implicitly
             // reference "this" variable
             error += "\n";
-            auto valueAccess = new LabeledValueAccessContext{};
+            auto valueAccess = new LabeledValueReferenceContext{};
             initDoc(valueAccess, ctx);
 
             valueAccess->value =
@@ -1176,6 +1219,14 @@ namespace BraneScript
         }
 
         DocumentContext* lastNode() { return _documentContext.top(); }
+
+        template<typename T>
+        T* getLast()
+        {
+            if(lastNode()->is<T>())
+                return lastNode()->as<T>();
+            return lastNode()->getParent<T>();
+        }
 
         bool analyze()
         {
@@ -1219,6 +1270,8 @@ namespace BraneScript
         }
     };
 
+    StaticAnalyzer::StaticAnalyzer() { addWorkspace("include"); }
+
     bool StaticAnalyzer::isLoaded(const std::string& path) { return _analyzationContexts.contains(path); }
 
     std::string readDocument(const std::string& path)
@@ -1227,7 +1280,7 @@ namespace BraneScript
         if(!f.is_open())
             throw std::runtime_error("Could not load " + path + "!");
         std::string document;
-        document.resize(f.gcount());
+        document.resize(f.tellg());
         f.seekg(0);
         f.read(document.data(), document.size());
         f.close();
@@ -1291,6 +1344,7 @@ namespace BraneScript
 
     void StaticAnalyzer::addWorkspace(const std::string& path)
     {
+        assert(std::filesystem::exists(path));
         for(const auto& entry : std::filesystem::recursive_directory_iterator{path})
         {
             if(!entry.is_regular_file())

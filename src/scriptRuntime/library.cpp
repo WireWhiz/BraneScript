@@ -34,15 +34,6 @@ namespace BraneScript
         if(_structs.count(def.name()))
             return;
         std::string name = def.name();
-        if(def.constructor())
-            addFunction(name + "::_construct()", "void", (void*)def.constructor());
-        if(def.moveConstructor())
-            addFunction(name + "::_move(ref " + name + ")", "void", (void*)def.moveConstructor());
-        if(def.copyConstructor())
-            addFunction(name + "::_copy(const ref " + name + ")", "void", (void*)def.copyConstructor());
-        if(def.destructor())
-            addFunction(name + "::_destruct()", "void", (void*)def.destructor());
-
         _structs.insert({name, std::move(def)});
     }
 

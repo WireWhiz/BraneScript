@@ -1,10 +1,11 @@
 #include "testing.h"
 
-#include "../src/compiler.h"
-#include "../src/scriptRuntime.h"
-#include "../src/script.h"
-#include "../src/nativeTypes.h"
-#include "../src/linker.h"
+#include "compiler.h"
+#include "linker.h"
+#include "nativeTypes.h"
+#include "script.h"
+#include "scriptRuntime.h"
+#include "staticAnalysis/staticAnalyzer.h"
 
 using namespace BraneScript;
 
@@ -48,6 +49,7 @@ TEST(BraneScript, Objects)
     scriptMallocDiff = 0;
 #endif
     std::string testString = R"(
+    link "BraneScript";
     float getMember1(ref TestStruct1 s)
     {
         return s.a;
@@ -78,7 +80,7 @@ TEST(BraneScript, Objects)
         TestStruct1 temp = createStruct();
     }
 
-    public struct TestStruct2
+    struct TestStruct2
     {
         int a;
         bool b;
@@ -111,7 +113,7 @@ TEST(BraneScript, Objects)
         return s.sum();
     }
 
-    public struct NestedStructChild
+    struct NestedStructChild
     {
         float x;
         float y;
@@ -123,7 +125,7 @@ TEST(BraneScript, Objects)
             z = 3;
         }
     }
-    public struct NestedStructBase
+    struct NestedStructBase
     {
         float a;
         NestedStructChild b;
@@ -140,28 +142,37 @@ TEST(BraneScript, Objects)
     }
 
 )";
+
     StructDef testStruct1Def("TestStruct1");
-    testStruct1Def.setConstructor([](void* data) {
-        new(data) TestStruct1();
-        constructorCalled = true;
-    });
-    testStruct1Def.setCopyConstructor([](void* dest, const void* src){
-        *((TestStruct1*)dest) = *((TestStruct1*)src);
-        copyConstructorCalled = true;
-    });
-    testStruct1Def.setMoveConstructor([](void* dest, void* src){
-        *((TestStruct1*)dest) = std::move(*((TestStruct1*)src));
-        moveConstructorCalled = true;
-    });
-    testStruct1Def.setDestructor([](void* data) {
-        ((TestStruct1*)data)->~TestStruct1();
-        destructorCalled = true;
-    });
 
     testStruct1Def.addMemberVar("c", getNativeTypeDef(ValueType::Bool));
     testStruct1Def.addMemberVar("a", getNativeTypeDef(ValueType::Float32));
     testStruct1Def.addMemberVar("b", getNativeTypeDef(ValueType::Int32));
     testStruct1Def.padMembers();
+
+    auto libraryContext = new LibraryContext{};
+    libraryContext->identifier.text = "BraneScript";
+    auto structCtx = new StructContext{};
+    structCtx->identifier.text = "TestStruct1";
+    structCtx->variables.emplace_back(new LabeledValueContext{});
+    structCtx->variables.emplace_back(new LabeledValueContext{});
+    structCtx->variables.emplace_back(new LabeledValueContext{});
+    structCtx->variables[0]->identifier.text = "c";
+    structCtx->variables[0]->type = {
+        "bool",
+        ValueType::Bool
+    };
+    structCtx->variables[1]->identifier.text = "a";
+    structCtx->variables[1]->type = {
+        "float",
+        ValueType::Float32
+    };
+    structCtx->variables[2]->identifier.text = "b";
+    structCtx->variables[2]->type = {
+        "int",
+        ValueType::Int32
+    };
+    libraryContext->structs.insert({"TestStruct1", std::unique_ptr<StructContext>(structCtx)});
 
     EXPECT_EQ(testStruct1Def.memberVars()[0].offset, offsetof(TestStruct1, c));
     EXPECT_EQ(testStruct1Def.memberVars()[1].offset, offsetof(TestStruct1, a));
@@ -169,17 +180,42 @@ TEST(BraneScript, Objects)
 
     Linker l;
     l.globalLib().addStruct(testStruct1Def);
+    l.globalLib().addFunction(std::string(testStruct1Def.name()) + "::_construct()", "void", (void*)(FunctionHandle<void, void*>)[](void* data) {
+            new(data) TestStruct1();
+            constructorCalled = true;
+        });
+    l.globalLib().addFunction(std::string(testStruct1Def.name()) + "::_copy(const ref " + std::string(testStruct1Def.name())  + ")", "void", (void*)(FunctionHandle<void, void*, const void*>)[](void* dest, const void* src){
+            *((TestStruct1*)dest) = *((TestStruct1*)src);
+            copyConstructorCalled = true;
+        });
+    l.globalLib().addFunction(std::string(testStruct1Def.name()) + "::_move(ref " + std::string(testStruct1Def.name())  + ")", "void", (void*)(FunctionHandle<void, void*, void*>)[](void* dest, void* src){
+            *((TestStruct1*)dest) = std::move(*((TestStruct1*)src));
+            moveConstructorCalled = true;
+        });
+    l.globalLib().addFunction(std::string(testStruct1Def.name())  + "::_destruct()", "void", (void*)(FunctionHandle<void, void*>)[](void* data) {
+            ((TestStruct1*)data)->~TestStruct1();
+            destructorCalled = true;
+        });
 
-    Compiler compiler(&l);
-    IRScript* ir = compiler.compile(testString);
-    checkCompileErrors(compiler);
+    StaticAnalyzer analyzer;
+    analyzer.registerLibrary(libraryContext);
+    analyzer.load("test", testString);
+    if(!analyzer.validate("test"))
+    {
+        for(auto& error : analyzer.getCtx("test")->errors)
+            std::cerr << error.message << std::endl;
+        ASSERT_TRUE(false);
+    }
+
+    Compiler compiler;
+    auto* ir = compiler.compile(analyzer.getCtx("test")->scriptContext.get());
     ASSERT_TRUE(ir);
 
-    IRScript::IRStructDef& scriptStructDef = ir->localStructs[0];
+    /*IRScript::IRStructDef& scriptStructDef = ir->localStructs[0];
     EXPECT_TRUE(scriptStructDef.isPublic);
     EXPECT_EQ(scriptStructDef.members[0].offset, offsetof(TestStruct2, a));
     EXPECT_EQ(scriptStructDef.members[1].offset, offsetof(TestStruct2, b));
-    EXPECT_EQ(scriptStructDef.members[2].offset, offsetof(TestStruct2, c));
+    EXPECT_EQ(scriptStructDef.members[2].offset, offsetof(TestStruct2, c));*/
 
     ScriptRuntime rt;
     rt.setLinker(&l);

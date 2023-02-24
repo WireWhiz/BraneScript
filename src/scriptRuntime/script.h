@@ -11,6 +11,7 @@
 #include <memory>
 #include <asmjit/core/codeholder.h>
 #include "functionHandle.h"
+#include "robin_hood.h"
 
 namespace BraneScript
 {
@@ -22,7 +23,7 @@ namespace BraneScript
         std::vector<uint8_t> globalVars;
         std::vector<std::unique_ptr<std::string>> constStrings;
 
-        std::unordered_map<std::string, size_t> functionNames;
+        robin_hood::unordered_map<std::string, size_t> functionNames;
 
         template<typename Ret, typename... Args>
         FunctionHandle<Ret, Args...> getFunction(const std::string& name) const

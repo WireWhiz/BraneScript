@@ -41,6 +41,8 @@ namespace BraneScript
         robin_hood::unordered_map<std::string, std::unique_ptr<AnalyzationContext>> _analyzationContexts;
 
       public:
+        StaticAnalyzer();
+
         /** @brief Register a workspace
          * This folder and it's children will be searched for brane script related files and scanned so that references
          * can be made correctly
@@ -48,8 +50,8 @@ namespace BraneScript
         void addWorkspace(const std::string& path);
 
         bool isLoaded(const std::string& path);
-        void load(const std::string& path, bool cacheDocument);
-        void load(const std::string& path, std::string document, bool cacheDocument);
+        void load(const std::string& path, bool cacheDocument = false);
+        void load(const std::string& path, std::string document, bool cacheDocument = true);
         void reload(const std::string& path);
 
         AnalyzationContext* getCtx(const std::string& path);

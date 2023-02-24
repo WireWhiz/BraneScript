@@ -6,7 +6,7 @@
 #include "library.h"
 #include "typeDef.h"
 #include "nativeTypes.h"
-#include "operator.h"
+#include "nativeLibrary.h"
 
 namespace BraneScript
 {
@@ -18,8 +18,7 @@ namespace BraneScript
         _global.addStruct(*dynamic_cast<const StructDef*>(getNativeTypes()[8]));
         for(auto& f : getNativeFunctions())
             _global.addFunction(f.name, f.ret, f.pointer);
-
-        _operators = nativeOperators();
+        addLibrary(getNativeLibrary());
     }
 
     Library* Linker::getLibrary(const std::string& name) const
@@ -57,12 +56,6 @@ namespace BraneScript
         if(_globalTypes.contains(type->name()))
             return;
         _globalTypes.insert({type->name(), type});
-    }
-
-    void Linker::addGlobalOperator(const std::string& sig, Operator* opr) {
-        if(_operators.contains(sig))
-            return;
-        _operators.insert({sig, opr});
     }
 
     void Linker::addGlobalFunction(const std::string& sig, const std::string& ret, void* func) {
@@ -106,14 +99,4 @@ namespace BraneScript
         assert(nameOffset < name.size());
         return lib->getFunction(std::string{name.data() + nameOffset, name.size() - nameOffset});
     }
-
-    const Operator* Linker::getOperator(const std::string& name) const
-    {
-        auto opr = _operators.find(name);
-        if(opr != _operators.end())
-            return opr->second;
-        return nullptr;
-    }
-
-
 }

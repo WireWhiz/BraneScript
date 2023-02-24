@@ -3,19 +3,10 @@
 //
 
 #include "testing.h"
-#include "../src/compiler.h"
+#include "compiler.h"
 
 namespace BraneScript
 {
-    void checkCompileErrors(Compiler& c)
-    {
-        fflush(0);
-        EXPECT_TRUE(c.errors().empty()) << "Compiler errors were detected";
-        if(c.errors().empty())
-            return;
-        for(auto& compileError: c.errors())
-            std::cerr << compileError << std::endl;
-    }
 
 }
 

@@ -13,185 +13,135 @@
 #include <memory>
 
 #include "antlr4/braneBaseVisitor.h"
-#include "irFunction.h"
-#include "irScript.h"
+#include "aotInlineFunctions/aotInlineFunction.h"
 #include "aotNodes/aotNode.h"
 #include "aotNodes/aotValueNodes.h"
-#include "structDefinition.h"
+#include "irFunction.h"
+#include "irScript.h"
 #include "robin_hood.h"
+#include "src/utility/staticIndexVector.h"
+#include "staticAnalysis/documentContext.h"
+#include "structDefinition.h"
 
 namespace BraneScript
 {
-    class TypeDef;
-    class StructDef;
-    class CompilerCtx;
-    class Linker;
 
     class Compiler : public braneBaseVisitor
     {
-    private:
-        const std::string* _currentFile = nullptr;
-        std::unique_ptr<CompilerCtx> _ctx;
-        Linker* _linker = nullptr;
-        std::vector<std::string> _errors;
+        robin_hood::unordered_map<std::string, const TypeDef*> _nativeTypes;
+        robin_hood::unordered_map<std::string, std::unique_ptr<StructDef>> _registeredStructs;
+        robin_hood::unordered_map<std::string, std::vector<std::unique_ptr<AotInlineFunction>>> _inlineFunctions;
 
-        robin_hood::unordered_map<std::string, TypeDef*> _privateTypes;
+        StructDef structFromDocumentContext(const StructContext* ctx);
+      public:
+        Compiler();
 
-        uint16_t _lValueIDCount = 0;
-        struct Scope
-        {
-            robin_hood::unordered_map<std::string, AotValueNode> localValues;
-        };
-        std::list<Scope> _scopes;
-        robin_hood::unordered_map<std::string, AotGlobalValueNode> _globalValues;
+        /** @brief Add an unmanaged type not controlled by this compiler */
+        void registerType(const TypeDef* type);
+        /** @brief Used to create and update struct definitions.
+         * Must be called with every script linked to a script you wish to compile so that all types will be defined.
+         */
+        void updateDefinedStructs(const ScriptContext* script);
+        void clearDefinedStructs();
 
-        std::any visitProgram(braneParser::ProgramContext* context) override;
+        const TypeDef* getType(const std::string& id) const;
+        IRScript* compile(const ScriptContext* script);
 
-        std::any visitInclude(braneParser::IncludeContext* context) override;
-
-        std::any visitConstChar(braneParser::ConstCharContext *context) override;
-
-        std::any visitConstString(braneParser::ConstStringContext* context) override;
-
-        std::any visitInlineScope(braneParser::InlineScopeContext* context) override;
-
-        std::any visitAssignment(braneParser::AssignmentContext* context) override;
-
-        std::any visitScope(braneParser::ScopeContext* context) override;
-
-        std::any visitConstFloat(braneParser::ConstFloatContext* context) override;
-
-        std::any visitAddsub(braneParser::AddsubContext* context) override;
-
-        std::any visitConstInt(braneParser::ConstIntContext* context) override;
-
-        std::any visitId(braneParser::IdContext* context) override;
-
-        std::any visitDecl(braneParser::DeclContext* context) override;
-
-        std::any visitMuldiv(braneParser::MuldivContext* context) override;
-
-        std::any visitDeclaration(braneParser::DeclarationContext* context) override;
-
-        std::any visitArgumentList(braneParser::ArgumentListContext* ctx) override;
-
-        std::any visitFunction(braneParser::FunctionContext* ctx) override;
-
-        std::any visitExprStatement(braneParser::ExprStatementContext* context) override;
-
-        std::any visitReturnVoid(braneParser::ReturnVoidContext* ctx) override;
-
-        std::any visitReturnVal(braneParser::ReturnValContext* ctx) override;
-
-        std::any visitCast(braneParser::CastContext* context) override;
-
-        std::any visitConstBool(braneParser::ConstBoolContext* ctx) override;
-
-        std::any visitIf(braneParser::IfContext* ctx) override;
-
-        std::any visitWhile(braneParser::WhileContext* context) override;
-
-        std::any visitComparison(braneParser::ComparisonContext* context) override;
-
-        std::any visitArgumentPack(braneParser::ArgumentPackContext *context) override;
-
-        std::any visitFunctionCall(braneParser::FunctionCallContext *context) override;
-
-        std::any visitMemberFunctionCall(braneParser::MemberFunctionCallContext *context) override;
-
-        std::any visitLink(braneParser::LinkContext *context) override;
-
-        std::any visitMemberAccess(braneParser::MemberAccessContext *context) override;
-
-        std::any visitIndexAccess(braneParser::IndexAccessContext *context) override;
-
-        std::any visitDelete(braneParser::DeleteContext *context) override;
-
-        std::any visitStructDef(braneParser::StructDefContext *context) override;
-
-        std::any visitType(braneParser::TypeContext *context) override;
-
-        bool localValueExists(const std::string& name);
-
-        void registerGlobalValue(std::string name, const TypeDef* type);
-        void registerLocalValue(std::string name, const TypeInfo& type);
-        void registerLocalValue(std::string name, AotValue* value, const TypeInfo& type);
-        AotNode* getValueNode(const std::string& name);
-
-        void castSameScalarType(AotNode*& a, AotNode*& b);
-
-        int16_t getLocalFunction(const std::string& name);
-
-        void pushScope();
-
-        void popScope();
-
-        friend class LexerErrorListener;
-
-        friend class ParserErrorListener;
-
-        void throwError(const std::string& message);
-
-        void throwError(antlr4::Token* token, const std::string& message);
-
-        void throwError(antlr4::ParserRuleContext* ctx, const std::string& message);
-
-        void throwError(size_t line, size_t position, const std::string& context, const std::string& message);
-
-        bool contextValid();
-
-        static std::string removePars(const std::string& str);
-
-        template<typename T>
-        T visitT(antlr4::tree::ParseTree* tree)
-        {
-            return std::move(std::any_cast<T>(visit(tree)));
-        }
-
-    public:
-        Compiler(Linker* linker);
-
-        IRScript* compile(const std::string& script);
-
-        const std::vector<std::string>& errors() const;
-
-        const TypeDef* getType(const std::string& typeName) const;
+        void registerInlineFunction(AotInlineFunction* function);
+        const AotInlineFunction* getInlineFunction(const std::string& name, const std::vector<AotNode*>& args);
     };
 
-    struct CompilerCtx
+    struct FunctionCompilerCtx;
+    struct ScriptCompilerCtx
     {
-        Compiler& compiler;
-        uint32_t regIndex = 0;
-        uint32_t memIndex = 0;
-        uint32_t markIndex = 0;
+        Compiler* compiler;
+        std::unique_ptr<IRScript> script;
+        std::vector<std::unique_ptr<const StructDef>> localStructDefs;
 
-        IRScript* script = nullptr;
-        IRFunction* function = nullptr;
-        StructDef* structDef = nullptr;
-        bool returnCalled = false;
-        std::vector<std::unique_ptr<AotValue>> values;
+        std::vector<std::unique_ptr<FunctionCompilerCtx>> functions;
+
         std::vector<std::unique_ptr<AotValue>> globalValues;
-        std::vector<std::unique_ptr<StructDef>>  localStructDefs;
+        AotValue* newGlobal(const TypeDef* type, uint8_t flags);
+
+        const TypeDef* getType(const std::string& string) const;
+
+        int16_t linkFunction(const std::string& sig);
+        int16_t linkConstructor(const StructDef* type);
+        int16_t linkMoveConstructor(const StructDef* type);
+        int16_t linkCopyConstructor(const StructDef* type);
+        int16_t linkDestructor(const StructDef* type);
+    };
+
+    struct FunctionCompilerCtx
+    {
+        ScriptCompilerCtx& script;
+        IRFunction* function;
+        std::string signature;
+
+        struct ValueIndex
+        {
+            std::unique_ptr<AotValue> aotValue;
+            size_t index;
+            bool isReg;
+        };
+        staticIndexVector<ValueIndex> values;
+
+        bool compareFlagsInUse = false;
+
+        staticIndexVector<Value> registers;
+        staticIndexVector<Value> memoryLocations;
+        uint8_t jumpTargetIDCounter = 0;
+
         robin_hood::unordered_map<const StructDef*, int16_t> localStructIndices;
 
-        robin_hood::unordered_map<std::string, uint32_t> libraryAliases;
+        FunctionCompilerCtx(ScriptCompilerCtx& s, std::string sig);
 
-        CompilerCtx(Compiler& c, IRScript* s);
+        uint32_t newJumpTargetID();
 
-        void setFunction(IRFunction* function);
-
-        uint32_t newMark();
-
-        AotValue* newReg(const std::string& type, uint8_t flags);
         AotValue* newReg(const TypeDef* type, uint8_t flags);
         AotValue* newConst(const TypeDef* type, uint8_t flags = AotValue::Const | AotValue::Constexpr);
-        AotValue* newGlobal(const TypeDef* type, uint8_t flags = 0);
+        AotValue* newCompareResult();
         AotValue* castValue(AotValue* value);
         AotValue* castTemp(AotValue* value);
         AotValue* castReg(AotValue* value);
-        AotValue* blankValue();
-        AotValue* derefPtr(AotValue* value,const TypeDef* type, uint16_t offset = 0);
+        AotValue* derefPtr(AotValue* value, const TypeDef* type, uint16_t offset = 0);
+
+        Value serialize(AotValue* value) const;
+        void releaseValue(AotValue* value);
+
+        void appendCode(Operand op);
+        void appendCode(const std::string& string);
+
+        void appendCode(Operand op, Value a);
+        void appendCode(Operand op, Value a, Value b);
+        void appendCode(Operand op, int16_t index);
+        void appendCode(Operand op, uint16_t index);
+        void appendCode(Operand op, uint32_t index);
+
+        template<typename T>
+        void appendCode(Operand op, Value a, T value)
+        {
+            appendCode(op, a);
+            static_assert(!std::is_pointer<T>());
+            size_t index = function->code.size();
+            function->code.resize(function->code.size() + sizeof(T));
+            *(T*)(function->code.data() + index) = value;
+        }
+
+        template<typename T>
+        void appendCode(T value)
+        {
+            static_assert(!std::is_pointer<T>());
+            size_t index = function->code.size();
+            function->code.resize(function->code.size() + sizeof(T));
+            *(T*)(function->code.data() + index) = value;
+        }
     };
 
+    class CompilerError : public std::runtime_error
+    {
+      public:
+        CompilerError(const std::string& message);
+    };
 }
 #endif //BRANESCRIPT_COMPILER_H

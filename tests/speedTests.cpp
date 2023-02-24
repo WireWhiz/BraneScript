@@ -1,10 +1,11 @@
 #include "testing.h"
 
 #include <iostream>
-#include "../src/compiler.h"
-#include "../src/scriptRuntime.h"
-#include "../src/script.h"
-#include "../src/linker.h"
+#include "compiler.h"
+#include "linker.h"
+#include "script.h"
+#include "scriptRuntime.h"
+#include "staticAnalysis/staticAnalyzer.h"
 
 using namespace BraneScript;
 
@@ -37,6 +38,7 @@ TEST(BraneScript, Speed)
 {
 
     std::string testString = R"(
+    link "BraneScript";
     int iFib(int n)
     {
         if(n < 2)
@@ -50,10 +52,17 @@ TEST(BraneScript, Speed)
         return fFib(n-1) + fFib(n-2);
     }
 )";
-    Linker l;
-    Compiler compiler(&l);
-    auto* ir = compiler.compile(testString);
-    checkCompileErrors(compiler);
+    StaticAnalyzer analyzer;
+    analyzer.load("test", testString);
+    if(!analyzer.validate("test"))
+    {
+        for(auto& error : analyzer.getCtx("test")->errors)
+            std::cerr << error.message << std::endl;
+        ASSERT_TRUE(false);
+    }
+
+    Compiler compiler;
+    auto* ir = compiler.compile(analyzer.getCtx("test")->scriptContext.get());
     ASSERT_TRUE(ir);
 
     ScriptRuntime rt;

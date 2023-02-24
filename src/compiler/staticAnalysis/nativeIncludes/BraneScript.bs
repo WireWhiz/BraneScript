@@ -1,0 +1,117 @@
+/* This file was auto generated, please use generateIncludesFile.py
+ * to make changes, as the ones here may be overwritten */
+
+export as "BraneScript" 
+ {
+ 	// uint casts
+	opr uint(uint64 arg) ext;
+	opr uint(int arg) ext;
+	opr uint(int64 arg) ext;
+	opr uint(float arg) ext;
+	opr uint(double arg) ext;
+
+	// uint64 casts
+	opr uint64(uint arg) ext;
+	opr uint64(int arg) ext;
+	opr uint64(int64 arg) ext;
+	opr uint64(float arg) ext;
+	opr uint64(double arg) ext;
+
+	// int casts
+	opr int(uint arg) ext;
+	opr int(uint64 arg) ext;
+	opr int(int64 arg) ext;
+	opr int(float arg) ext;
+	opr int(double arg) ext;
+
+	// int64 casts
+	opr int64(uint arg) ext;
+	opr int64(uint64 arg) ext;
+	opr int64(int arg) ext;
+	opr int64(float arg) ext;
+	opr int64(double arg) ext;
+
+	// float casts
+	opr float(uint arg) ext;
+	opr float(uint64 arg) ext;
+	opr float(int arg) ext;
+	opr float(int64 arg) ext;
+	opr float(double arg) ext;
+
+	// double casts
+	opr double(uint arg) ext;
+	opr double(uint64 arg) ext;
+	opr double(int arg) ext;
+	opr double(int64 arg) ext;
+	opr double(float arg) ext;
+
+	// arithmetic operators
+	uint   opr +(uint left, uint right) ext;
+	uint64 opr +(uint64 left, uint64 right) ext;
+	int    opr +(int left, int right) ext;
+	int64  opr +(int64 left, int64 right) ext;
+	float  opr +(float left, float right) ext;
+	double opr +(double left, double right) ext;
+	uint   opr -(uint left, uint right) ext;
+	uint64 opr -(uint64 left, uint64 right) ext;
+	int    opr -(int left, int right) ext;
+	int64  opr -(int64 left, int64 right) ext;
+	float  opr -(float left, float right) ext;
+	double opr -(double left, double right) ext;
+	uint   opr *(uint left, uint right) ext;
+	uint64 opr *(uint64 left, uint64 right) ext;
+	int    opr *(int left, int right) ext;
+	int64  opr *(int64 left, int64 right) ext;
+	float  opr *(float left, float right) ext;
+	double opr *(double left, double right) ext;
+	uint   opr /(uint left, uint right) ext;
+	uint64 opr /(uint64 left, uint64 right) ext;
+	int    opr /(int left, int right) ext;
+	int64  opr /(int64 left, int64 right) ext;
+	float  opr /(float left, float right) ext;
+	double opr /(double left, double right) ext;
+
+	// logic operators
+	bool opr ==(bool left, bool right) ext;
+	bool opr !=(bool left, bool right) ext;
+	bool opr ==(char left, char right) ext;
+	bool opr !=(char left, char right) ext;
+	bool opr ==(uint left, uint right) ext;
+	bool opr ==(uint64 left, uint64 right) ext;
+	bool opr ==(int left, int right) ext;
+	bool opr ==(int64 left, int64 right) ext;
+	bool opr ==(float left, float right) ext;
+	bool opr ==(double left, double right) ext;
+	bool opr !=(uint left, uint right) ext;
+	bool opr !=(uint64 left, uint64 right) ext;
+	bool opr !=(int left, int right) ext;
+	bool opr !=(int64 left, int64 right) ext;
+	bool opr !=(float left, float right) ext;
+	bool opr !=(double left, double right) ext;
+	bool opr <(uint left, uint right) ext;
+	bool opr <(uint64 left, uint64 right) ext;
+	bool opr <(int left, int right) ext;
+	bool opr <(int64 left, int64 right) ext;
+	bool opr <(float left, float right) ext;
+	bool opr <(double left, double right) ext;
+	bool opr <=(uint left, uint right) ext;
+	bool opr <=(uint64 left, uint64 right) ext;
+	bool opr <=(int left, int right) ext;
+	bool opr <=(int64 left, int64 right) ext;
+	bool opr <=(float left, float right) ext;
+	bool opr <=(double left, double right) ext;
+	bool opr >(uint left, uint right) ext;
+	bool opr >(uint64 left, uint64 right) ext;
+	bool opr >(int left, int right) ext;
+	bool opr >(int64 left, int64 right) ext;
+	bool opr >(float left, float right) ext;
+	bool opr >(double left, double right) ext;
+	bool opr >=(uint left, uint right) ext;
+	bool opr >=(uint64 left, uint64 right) ext;
+	bool opr >=(int left, int right) ext;
+	bool opr >=(int64 left, int64 right) ext;
+	bool opr >=(float left, float right) ext;
+	bool opr >=(double left, double right) ext;
+	bool opr ==(const ref string left, const ref string right) ext;
+	bool opr !=(const ref string left, const ref string right) ext;
+}

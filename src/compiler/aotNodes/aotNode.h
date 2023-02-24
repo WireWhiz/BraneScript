@@ -5,13 +5,17 @@
 #ifndef BRANESCRIPT_AOTNODE_H
 #define BRANESCRIPT_AOTNODE_H
 
+#include "valueIndex.h"
 #include <cstdint>
 #include <type_traits>
-#include "../valueIndex.h"
+#include <vector>
+#include <ostream>
+#include <memory>
+
 namespace BraneScript
 {
     class TypeDef;
-    class CompilerCtx;
+    struct FunctionCompilerCtx;
 
     struct AotValue
     {
@@ -26,6 +30,7 @@ namespace BraneScript
             Initialized    = 1 << 6,
 
         };
+
         enum CompareType : uint8_t
         {
             NoRes = 0,
@@ -40,64 +45,40 @@ namespace BraneScript
         uint8_t flags = 0;
         CompareType compareType = NoRes;
         ValueStorageType storageType = ValueStorageType_Null;
-        const TypeDef* def = nullptr;
-        uint16_t valueIndex = (uint16_t)-1;
+        const TypeDef* type = nullptr;
+        uint16_t id = 0;
         uint16_t ptrOffset = 0;
-        Value value(CompilerCtx& ctx);
         inline bool isCompare() const { return compareType != NoRes; }
-        inline bool isVoid() const { return def == nullptr; }
+        inline bool isVoid() const { return type == nullptr; }
         inline bool isTemp() const { return flags & Temp; }
         inline bool isGlobal() const { return storageType == ValueStorageType_Global; }
         inline bool isRef() const { return storageType == ValueStorageType_Ptr; }
         inline bool isStackRef() const { return storageType == ValueStorageType_Ptr && flags & StackRef; }
         inline bool isHeapRef() const { return storageType == ValueStorageType_Ptr && flags & HeapRef; }
         inline bool isExternalRef() const { return storageType == ValueStorageType_Ptr && flags & ExternalRef; }
+        bool isScalar() const;
+        bool isUnsigned() const;
+        bool isInt() const;
+        bool isFloat() const;
     };
-
-    class CompilerCtx;
 
     class AotNode
     {
-    public:
-        enum class NodeType
-        {
-            Const,
-            Lib,
-            Func,
-            Value,
-            New,
-            Free,
-            Deref,
-            Cast,
-            Compare,
-            Operator,
-            Return,
-            ReturnValue,
-            Scope,
-            If,
-            While,
-            Call,
-            Assign,
-            Add,
-            Sub,
-            Mul,
-            Div
-        };
     protected:
-        NodeType _type;
         const TypeDef* _resType = nullptr;
-
-        static const TypeDef* dominantArgType(const TypeDef* a, const TypeDef* b);
+        bool isConstexpr = false;
 
     public:
-        explicit AotNode(const TypeDef* resType, NodeType type);
+        explicit AotNode(const TypeDef* resType);
 
         virtual ~AotNode() = default;
         AotNode(const AotNode&) = default;
 
         virtual AotNode* optimize() = 0;
 
-        virtual AotValue* generateBytecode(CompilerCtx& ctx) const = 0;
+        virtual AotValue* generateBytecode(FunctionCompilerCtx& ctx) const = 0;
+
+        const TypeDef* resType() const;
 
         template<class T>
         T* as()
@@ -106,9 +87,33 @@ namespace BraneScript
             return dynamic_cast<T*>(this);
         }
 
-        NodeType type() const;
+        template<class T>
+        bool is()
+        {
+            static_assert(std::is_base_of<AotNode, T>());
+            return dynamic_cast<T*>(this);
+        }
+    };
 
-        const TypeDef* resType() const;
+    class AotUnaryArgNode : public AotNode
+    {
+      public:
+        std::unique_ptr<AotNode> arg;
+
+        AotUnaryArgNode(AotNode* arg, const TypeDef* resType);
+
+        AotNode* optimize() override;
+    };
+
+    class AotBinaryArgNode : public AotNode
+    {
+      public:
+        std::unique_ptr<AotNode> argA;
+        std::unique_ptr<AotNode> argB;
+
+        AotBinaryArgNode(AotNode* argA, AotNode* argB, const TypeDef* resType);
+
+        AotNode* optimize() override;
     };
 
 }

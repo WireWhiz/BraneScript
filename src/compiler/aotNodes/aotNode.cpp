@@ -3,74 +3,56 @@
 //
 
 #include "aotNode.h"
-#include "../irFunction.h"
-#include "../typeDef.h"
 #include <cassert>
 #include "../compiler.h"
+#include "irFunction.h"
+#include "typeDef.h"
 
 namespace BraneScript
 {
-    AotNode::NodeType AotNode::type() const
+    AotNode::AotNode(const TypeDef* resType) : _resType(resType) {}
+
+    const TypeDef* AotNode::resType() const { return _resType; }
+
+    AotUnaryArgNode::AotUnaryArgNode(AotNode* arg, const TypeDef* resType) : AotNode(resType), arg(arg) {}
+
+    AotNode* AotUnaryArgNode::optimize()
     {
-        return _type;
+        auto optArg = arg->optimize();
+        if(optArg != arg.get())
+            arg = std::unique_ptr<AotNode>(optArg);
+        return this;
     }
 
-    AotNode::AotNode(const TypeDef* resType, NodeType type) : _type(type), _resType(resType)
-    {
+    AotBinaryArgNode::AotBinaryArgNode(AotNode* argA, AotNode* argB, const TypeDef* resType)
+        : AotNode(resType), argA(argA), argB(argB)
+    {}
 
+    AotNode* AotBinaryArgNode::optimize()
+    {
+        auto optArgA = argA->optimize();
+        if(optArgA != argA.get())
+            argA = std::unique_ptr<AotNode>(optArgA);
+        auto optArgB = argB->optimize();
+        if(optArgB != argB.get())
+            argB = std::unique_ptr<AotNode>(optArgB);
+        return this;
     }
 
-    const TypeDef* AotNode::resType() const
+    bool AotValue::isScalar() const
     {
-        return _resType;
+        return ValueType::Scalar_Begin <= type->type() && type->type() <= ValueType::Scalar_End;
     }
 
-    const TypeDef* AotNode::dominantArgType(const TypeDef* a, const TypeDef* b)
+    bool AotValue::isUnsigned() const
     {
-        assert(a && b);
-        if (a->type() == Float64)
-            return a;
-        if (b->type() == Float64)
-            return b;
-        if (a->type() == Float32)
-            return a;
-        if (b->type() == Float32)
-            return b;
-        if (a->type() == Int32)
-            return a;
-        if (b->type() == Int32)
-            return b;
-        return nullptr;
+        return ValueType::Unsigned_Begin <= type->type() && type->type() <= ValueType::Unsigned_End;
     }
 
-    Value AotValue::value(CompilerCtx& ctx)
+    bool AotValue::isInt() const { return ValueType::Int_Begin <= type->type() && type->type() <= ValueType::Int_End; }
+
+    bool AotValue::isFloat() const
     {
-        assert(storageType != ValueStorageType_Null);
-        assert(compareType == CompareType::NoRes);
-        Value value{};
-        value.valueType = def->type();
-        value.storageType = storageType;
-        switch(storageType)
-        {
-            case ValueStorageType_Ptr:
-            case ValueStorageType_Reg:
-                if(valueIndex == (uint16_t)-1)
-                    valueIndex = ctx.regIndex++;
-                    break;
-            case ValueStorageType_Const:
-                if(valueIndex == (uint16_t)-1)
-                    valueIndex = ctx.memIndex++;
-                break;
-            case ValueStorageType_DerefPtr:
-                assert(valueIndex != (uint16_t)-1);
-                value.offset = ptrOffset;
-                break;
-            case ValueStorageType_Global:
-                break;
-            default:
-                assert(false);
-        }
-        value.index = valueIndex;
-        return value;
+        return ValueType::Float_Begin <= type->type() && type->type() <= ValueType::Float_End;
     }
-}
+} // namespace BraneScript

@@ -3,12 +3,14 @@ Language: Cpp
 
 # Limits
 ColumnLimit: 120
+MaxEmptyLinesToKeep: 2
 
 # Indents
 IndentWidth: 4
 PPIndentWidth: 4
 NamespaceIndentation: All
 LambdaBodyIndentation: OuterScope
+IndentCaseLabels: true
 
 # Breaking
 BreakBeforeBraces: Custom
@@ -41,10 +43,22 @@ ReferenceAlignment: Left
 AlignAfterOpenBracket: Align
 BinPackArguments: false
 BinPackParameters: false
+SeparateDefinitionBlocks: Always
 
 # Spaces
 SpaceBeforeParens: Never
 SpaceAfterTemplateKeyword: false
+SpaceAfterCStyleCast: false
 
 # Tabs
 UseTab: Never
+
+#sorting
+SortIncludes: CaseInsensitive
+IncludeCategories:
+  - Regex:           '<[[:alnum:].]+>'
+    Priority:        0
+  - Regex:           '.*'
+    Priority:        1
+    SortPriority:    3
+SortUsingDeclarations: true

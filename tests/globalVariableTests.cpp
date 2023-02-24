@@ -2,17 +2,19 @@
 
 #include "testing.h"
 
-#include "../src/compiler.h"
-#include "../src/scriptRuntime.h"
-#include "../src/script.h"
-#include "../src/library.h"
-#include "../src/linker.h"
+#include "library.h"
+#include "linker.h"
+#include "script.h"
+#include "scriptRuntime.h"
+#include "compiler.h"
+#include "staticAnalysis/staticAnalyzer.h"
 
 using namespace BraneScript;
 
 TEST(BraneScript, GlobalVariables)
 {
     std::string testString = R"(
+    link "BraneScript";
     int globalInt;
     float globalFloat;
     struct GlobalStruct
@@ -55,18 +57,23 @@ TEST(BraneScript, GlobalVariables)
         return globalString;
     }
 )";
+    StaticAnalyzer analyzer;
+    analyzer.load("test", testString);
+    if(!analyzer.validate("test"))
+    {
+        for(auto& error : analyzer.getCtx("test")->errors)
+            std::cerr << error.message << std::endl;
+        ASSERT_TRUE(false);
+    }
 
-    Linker linker;
-
-    Compiler compiler(&linker);
-    auto* ir = compiler.compile(testString);
-    checkCompileErrors(compiler);
+    Compiler compiler;
+    auto* ir = compiler.compile(analyzer.getCtx("test")->scriptContext.get());
     ASSERT_TRUE(ir);
 
+    Linker linker;
     ScriptRuntime rt;
     rt.setLinker(&linker);
     Script* testScript = rt.assembleScript(ir);
-    checkCompileErrors(compiler);
     ASSERT_TRUE(testScript);
 
     auto setInt = testScript->getFunction<void, int>("setInt");

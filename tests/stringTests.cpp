@@ -1,10 +1,11 @@
 
 #include "testing.h"
 
-#include "../src/compiler.h"
-#include "../src/scriptRuntime.h"
-#include "../src/script.h"
-#include "../src/linker.h"
+#include "compiler.h"
+#include "linker.h"
+#include "script.h"
+#include "scriptRuntime.h"
+#include "staticAnalysis/staticAnalyzer.h"
 
 using namespace BraneScript;
 
@@ -14,6 +15,7 @@ TEST(BraneScript, Strings)
     scriptMallocDiff = 0;
 #endif
     std::string testString = R"(
+    link "BraneScript";
         string testConst()
         {
             return "Hello World!";
@@ -38,9 +40,17 @@ TEST(BraneScript, Strings)
 
     Linker l;
 
-    Compiler compiler(&l);
-    IRScript* ir = compiler.compile(testString);
-    checkCompileErrors(compiler);
+    StaticAnalyzer analyzer;
+    analyzer.load("test", testString);
+    if(!analyzer.validate("test"))
+    {
+        for(auto& error : analyzer.getCtx("test")->errors)
+            std::cerr << error.message << std::endl;
+        ASSERT_TRUE(false);
+    }
+
+    Compiler compiler;
+    auto* ir = compiler.compile(analyzer.getCtx("test")->scriptContext.get());
     ASSERT_TRUE(ir);
 
     ScriptRuntime rt;

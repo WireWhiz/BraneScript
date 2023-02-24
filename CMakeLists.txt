@@ -10,6 +10,7 @@ execute_process(COMMAND conan install ${CMAKE_CURRENT_SOURCE_DIR}
 include(${CMAKE_CURRENT_BINARY_DIR}/conan_paths.cmake)
 
 if(BS_BUILD_EXECUTABLE)
+    set(EXECUTABLE_OUTPUT_PATH ${CMAKE_BINARY_DIR}/executables)
     add_executable(BraneScriptApplication main.cpp)
     target_link_libraries(BraneScriptApplication antlr4 BraneScriptCompiler)
 endif()

@@ -3,9 +3,7 @@
 //
 
 #include "nativeTypes.h"
-#include "operator.h"
-#include "aotNode/aotNode.h"
-#include "compiler.h"
+#include "structDefinition.h"
 
 #include <cassert>
 
@@ -26,7 +24,7 @@ namespace BraneScript
 
         ValueType type() const override
         {
-            return Bool;
+            return ValueType::Bool;
         }
     };
 
@@ -45,7 +43,7 @@ namespace BraneScript
 
         ValueType type() const override
         {
-            return Char;
+            return ValueType::Char;
         }
     };
 
@@ -64,7 +62,7 @@ namespace BraneScript
 
         ValueType type() const override
         {
-            return UInt32;
+            return ValueType::UInt32;
         }
     };
 
@@ -83,7 +81,7 @@ namespace BraneScript
 
         ValueType type() const override
         {
-            return Int32;
+            return ValueType::Int32;
         }
     };
 
@@ -102,7 +100,7 @@ namespace BraneScript
 
         ValueType type() const override
         {
-            return UInt64;
+            return ValueType::UInt64;
         }
     };
 
@@ -121,7 +119,7 @@ namespace BraneScript
 
         ValueType type() const override
         {
-            return Int64;
+            return ValueType::Int64;
         }
     };
 
@@ -140,7 +138,7 @@ namespace BraneScript
 
         ValueType type() const override
         {
-            return Float32;
+            return ValueType::Float32;
         }
     };
 
@@ -159,7 +157,7 @@ namespace BraneScript
 
         ValueType type() const override
         {
-            return Float64;
+            return ValueType::Float64;
         }
     };
 
@@ -167,7 +165,7 @@ namespace BraneScript
     {
     public:
         StringDef() : StructDef("string"){
-            setConstructor([](void* data){
+            /*setConstructor([](void* data){
                 new (data)std::string;
             });
             setCopyConstructor([](void* dest, void* source){
@@ -179,7 +177,7 @@ namespace BraneScript
             setDestructor([](void* data)
             {
                 delete (std::string*)data;
-            });
+            });*/
         };
 
         uint16_t size() const override
@@ -190,7 +188,7 @@ namespace BraneScript
 
     std::vector<TypeDef*> nativeTypes({new BoolDef(), new CharDef(), new UIntDef(), new IntDef(), new UInt64Def(), new Int64Def(), new FloatDef(), new Float64Def(), new StringDef()});
 
-    std::vector<TypeDef*> getNativeTypes()
+    const std::vector<TypeDef*>& getNativeTypes()
     {
         return nativeTypes;
     };
@@ -200,29 +198,29 @@ namespace BraneScript
     {
         switch (type)
         {
-            case Bool:
+            case ValueType::Bool:
                 return nativeTypes[0];
-            case Char:
+            case ValueType::Char:
                 return nativeTypes[1];
-            case UInt32:
+            case ValueType::UInt32:
                 return nativeTypes[2];
-            case Int32:
+            case ValueType::Int32:
                 return nativeTypes[3];
-            case UInt64:
+            case ValueType::UInt64:
                 return nativeTypes[4];
-            case Int64:
+            case ValueType::Int64:
                 return nativeTypes[5];
-            case Float32:
+            case ValueType::Float32:
                 return nativeTypes[6];
-            case Float64:
+            case ValueType::Float64:
                 return nativeTypes[7];
-            case Struct:
+            case ValueType::Struct:
                 throw std::runtime_error("No native definition for struct type");
         }
         return nullptr;
     };
 
-    class NativeCastOpr : public ConstexprOperator
+    /*class NativeCastOpr : public ConstexprOperator
     {
         const TypeDef* _resType;
         template<typename T>
@@ -885,7 +883,7 @@ namespace BraneScript
     const robin_hood::unordered_map<std::string, Operator*>& nativeOperators()
     {
         return _nativeOperators;
-    }
+    }*/
 
     std::vector<FunctionData> getNativeFunctions()
     {

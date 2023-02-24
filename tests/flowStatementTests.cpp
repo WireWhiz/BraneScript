@@ -1,10 +1,11 @@
 
 #include "testing.h"
 
-#include "../src/compiler.h"
-#include "../src/scriptRuntime.h"
-#include "../src/script.h"
-#include "../src/linker.h"
+#include "src/compiler/compiler.h"
+#include "src/scriptRuntime/linker.h"
+#include "src/scriptRuntime/script.h"
+#include "src/scriptRuntime/scriptRuntime.h"
+#include "staticAnalysis/staticAnalyzer.h"
 
 using namespace BraneScript;
 
@@ -18,6 +19,7 @@ void testFunction(const std::string& name, Script* script)
 TEST(BraneScript, FlowStatements)
 {
     std::string testString = R"(
+    link "BraneScript";
     bool testConstTrueIf()
     {
         if(true)
@@ -57,11 +59,17 @@ TEST(BraneScript, FlowStatements)
         return true;
     }
 )";
+    StaticAnalyzer analyzer;
+    analyzer.load("test", testString);
+    if(!analyzer.validate("test"))
+    {
+        for(auto& error : analyzer.getCtx("test")->errors)
+            std::cerr << error.message << std::endl;
+        ASSERT_TRUE(false);
+    }
 
-    Linker l;
-    Compiler compiler(&l);
-    auto* ir = compiler.compile(testString);
-    checkCompileErrors(compiler);
+    Compiler compiler;
+    auto* ir = compiler.compile(analyzer.getCtx("test")->scriptContext.get());
 
     ScriptRuntime rt;
     Script* testScript = rt.assembleScript(ir);

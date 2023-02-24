@@ -23,7 +23,7 @@ namespace BraneScript
     {
         asmjit::JitRuntime _runtime;
         std::vector<std::unique_ptr<Script>> _scripts;
-        Linker* _linker;
+        Linker* _linker = nullptr;
 
     public:
         Script* assembleScript(IRScript* irScript);

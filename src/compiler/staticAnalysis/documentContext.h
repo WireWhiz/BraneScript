@@ -111,13 +111,17 @@ namespace BraneScript
         }
     };
 
-    struct LabeledValueAccessContext;
+    struct LabeledValueReferenceContext;
     struct LabeledValueContext : public DocumentContext, ValueContext
     {
         Identifier identifier;
         /* Last assignment to check if this value is a constant expression */
-        LabeledValueAccessContext* lastAssignment = nullptr;
-        bool scoped = false;
+        struct Reference
+        {
+            LabeledValueReferenceContext* ctx;
+            bool isAssignment = false;
+        };
+        std::list<Reference> references;
 
         std::string signature() const override;
         std::string getLongID() const override;
@@ -210,9 +214,16 @@ namespace BraneScript
         ConstStringContext();
     };
 
-    struct LabeledValueAccessContext : public ExpressionContext
+    struct LabeledValueConstructionContext : public ExpressionContext
     {
         LabeledValueContext* value = nullptr;
+    };
+
+    struct LabeledValueReferenceContext : public ExpressionContext
+    {
+        LabeledValueContext* value = nullptr;
+        uint32_t referenceIndex = 0;
+        bool isAssignment = false;
     };
 
     struct MemberAccessContext : public ExpressionContext
@@ -250,6 +261,7 @@ namespace BraneScript
         Identifier identifier;
         LabeledNodeList<LabeledValueContext> variables;
         LabeledNodeList<FunctionContext> functions;
+        bool packed = false;
 
         DocumentContext* getNodeAtChar(TextPos pos) override;
         DocumentContext* findIdentifier(const std::string& identifier, uint8_t searchOptions) override;

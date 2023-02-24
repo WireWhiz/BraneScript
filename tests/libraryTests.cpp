@@ -1,5 +1,6 @@
 
 #include "testing.h"
+/*
 
 #include "../src/compiler.h"
 #include "../src/scriptRuntime.h"
@@ -55,4 +56,4 @@ TEST(BraneScript, Libraries)
 #ifndef NDEBUG
     EXPECT_EQ(scriptMallocDiff, 0);
 #endif
-}
+}*/

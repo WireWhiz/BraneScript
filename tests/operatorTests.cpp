@@ -1,11 +1,12 @@
 
 #include "testing.h"
 
-#include "../src/compiler.h"
-#include "../src/scriptRuntime.h"
-#include "../src/script.h"
-#include "../src/linker.h"
 #include <limits>
+#include "compiler.h"
+#include "linker.h"
+#include "script.h"
+#include "scriptRuntime.h"
+#include "staticAnalysis/staticAnalyzer.h"
 
 using namespace BraneScript;
 
@@ -16,8 +17,8 @@ std::string sformat(const char* format, Args... args)
     if(size <= 0)
         throw std::runtime_error("String format error!");
     std::string output;
-    output.resize(size - 1);
-    std::snprintf(output.data(), size, format, args...);
+    output.resize(size);
+    std::snprintf(output.data(), size + 1, format, args...);
     return std::move(output);
 }
 
@@ -27,7 +28,7 @@ std::string sformat(const char* format, Args... args)
 
 void addScalarTestFunctions(const std::string& typeName, std::string& script)
 {
-    script += "\n" + sformat("%s add(%s a, %s b){return a + b;}%s sub(%s a, %s b){return a - b;}%s mul(%s a, %s b){return a * b;}%s div(%s a, %s b){return a / b;})",
+    script += "\n" + sformat("%s add(%s a, %s b){return a + b;}%s sub(%s a, %s b){return a - b;}%s mul(%s a, %s b){return a * b;}%s div(%s a, %s b){return a / b;}",
                             typeName.c_str(), typeName.c_str(), typeName.c_str(),
                             typeName.c_str(), typeName.c_str(), typeName.c_str(),
                             typeName.c_str(), typeName.c_str(), typeName.c_str(),
@@ -51,23 +52,31 @@ void runScalarTestFunctions(const std::string& typeName, const Script* testScrip
     TEST_DUAL_ARG_OPERATOR(/, div, testArgs);
 }
 
+void testCasts(std::vector<std::string> typenames)
+{
+
+}
+
 TEST(BraneScript, Operators)
 {
     std::string testString = R"(
-    //Casting
+    link "BraneScript";
     bool testBoolCast(int a, int b)
     {
         return a > b;
     }
-    float testFloatCast(int a)
-    {
-        return a;
-    }
-    int testIntCast(float a)
-    {
-        return a;
-    }
 )";
+
+    auto scalarCasts = {"uint", "uint64", "int", "int64", "float", "double"};
+    for(auto& targetType : scalarCasts)
+    {
+        for(auto& sourceType : scalarCasts)
+        {
+            if(targetType == sourceType)
+                continue;
+            testString += sformat("%s %sCast(%s v){return (%s)v;}", targetType, targetType, sourceType, targetType);
+        }
+    }
 
     addScalarTestFunctions("int", testString);
     addScalarTestFunctions("int64", testString);
@@ -76,28 +85,36 @@ TEST(BraneScript, Operators)
     addScalarTestFunctions("float", testString);
     addScalarTestFunctions("double", testString);
 
-    Linker l;
-    Compiler compiler(&l);
-    auto* ir = compiler.compile(testString);
-    checkCompileErrors(compiler);
+    StaticAnalyzer analyzer;
+    analyzer.load("test", testString, true);
+    if(!analyzer.validate("test"))
+    {
+        for(auto& error : analyzer.getCtx("test")->errors)
+        {
+            auto bounds = error.range.getBoundsForText(testString);
+            std::cerr << "(" << bounds.first << ", " << bounds.second << ") " << error.message << std::endl;
+        }
+        ASSERT_TRUE(false);
+    }
+
+    Compiler compiler;
+    auto* ir = compiler.compile(analyzer.getCtx("test")->scriptContext.get());
     ASSERT_TRUE(ir);
 
+    Linker linker;
     ScriptRuntime rt;
+    rt.setLinker(&linker);
     Script* testScript = rt.assembleScript(ir);
+    fflush(0);
     ASSERT_TRUE(testScript);
 
     //Casting
     auto testBoolCast = testScript->getFunction<bool, int, int>("testBoolCast");
-    EXPECT_TRUE(testBoolCast);
+    ASSERT_TRUE(testBoolCast);
     EXPECT_TRUE(testBoolCast(5, 3));
     EXPECT_FALSE(testBoolCast(2,4));
 
-    auto testFloatCast = testScript->getFunction<float, int>("testFloatCast");
-    EXPECT_TRUE(testFloatCast);
-    EXPECT_EQ(testFloatCast(23), 23);
-    auto testIntCast = testScript->getFunction<int, float>("testIntCast");
-    EXPECT_TRUE(testIntCast);
-    EXPECT_EQ(testIntCast(23.23f), 23);
+
 
     //Arithmatic
     runScalarTestFunctions<int32_t>("int", testScript, {

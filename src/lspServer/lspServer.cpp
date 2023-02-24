@@ -27,17 +27,18 @@ namespace lsp
 
     void LspServer::listenForNewSession()
     {
-        _sessionsLock.lock();
-        _sessions.push_back(std::make_unique<LspSession>(asio::ip::tcp::socket(_netCtx)));
-        auto newSession = (--_sessions.end())->get();
-        _sessionsLock.unlock();
-        _acceptor->async_accept(newSession->connection, [this, newSession](std::error_code ec) {
+        auto* socket = new asio::ip::tcp::socket(_netCtx);
+        _acceptor->async_accept(*socket, [this, socket](std::error_code ec) {
             if(ec)
             {
-                removeSession(newSession);
+                delete socket;
                 return;
             }
-            initializeSession(newSession);
+            _sessionsLock.lock();
+            _sessions.push_back(std::make_unique<LspSession>(std::move(*socket)));
+            initializeSession((--_sessions.end())->get());
+            _sessionsLock.unlock();
+            delete socket;
             listenForNewSession();
         });
     }

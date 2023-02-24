@@ -14,7 +14,6 @@ namespace BraneScript
     {
     public:
         virtual ~TypeDef() = default;
-
         virtual const char* name() const = 0;
         virtual uint16_t size() const = 0;
         virtual ValueType type() const = 0;

@@ -42,8 +42,8 @@ namespace BraneScript
 
     struct alignas(2) Value
     {
-        uint16_t index;
-        uint16_t offset;
+        uint16_t index = 0;
+        uint16_t offset = 0;
         ValueType valueType;
         ValueStorageType storageType;
     };

@@ -6,64 +6,106 @@
 #define BRANESCRIPT_AOTVALUENODES_H
 
 #include <any>
-#include <string>
 #include <memory>
+#include <string>
 
 #include "aotNode.h"
-#include "../typeInfo.h"
+#include "typeInfo.h"
+
 namespace BraneScript
 {
     class AotConstNode : public AotNode
     {
-        std::any _value;
-    public:
-        AotConstNode(std::any value, const TypeDef* resType);
+        ValueType _type;
 
-        AotNode* optimize() override;
-
-        AotValue* generateBytecode(CompilerCtx& ctx) const override;
-
-        const std::any& value() const;
-
-        bool isNumber() const;
-
-        bool isBool() const;
-
-        AotConstNode* operator+(const AotConstNode&);
-
-        AotConstNode* operator-(const AotConstNode&);
-
-        AotConstNode* operator*(const AotConstNode&);
-
-        AotConstNode* operator/(const AotConstNode&);
-
-        AotNode* cast(const TypeDef* type) const;
-    };
-
-    class AotValueNode : public AotNode
-    {
-        struct ValueContext {
-            TypeInfo info;
-            AotValue* value = nullptr;
+      public:
+        union
+        {
+            bool asBool;
+            char asChar;
+            uint32_t asUInt;
+            int32_t asInt;
+            uint64_t asUInt64;
+            int64_t asInt64;
+            float asFloat32;
+            double asFloat64;
         };
-        std::shared_ptr<ValueContext> _ctx;
-    public:
-        AotValueNode(const TypeDef* type, TypeInfo info);
-        AotValueNode(const TypeDef* type, AotValue* value, TypeInfo info);
-        AotValueNode(const AotValueNode&);
+
+        std::string asString;
+        AotConstNode(bool value);
+        AotConstNode(char value);
+        AotConstNode(uint32_t value);
+        AotConstNode(int32_t value);
+        AotConstNode(uint64_t value);
+        AotConstNode(int64_t value);
+        AotConstNode(float value);
+        AotConstNode(double value);
+        AotConstNode(std::string value);
 
         AotNode* optimize() override;
 
-        AotValue* generateBytecode(CompilerCtx& ctx) const override;
+        AotValue* generateBytecode(FunctionCompilerCtx& ctx) const override;
+        ValueType type() const;
+
+        template<typename T>
+        AotConstNode* cast()
+        {
+            switch(_type)
+            {
+                case ValueType::Void:
+                case ValueType::Struct:
+                    throw std::runtime_error("Invalid compile time cast attempted!");
+                case ValueType::Bool:
+                    return new AotConstNode(static_cast<T>(asBool));
+                case ValueType::Char:
+                    return new AotConstNode(static_cast<T>(asChar));
+                case ValueType::UInt32:
+                    return new AotConstNode(static_cast<T>(asUInt));
+                case ValueType::UInt64:
+                    return new AotConstNode(static_cast<T>(asUInt64));
+                case ValueType::Int32:
+                    return new AotConstNode(static_cast<T>(asInt));
+                case ValueType::Int64:
+                    return new AotConstNode(static_cast<T>(asInt64));
+                case ValueType::Float32:
+                    return new AotConstNode(static_cast<T>(asFloat32));
+                case ValueType::Float64:
+                    return new AotConstNode(static_cast<T>(asFloat64));
+            }
+        }
     };
 
-    class AotGlobalValueNode : public AotNode
+    class AotValueConstruction : public AotNode
     {
-        AotValue* _global;
-    public:
-        AotGlobalValueNode(AotValue* global);
+        AotValue* _value;
+      public:
+        AotValueConstruction(AotValue* value);
+
         AotNode* optimize() override;
-        AotValue* generateBytecode(CompilerCtx& ctx) const override;
+
+        AotValue* generateBytecode(FunctionCompilerCtx& ctx) const override;
+    };
+
+    class AotValueDestruction : public AotNode
+    {
+        AotValue* _value;
+      public:
+        AotValueDestruction(AotValue* value);
+
+        AotNode* optimize() override;
+
+        AotValue* generateBytecode(FunctionCompilerCtx& ctx) const override;
+    };
+
+    class AotValueReference : public AotNode
+    {
+        AotValue* _value = nullptr;
+      public:
+        AotValueReference(AotValue* value);
+
+        AotNode* optimize() override;
+
+        AotValue* generateBytecode(FunctionCompilerCtx& ctx) const override;
     };
 
     class AotDerefNode : public AotNode
@@ -71,57 +113,37 @@ namespace BraneScript
         std::unique_ptr<AotNode> _value;
         uint32_t _offset;
 
-    public:
+      public:
         AotDerefNode(AotNode* value, const TypeDef* type, uint32_t offset);
 
         AotNode* optimize() override;
 
-        AotValue* generateBytecode(CompilerCtx& ctx) const override;
+        AotValue* generateBytecode(FunctionCompilerCtx& ctx) const override;
     };
 
     class StructDef;
+
     class AotNewNode : public AotNode
     {
-    public:
+      public:
         AotNewNode(StructDef* structType);
 
         AotNode* optimize() override;
 
-        AotValue* generateBytecode(CompilerCtx& ctx) const override;
+        AotValue* generateBytecode(FunctionCompilerCtx& ctx) const override;
     };
 
     class AotDeleteNode : public AotNode
     {
         std::unique_ptr<AotNode> _ptr;
-    public:
+
+      public:
         AotDeleteNode(AotNode* ptr);
 
         AotNode* optimize() override;
 
-        AotValue* generateBytecode(CompilerCtx& ctx) const override;
+        AotValue* generateBytecode(FunctionCompilerCtx& ctx) const override;
     };
+} // namespace BraneScript
 
-    class Library;
-    class AotLibraryNode : public AotNode
-    {
-        Library* _lib;
-    public:
-        AotLibraryNode(Library* lib);
-        Library* lib() const;
-        AotNode* optimize() override;
-        AotValue* generateBytecode(CompilerCtx& ctx) const override;
-    };
-
-    class AotFunctionNode : public AotNode
-    {
-        std::string _index;
-    public:
-        AotFunctionNode(int16_t index);
-        int16_t index() const;
-        AotNode* optimize() override;
-        AotValue* generateBytecode(CompilerCtx& ctx) const override;
-    };
-}
-
-
-#endif //BRANESCRIPT_AOTVALUENODES_H
+#endif // BRANESCRIPT_AOTVALUENODES_H

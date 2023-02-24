@@ -18,7 +18,7 @@ int16_t insertOnce(std::vector<T>& vec, const T& item)
 int16_t BraneScript::IRScript::findLocalFuncIndex(const std::string& name) const
 {
     for(int16_t f = 0; f < localFunctions.size(); ++f)
-        if(localFunctions[f].name == name)
+        if(localFunctions[f].sig == name)
             return f;
     return -1;
 }
