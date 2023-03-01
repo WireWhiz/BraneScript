@@ -6,11 +6,12 @@
 #define BRANESCRIPT_TESTING_H
 
 #include <gtest/gtest.h>
+#include "staticAnalysis/staticAnalyzer.h"
 
 namespace BraneScript
 {
     class Compiler;
-    void checkCompileErrors(Compiler& c);
+    void checkCompileErrors(StaticAnalyzer& analyzer, const std::string& testString);
 }
 
 #endif //BRANESCRIPT_TESTING_H

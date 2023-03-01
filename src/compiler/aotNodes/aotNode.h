@@ -52,14 +52,15 @@ namespace BraneScript
         inline bool isVoid() const { return type == nullptr; }
         inline bool isTemp() const { return flags & Temp; }
         inline bool isGlobal() const { return storageType == ValueStorageType_Global; }
-        inline bool isRef() const { return storageType == ValueStorageType_Ptr; }
-        inline bool isStackRef() const { return storageType == ValueStorageType_Ptr && flags & StackRef; }
-        inline bool isHeapRef() const { return storageType == ValueStorageType_Ptr && flags & HeapRef; }
-        inline bool isExternalRef() const { return storageType == ValueStorageType_Ptr && flags & ExternalRef; }
+        inline bool isRef() const { return storageType == ValueStorageType_Ptr || storageType == ValueStorageType_DerefPtr; }
+        inline bool isStackRef() const { return isRef() && flags & StackRef; }
+        inline bool isHeapRef() const { return isRef() && flags & HeapRef; }
+        inline bool isExternalRef() const { return isRef() && flags & ExternalRef; }
         bool isScalar() const;
         bool isUnsigned() const;
         bool isInt() const;
         bool isFloat() const;
+        bool isStruct() const;
     };
 
     class AotNode

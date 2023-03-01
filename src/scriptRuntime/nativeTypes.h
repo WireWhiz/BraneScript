@@ -14,7 +14,6 @@
 namespace BraneScript
 {
     const std::vector<TypeDef*>& getNativeTypes();
-    std::vector<FunctionData> getNativeFunctions();
 
     TypeDef* getNativeTypeDef(ValueType type);
 

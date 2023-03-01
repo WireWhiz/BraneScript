@@ -11,13 +11,12 @@
 
 #include "aotNode.h"
 #include "typeInfo.h"
+#include "typeDef.h"
 
 namespace BraneScript
 {
     class AotConstNode : public AotNode
     {
-        ValueType _type;
-
       public:
         union
         {
@@ -50,7 +49,7 @@ namespace BraneScript
         template<typename T>
         AotConstNode* cast()
         {
-            switch(_type)
+            switch(_resType->type())
             {
                 case ValueType::Void:
                 case ValueType::Struct:
@@ -75,9 +74,31 @@ namespace BraneScript
         }
     };
 
-    class AotValueConstruction : public AotNode
+    class AotAllocNode : public AotNode
     {
         AotValue* _value;
+      public:
+        AotAllocNode(AotValue* value);
+
+        AotNode* optimize() override;
+
+        AotValue* generateBytecode(FunctionCompilerCtx& ctx) const override;
+    };
+
+    class AotMallocNode : public AotNode
+    {
+        AotValue* _value;
+      public:
+        AotMallocNode(AotValue* value);
+
+        AotNode* optimize() override;
+
+        AotValue* generateBytecode(FunctionCompilerCtx& ctx) const override;
+    };
+
+    class AotValueConstruction : public AotNode
+    {
+        AotValue* _value = nullptr;
       public:
         AotValueConstruction(AotValue* value);
 

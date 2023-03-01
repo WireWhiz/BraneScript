@@ -28,7 +28,7 @@ namespace BraneScript
                 continue;
             }
             if(result != op.get())
-                op = std::unique_ptr<AotNode>(result);
+                op.reset(result);
             ++itr;
         }
         return this;
@@ -47,18 +47,6 @@ namespace BraneScript
 
     AotValue* AotReturnNode::generateBytecode(FunctionCompilerCtx& ctx) const
     {
-        // Call destructors for local values
-        for(auto& v : ctx.values)
-        {
-            if(!v.aotValue->isStackRef())
-                continue;
-
-            auto sDef = static_cast<const StructDef*>(v.aotValue->type);
-            int16_t dIndex = ctx.script.linkFunction(std::string(sDef->name()) + "::_destruct()");
-            ctx.appendCode(Operand::CALL, dIndex);
-            ctx.appendCode(ctx.serialize(v.aotValue.get()));
-        }
-
         ctx.appendCode(Operand::RET);
         return {};
     }
@@ -69,39 +57,42 @@ namespace BraneScript
     {
         auto value = ctx.castReg(arg->generateBytecode(ctx));
 
-        if(value->isStackRef())
+        if(value->isRef() && value->isStruct())
         {
+            if(!(value->flags & AotValue::Const) && value->isHeapRef() && value->isTemp())
+            {
+                ctx.appendCode(RETV, ctx.serialize(value));
+                ctx.releaseValue(value);
+                return nullptr;
+            }
             auto* sDef = static_cast<const StructDef*>(value->type);
             auto ptr = ctx.newReg(value->type, AotValue::Temp);
-            int16_t cIndex = ctx.script.linkFunction(std::string(sDef->name()) + "::_construct()");
-            int16_t mcIndex = ctx.script.linkFunction(std::string(sDef->name()) + "::_move(ref " + sDef->name() + ")");
+            int16_t cIndex = ctx.script.linkConstructor(sDef);
             // Allocate memory to return
-            ctx.appendCode(Operand::MALLOC, ctx.serialize(ptr), sDef->size());
+            ctx.appendCode(Operand::MALLOC, ctx.serialize(ptr), (uint16_t)sDef->size());
 
             // Call constructor
             ctx.appendCode(Operand::CALL, cIndex);
             ctx.appendCode(ctx.serialize(ptr));
 
-            // Call move constructor
-            ctx.appendCode(Operand::CALL, mcIndex);
-            ctx.appendCode(ctx.serialize(ptr));
-            ctx.appendCode(ctx.serialize(value));
+            if(value->isStackRef())
+            {
+                // Call move constructor
+                ctx.appendCode(Operand::CALL, ctx.script.linkMoveConstructor(sDef));
+                ctx.appendCode(ctx.serialize(ptr));
+                ctx.appendCode(ctx.serialize(value));
+            }
+            else
+            {
+                // Call copy constructor
+                ctx.appendCode(Operand::CALL, ctx.script.linkCopyConstructor(sDef));
+                ctx.appendCode(ctx.serialize(ptr));
+                ctx.appendCode(ctx.serialize(value));
+            }
 
             if(value->isTemp())
                 ctx.releaseValue(value);
             value = ptr;
-        }
-
-        // Call destructors for local values
-        for(auto& v : ctx.values)
-        {
-            if(!v.aotValue->isStackRef())
-                continue;
-
-            auto sDef = static_cast<const StructDef*>(v.aotValue->type);
-            int16_t dIndex = ctx.script.linkFunction(std::string(sDef->name()) + "::_destruct()");
-            ctx.appendCode(Operand::CALL, dIndex);
-            ctx.appendCode(ctx.serialize(v.aotValue.get()));
         }
 
         ctx.appendCode(RETV, ctx.serialize(value));

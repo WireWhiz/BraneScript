@@ -3,24 +3,31 @@
 //
 
 #include "staticAnalyzer.h"
+#include <typeinfo>
 #include "antlr4/braneBaseVisitor.h"
 #include "antlr4/braneLexer.h"
 
 namespace BraneScript
 {
 #define NULL_EXPR                                                                                                      \
-    (ExpressionContext*)new ExpressionErrorContext {}
+    (ExpressionContext*)new ExpressionErrorContext { "null expr", __LINE__ }
 #define RETURN_EXPR(expr) return (ExpressionContext*)expr
 #define RETURN_STMT(expr) return (StatementContext*)expr
 #define ASSERT_EXISTS(ptr)                                                                                             \
     if(!(ptr))                                                                                                         \
         return {}
-#define EXPR_ASSERT_EXISTS(ptr)                                                                                        \
+#define EXPR_ASSERT_EXISTS(ptr, message)                                                                               \
     if(!(ptr))                                                                                                         \
-        return (ExpressionContext*)new ExpressionErrorContext{};
-#define STMT_ASSERT_EXISTS(ptr)                                                                                        \
+    {                                                                                                                  \
+        recordError(ctx, message);                                                                                     \
+        return (ExpressionContext*)new ExpressionErrorContext{message, __LINE__};                                      \
+    }
+#define STMT_ASSERT_EXISTS(ptr, message)                                                                               \
     if(!(ptr))                                                                                                         \
-        return (StatementContext*)new StatementErrorContext{};
+    {                                                                                                                  \
+        recordError(ctx, message);                                                                                     \
+        return (StatementContext*)new StatementErrorContext{message, __LINE__};                                        \
+    }
 
     class Analyzer;
 
@@ -75,32 +82,39 @@ namespace BraneScript
 
         bool _functionHasReturn = false;
 
+        std::vector<LabeledValueContext*> globals;
         robin_hood::unordered_map<std::string, LibraryContext*> _linkedLibraries;
-        robin_hood::unordered_map<std::string, TypeContext> _nativeTypes = {
-            {"bool", {"bool", ValueType::Bool}},
-            {"char", {"char", ValueType::Char}},
-            {"uint", {"uint", ValueType::UInt32}},
-            {"uint64", {"uint64", ValueType::UInt64}},
-            {"int", {"int", ValueType::Int32}},
-            {"int64", {"int64", ValueType::Int64}},
-            {"float", {"float", ValueType::Float32}},
-            {"double", {"double", ValueType::Float64}},
-        };
+        robin_hood::unordered_map<std::string, TypeContext> _nativeTypes = {{"bool", {"bool", ValueType::Bool}},
+                                                                            {"char", {"char", ValueType::Char}},
+                                                                            {"uint", {"uint", ValueType::UInt32}},
+                                                                            {"uint64", {"uint64", ValueType::UInt64}},
+                                                                            {"int", {"int", ValueType::Int32}},
+                                                                            {"int64", {"int64", ValueType::Int64}},
+                                                                            {"float", {"float", ValueType::Float32}},
+                                                                            {"double", {"double", ValueType::Float64}}};
 
         std::unique_ptr<ExpressionContext> asExpr(std::any value)
         {
+            if(!value.has_value())
+                return std::make_unique<ExpressionErrorContext>("internal null value error", __LINE__);
             if(value.type() != typeid(ExpressionContext*))
-                return std::make_unique<ExpressionErrorContext>();
+                return std::make_unique<ExpressionErrorContext>("internal casting error, attempted to cast type " +
+                                                                    std::string(value.type().name()) + " to expression",
+                                                                __LINE__);
             return std::unique_ptr<ExpressionContext>(std::any_cast<ExpressionContext*>(value));
         }
 
         std::unique_ptr<StatementContext> asStmt(std::any value)
         {
+            if(!value.has_value())
+                return std::make_unique<StatementErrorContext>("internal null value error", __LINE__);
             if(value.type() == typeid(ExpressionContext*))
                 return std::unique_ptr<StatementContext>(std::any_cast<ExpressionContext*>(value));
             if(value.type() == typeid(StatementContext*))
                 return std::unique_ptr<StatementContext>(std::any_cast<StatementContext*>(value));
-            return std::make_unique<StatementErrorContext>();
+            return std::make_unique<StatementErrorContext>("internal casting error, attempted to cast type " +
+                                                               std::string(value.type().name()) + " to statement",
+                                                           __LINE__);
         }
 
         TextRange toRange(antlr4::Token* token)
@@ -126,6 +140,7 @@ namespace BraneScript
         {
             doc->parent = lastNode();
             doc->range = toRange(token);
+            doc->version = _result.version;
             _documentContext.push(doc);
         }
 
@@ -261,7 +276,9 @@ namespace BraneScript
             DocumentContext* ident = nullptr;
             for(auto& imp : _result.scriptContext->imports)
             {
-                if(imp.alias != prefix)
+                if(!imp.alias.empty() && imp.alias != prefix)
+                    continue;
+                if(imp.alias.empty() && imp.library != prefix)
                     continue;
                 ident = _analyzer.getLibrary(imp.library);
                 if(ident)
@@ -412,7 +429,7 @@ namespace BraneScript
                 }
                 if(!argsMatch)
                     continue;
-                // This is the best match if it requires less casts or has the same amount and just costs lest
+                // This is the best match if it requires fewer casts or has the same amount and just costs lest
                 if(requiredCasts < castCount || (requiredCasts == castCount && requiredCost < castCost))
                 {
                     bestMatch = f;
@@ -430,7 +447,7 @@ namespace BraneScript
                 {
                     error += "\nDid you mean to use one of these overrides?\n-----\n";
                     for(auto o : overrides)
-                        error += functionSig(o->getLongID(), o->arguments) + "\n";
+                        error += functionSig(o->longId(), o->arguments) + "\n";
                     error += "-----";
                 }
                 return false;
@@ -482,6 +499,11 @@ namespace BraneScript
         Analyzer(StaticAnalyzer& analyzer, StaticAnalyzer::AnalyzationContext& result, bool extractOnlyIdentifiers)
             : _analyzer(analyzer), _result(result), _extractOnlyIdentifiers(extractOnlyIdentifiers){};
 
+        std::any visitExprStatement(braneParser::ExprStatementContext* ctx) override
+        {
+            return visit(ctx->expression());
+        }
+
         std::any visitExport(braneParser::ExportContext* ctx) override
         {
             ASSERT_EXISTS(ctx->libID);
@@ -508,7 +530,7 @@ namespace BraneScript
         {
             ASSERT_EXISTS(ctx->id);
             ASSERT_EXISTS(ctx->type());
-            LabeledNodeMap<LabeledValueContext>* values = nullptr;
+            LabeledNodeList<LabeledValueContext>* values = nullptr;
             if(lastNode()->is<ScriptContext>())
                 values = &lastNode()->as<ScriptContext>()->globals;
             else if(lastNode()->is<LibraryContext>())
@@ -523,6 +545,7 @@ namespace BraneScript
             globVar->isConst = value.isConst;
             globVar->isRef = value.isRef;
             globVar->isLValue = true;
+            globals.push_back(globVar);
             popDoc();
             return {};
         }
@@ -534,7 +557,7 @@ namespace BraneScript
             if(type.storageType == ValueType::Struct)
             {
                 auto* sCtx = getStructCtx(type.identifier);
-                type.identifier = sCtx->getLongID();
+                type.identifier = sCtx->longId();
             }
             if(type.storageType == ValueType::Void && type.identifier != "void")
                 recordError(ctx->id, "Type " + type.identifier + " does not exist!");
@@ -579,7 +602,7 @@ namespace BraneScript
             LabeledNodeList<FunctionContext>* functions = nullptr;
             if(auto* s = getLast<StructContext>())
                 functions = &s->functions;
-            else if(auto* l =  getLast<LibraryContext>())
+            else if(auto* l = getLast<LibraryContext>())
                 functions = &l->functions;
             else
                 functions = &_result.scriptContext->functions;
@@ -632,7 +655,7 @@ namespace BraneScript
             if(isMember)
             {
                 LabeledValueContext thisRef;
-                thisRef.type = TypeContext{lastNode()->as<StructContext>()->getLongID(), ValueType::Struct};
+                thisRef.type = TypeContext{lastNode()->as<StructContext>()->longId(), ValueType::Struct};
                 thisRef.identifier.text = "this";
                 thisRef.isLValue = true;
                 thisRef.isRef = true;
@@ -677,7 +700,7 @@ namespace BraneScript
             if(isMember)
             {
                 LabeledValueContext thisRef;
-                thisRef.type = TypeContext{lastNode()->as<StructContext>()->getLongID(), ValueType::Struct};
+                thisRef.type = TypeContext{lastNode()->as<StructContext>()->longId(), ValueType::Struct};
                 thisRef.identifier.text = "this";
                 thisRef.isLValue = true;
                 thisRef.isRef = true;
@@ -726,6 +749,8 @@ namespace BraneScript
                 recordError(ctx->id, "Function never returns " + func->returnType.type.identifier);
 
             _functionHasReturn = cachedFHR;
+
+            _result.scriptContext->functionOrder.push_back(func);
             return {};
         }
 
@@ -770,7 +795,7 @@ namespace BraneScript
         std::any visitStructDef(braneParser::StructDefContext* ctx) override
         {
             ASSERT_EXISTS(ctx->id);
-            LabeledNodeMap<StructContext>* structs = nullptr;
+            LabeledNodeList<StructContext>* structs = nullptr;
             if(lastNode()->as<ScriptContext>())
                 structs = &lastNode()->as<ScriptContext>()->structs;
             else if(lastNode()->is<LibraryContext>())
@@ -780,10 +805,236 @@ namespace BraneScript
             auto structCtx = getNode(*structs, safeGetText(ctx->id));
             initDoc(structCtx, ctx);
             visitChildren(ctx);
+
+            bool hasConstructor[4] = {false, false, false, false};
+            for(auto& f : structCtx->functions)
+            {
+                // If this is an out of date function, skip (this will make it so we always regenerate auto-created
+                // constructors)
+                if(f->version != _result.version)
+                    continue;
+                if(f->identifier.text == "_construct")
+                    hasConstructor[0] = true;
+                if(f->identifier.text == "_copy")
+                    hasConstructor[1] = true;
+                if(f->identifier.text == "_move")
+                    hasConstructor[2] = true;
+                if(f->identifier.text == "_destruct")
+                    hasConstructor[3] = true;
+            }
+            // Make constructor
+            if(!hasConstructor[0])
+            {
+                LabeledValueContext thisRef{};
+                thisRef.identifier.text = "this";
+                thisRef.isRef = true;
+                thisRef.type = {structCtx->longId(), ValueType::Struct};
+
+                std::vector<LabeledValueContext> args = {thisRef};
+                auto func = getFunctionNode("_construct", args);
+                initDoc(func, ctx->id);
+                popDoc();
+                func->arguments = std::move(args);
+                func->body = std::make_unique<ScopeContext>();
+
+                size_t varIndex = 0;
+                for(auto& var : structCtx->variables)
+                {
+                    if(var->type.storageType == ValueType::Struct)
+                    {
+                        auto memberBase = new LabeledValueReferenceContext{};
+                        memberBase->value = &func->arguments[0];
+                        memberBase->returnType = func->arguments[0];
+
+                        auto memberAccess = new MemberAccessContext{};
+                        memberAccess->member = varIndex;
+                        memberAccess->returnType = *var;
+                        memberAccess->returnType.isRef = true;
+                        memberAccess->baseExpression.reset(memberBase);
+
+                        auto constructCall = new FunctionCallContext{};
+                        constructCall->arguments.emplace_back(memberAccess);
+                        std::string error;
+                        if(!resolveFunctionCall(var->type.identifier + "::_construct", constructCall, error))
+                            recordError(ctx->id, error);
+                        func->body->statements.emplace_back(constructCall);
+                    }
+                    varIndex++;
+                }
+            }
+            // Make copy constructor
+            if(!hasConstructor[1])
+            {
+                LabeledValueContext thisRef{};
+                thisRef.identifier.text = "this";
+                thisRef.isRef = true;
+                thisRef.type = {structCtx->longId(), ValueType::Struct};
+
+                LabeledValueContext otherRef{};
+                otherRef.identifier.text = "other";
+                otherRef.isRef = true;
+                otherRef.isConst = true;
+                otherRef.type = {structCtx->longId(), ValueType::Struct};
+
+                std::vector<LabeledValueContext> args = {thisRef, otherRef};
+                auto func = getFunctionNode("_copy", args);
+                initDoc(func, ctx->id);
+                popDoc();
+                func->arguments = std::move(args);
+                func->body = std::make_unique<ScopeContext>();
+
+                size_t varIndex = 0;
+                for(auto& var : structCtx->variables)
+                {
+                    auto memberBase = new LabeledValueReferenceContext{};
+                    memberBase->value = &func->arguments[0];
+                    memberBase->returnType = func->arguments[0];
+
+                    auto memberAccess = new MemberAccessContext{};
+                    memberAccess->member = varIndex;
+                    memberAccess->returnType = *var;
+                    memberAccess->returnType.isRef = true;
+                    memberAccess->baseExpression.reset(memberBase);
+
+                    auto otherBase = new LabeledValueReferenceContext{};
+                    otherBase->value = &func->arguments[1];
+                    otherBase->returnType = func->arguments[1];
+
+                    auto otherAccess = new MemberAccessContext{};
+                    otherAccess->member = varIndex;
+                    otherAccess->returnType = *var;
+                    otherAccess->returnType.isRef = true;
+                    otherAccess->returnType.isConst = true;
+                    otherAccess->baseExpression.reset(otherBase);
+
+                    if(var->type.storageType == ValueType::Struct)
+                    {
+                        auto constructCall = new FunctionCallContext{};
+                        constructCall->arguments.emplace_back(memberAccess);
+                        constructCall->arguments.emplace_back(otherAccess);
+                        std::string error;
+                        if(!resolveFunctionCall(var->type.identifier + "::_copy", constructCall, error))
+                            recordError(ctx->id, error);
+                        func->body->statements.emplace_back(constructCall);
+                    }
+                    else
+                    {
+                        auto move = new AssignmentContext{};
+                        move->lValue.reset(memberAccess);
+                        move->rValue.reset(otherAccess);
+                        func->body->statements.emplace_back(move);
+                    }
+                    varIndex++;
+                }
+            }
+            // Make move constructor
+            if(!hasConstructor[2])
+            {
+                LabeledValueContext thisRef{};
+                thisRef.identifier.text = "this";
+                thisRef.isRef = true;
+                thisRef.type = {structCtx->longId(), ValueType::Struct};
+
+                LabeledValueContext otherRef{};
+                otherRef.identifier.text = "other";
+                otherRef.isRef = true;
+                otherRef.type = {structCtx->longId(), ValueType::Struct};
+
+                std::vector<LabeledValueContext> args = {thisRef, otherRef};
+                auto func = getFunctionNode("_move", {thisRef, otherRef});
+                initDoc(func, ctx->id);
+                popDoc();
+                func->arguments = std::move(args);
+                func->body = std::make_unique<ScopeContext>();
+
+                size_t varIndex = 0;
+                for(auto& var : structCtx->variables)
+                {
+                    auto memberBase = new LabeledValueReferenceContext{};
+                    memberBase->value = &func->arguments[0];
+                    memberBase->returnType = func->arguments[0];
+
+                    auto memberAccess = new MemberAccessContext{};
+                    memberAccess->returnType = *var;
+                    memberAccess->returnType.isRef = true;
+                    memberAccess->member = varIndex;
+                    memberAccess->baseExpression.reset(memberBase);
+
+                    auto otherBase = new LabeledValueReferenceContext{};
+                    otherBase->value = &func->arguments[1];
+                    otherBase->returnType = func->arguments[1];
+
+                    auto otherAccess = new MemberAccessContext{};
+                    otherAccess->member = varIndex;
+                    otherAccess->returnType = *var;
+                    otherAccess->returnType.isRef = true;
+                    otherAccess->baseExpression.reset(otherBase);
+
+                    if(var->type.storageType == ValueType::Struct)
+                    {
+                        auto constructCall = new FunctionCallContext{};
+                        constructCall->arguments.emplace_back(memberAccess);
+                        constructCall->arguments.emplace_back(otherAccess);
+                        std::string error;
+                        if(!resolveFunctionCall(var->type.identifier + "::_move", constructCall, error))
+                            recordError(ctx->id, error);
+                        func->body->statements.emplace_back(constructCall);
+                    }
+                    else
+                    {
+                        auto move = new AssignmentContext{};
+                        move->lValue.reset(memberAccess);
+                        move->rValue.reset(otherAccess);
+                        func->body->statements.emplace_back(move);
+                    }
+                    varIndex++;
+                }
+            }
+            // Make destructor
+            if(!hasConstructor[3])
+            {
+                LabeledValueContext thisRef{};
+                thisRef.identifier.text = "this";
+                thisRef.isRef = true;
+                thisRef.type = {structCtx->longId(), ValueType::Struct};
+
+                std::vector<LabeledValueContext> args = {thisRef};
+                auto func = getFunctionNode("_destruct", args);
+                initDoc(func, ctx->id);
+                popDoc();
+                func->arguments = std::move(args);
+                func->body = std::make_unique<ScopeContext>();
+
+                size_t varIndex = 0;
+                for(auto& var : structCtx->variables)
+                {
+                    if(var->type.storageType == ValueType::Struct)
+                    {
+                        auto memberBase = new LabeledValueReferenceContext{};
+                        memberBase->value = &func->arguments[0];
+                        memberBase->returnType = func->arguments[0];
+
+                        auto memberAccess = new MemberAccessContext{};
+                        memberAccess->member = varIndex;
+                        memberAccess->returnType = *var;
+                        memberAccess->returnType.isRef = true;
+                        memberAccess->baseExpression.reset(memberBase);
+
+                        auto constructCall = new FunctionCallContext{};
+                        constructCall->arguments.emplace_back(memberAccess);
+                        std::string error;
+                        if(!resolveFunctionCall(var->type.identifier + "::_destruct", constructCall, error))
+                            recordError(ctx->id, error);
+                        func->body->statements.emplace_back(constructCall);
+                    }
+                    varIndex++;
+                }
+            }
             structCtx->packed = ctx->packed;
             popDoc();
             pruneNodes(structCtx->variables);
             pruneNodes(structCtx->functions);
+
             return {};
         }
 
@@ -816,7 +1067,8 @@ namespace BraneScript
                 std::string castError;
                 castCtx->arguments.push_back(std::move(retCtx->value));
                 if(!resolveCast(castCtx.get(), lastNode()->getParent<FunctionContext>()->returnType.type, castError))
-                    recordError(ctx,"Returned value of type " + castCtx->arguments[0]->returnType.type.identifier +
+                    recordError(ctx,
+                                "Returned value of type " + castCtx->arguments[0]->returnType.type.identifier +
                                     " does not match the function's declared return type of " +
                                     functionType.identifier);
 
@@ -829,8 +1081,8 @@ namespace BraneScript
 
         std::any visitIf(braneParser::IfContext* ctx) override
         {
-            STMT_ASSERT_EXISTS(ctx->cond);
-            STMT_ASSERT_EXISTS(ctx->operation);
+            STMT_ASSERT_EXISTS(ctx->cond, "If missing condition");
+            STMT_ASSERT_EXISTS(ctx->operation, "If statement missing body");
             auto ifCtx = new IfContext{};
             initDoc(ifCtx, ctx);
             ifCtx->condition = asExpr(visit(ctx->cond));
@@ -843,8 +1095,8 @@ namespace BraneScript
 
         std::any visitWhile(braneParser::WhileContext* ctx) override
         {
-            STMT_ASSERT_EXISTS(ctx->cond);
-            STMT_ASSERT_EXISTS(ctx->operation);
+            STMT_ASSERT_EXISTS(ctx->cond, "while loop condition missing");
+            STMT_ASSERT_EXISTS(ctx->operation, "while loop body missing");
             auto whileCtx = new WhileContext{};
             initDoc(whileCtx, ctx);
             whileCtx->condition = asExpr(visit(ctx->cond));
@@ -855,7 +1107,7 @@ namespace BraneScript
 
         std::any visitDecl(braneParser::DeclContext* ctx) override
         {
-            EXPR_ASSERT_EXISTS(ctx->declaration());
+            EXPR_ASSERT_EXISTS(ctx->declaration(), "declaration expected");
             auto* scope = lastNode()->as<ScopeContext>();
             if(!scope)
                 scope = lastNode()->getParent<ScopeContext>();
@@ -878,8 +1130,8 @@ namespace BraneScript
 
         std::any visitAssignment(braneParser::AssignmentContext* ctx) override
         {
-            STMT_ASSERT_EXISTS(ctx->lValue);
-            STMT_ASSERT_EXISTS(ctx->rValue);
+            STMT_ASSERT_EXISTS(ctx->lValue, "lValue expected");
+            STMT_ASSERT_EXISTS(ctx->rValue, "rValue expected");
             auto assignmentCtx = new AssignmentContext{};
             initDoc(assignmentCtx, ctx);
             assignmentCtx->lValue = asExpr(visit(ctx->lValue));
@@ -888,8 +1140,6 @@ namespace BraneScript
             if(assignmentCtx->lValue->returnType.isConst)
                 recordError(ctx->lValue, "Can not modify a constant value!");
 
-            if(assignmentCtx->lValue->is<LabeledValueReferenceContext>())
-                assignmentCtx->lValue->as<LabeledValueReferenceContext>()->isAssignment = true;
             assignmentCtx->rValue = asExpr(visit(ctx->rValue));
             if(assignmentCtx->lValue->returnType.type != assignmentCtx->rValue->returnType.type)
             {
@@ -906,7 +1156,7 @@ namespace BraneScript
 
         std::any visitConstBool(braneParser::ConstBoolContext* ctx) override
         {
-            EXPR_ASSERT_EXISTS(ctx->BOOL());
+            EXPR_ASSERT_EXISTS(ctx->BOOL(), "constant missing");
             auto constCtx = new ConstBoolContext{};
             initDoc(constCtx, ctx);
             constCtx->value = (ctx->getText() == "true");
@@ -916,7 +1166,7 @@ namespace BraneScript
 
         std::any visitConstInt(braneParser::ConstIntContext* ctx) override
         {
-            EXPR_ASSERT_EXISTS(ctx->INT());
+            EXPR_ASSERT_EXISTS(ctx->INT(), "constant missing");
             auto constCtx = new ConstIntContext{};
             initDoc(constCtx, ctx);
             constCtx->value = std::stoi(ctx->getText());
@@ -926,7 +1176,7 @@ namespace BraneScript
 
         std::any visitConstFloat(braneParser::ConstFloatContext* ctx) override
         {
-            EXPR_ASSERT_EXISTS(ctx->FLOAT());
+            EXPR_ASSERT_EXISTS(ctx->FLOAT(), "constant missing");
             auto constCtx = new ConstFloatContext{};
             initDoc(constCtx, ctx);
             constCtx->value = std::stof(ctx->getText());
@@ -936,7 +1186,7 @@ namespace BraneScript
 
         std::any visitConstChar(braneParser::ConstCharContext* ctx) override
         {
-            EXPR_ASSERT_EXISTS(ctx->CHAR());
+            EXPR_ASSERT_EXISTS(ctx->CHAR(), "constant missing");
             auto constCtx = new ConstCharContext{};
             initDoc(constCtx, ctx);
             constCtx->value = ctx->getText()[1];
@@ -946,7 +1196,7 @@ namespace BraneScript
 
         std::any visitConstString(braneParser::ConstStringContext* ctx) override
         {
-            EXPR_ASSERT_EXISTS(ctx->STRING());
+            EXPR_ASSERT_EXISTS(ctx->STRING(), "constant missing");
             auto constCtx = new ConstStringContext{};
             initDoc(constCtx, ctx);
             constCtx->value = ctx->getText();
@@ -957,14 +1207,14 @@ namespace BraneScript
 
         std::any visitParen(braneParser::ParenContext* ctx) override
         {
-            EXPR_ASSERT_EXISTS(ctx->expression());
+            EXPR_ASSERT_EXISTS(ctx->expression(), "expression expected");
             return visit(ctx->expression());
         }
 
         std::any visitCast(braneParser::CastContext* ctx) override
         {
-            EXPR_ASSERT_EXISTS(ctx->type());
-            EXPR_ASSERT_EXISTS(ctx->expression());
+            EXPR_ASSERT_EXISTS(ctx->type(), "type expected");
+            EXPR_ASSERT_EXISTS(ctx->expression(), "expression expected");
             auto callCtx = new FunctionCallContext{};
             initDoc(callCtx, ctx);
             auto returnType = std::any_cast<ValueContext>(visit(ctx->type()));
@@ -978,9 +1228,9 @@ namespace BraneScript
 
         std::any visitAddsub(braneParser::AddsubContext* ctx) override
         {
-            EXPR_ASSERT_EXISTS(ctx->left);
-            EXPR_ASSERT_EXISTS(ctx->opr);
-            EXPR_ASSERT_EXISTS(ctx->right);
+            EXPR_ASSERT_EXISTS(ctx->left, "expression expected");
+            EXPR_ASSERT_EXISTS(ctx->opr, "operator expected");
+            EXPR_ASSERT_EXISTS(ctx->right, "expression expected");
             auto callCtx = new FunctionCallContext{};
             initDoc(callCtx, ctx);
             callCtx->arguments.push_back(asExpr(visit(ctx->left)));
@@ -994,9 +1244,9 @@ namespace BraneScript
 
         std::any visitMuldiv(braneParser::MuldivContext* ctx) override
         {
-            EXPR_ASSERT_EXISTS(ctx->left);
-            EXPR_ASSERT_EXISTS(ctx->opr);
-            EXPR_ASSERT_EXISTS(ctx->right);
+            EXPR_ASSERT_EXISTS(ctx->left, "expression expected");
+            EXPR_ASSERT_EXISTS(ctx->opr, "operator expected");
+            EXPR_ASSERT_EXISTS(ctx->right, "expression expected");
             auto callCtx = new FunctionCallContext{};
             initDoc(callCtx, ctx);
             callCtx->arguments.push_back(asExpr(visit(ctx->left)));
@@ -1010,9 +1260,9 @@ namespace BraneScript
 
         std::any visitLogic(braneParser::LogicContext* ctx) override
         {
-            EXPR_ASSERT_EXISTS(ctx->left);
-            EXPR_ASSERT_EXISTS(ctx->opr);
-            EXPR_ASSERT_EXISTS(ctx->right);
+            EXPR_ASSERT_EXISTS(ctx->left, "expression expected");
+            EXPR_ASSERT_EXISTS(ctx->opr, "operator expected");
+            EXPR_ASSERT_EXISTS(ctx->right, "expression expected");
             auto callCtx = new FunctionCallContext{};
             initDoc(callCtx, ctx);
             callCtx->arguments.push_back(asExpr(visit(ctx->left)));
@@ -1026,9 +1276,9 @@ namespace BraneScript
 
         std::any visitComparison(braneParser::ComparisonContext* ctx) override
         {
-            EXPR_ASSERT_EXISTS(ctx->left);
-            EXPR_ASSERT_EXISTS(ctx->opr);
-            EXPR_ASSERT_EXISTS(ctx->right);
+            EXPR_ASSERT_EXISTS(ctx->left, "expression expected");
+            EXPR_ASSERT_EXISTS(ctx->opr, "operator expected");
+            EXPR_ASSERT_EXISTS(ctx->right, "expression expected");
             auto callCtx = new FunctionCallContext{};
             initDoc(callCtx, ctx);
             callCtx->arguments.push_back(asExpr(visit(ctx->left)));
@@ -1042,8 +1292,8 @@ namespace BraneScript
 
         std::any visitIndexAccess(braneParser::IndexAccessContext* ctx) override
         {
-            EXPR_ASSERT_EXISTS(ctx->base);
-            EXPR_ASSERT_EXISTS(ctx->arg);
+            EXPR_ASSERT_EXISTS(ctx->base, "expression expected");
+            EXPR_ASSERT_EXISTS(ctx->arg, "expression expected");
             auto callCtx = new FunctionCallContext{};
             initDoc(callCtx, ctx);
             callCtx->arguments.push_back(asExpr(visit(ctx->base)));
@@ -1081,10 +1331,10 @@ namespace BraneScript
                     lastNode()->findIdentifier("this", IDSearchOptions_ParentsOnly)->as<LabeledValueContext>();
                 valueAccess->returnType = *valueAccess->value;
 
-                valueAccess->referenceIndex = valueAccess->value->references.size();
-                valueAccess->value->references.push_back(LabeledValueContext::Reference{valueAccess, false});
+                memberAccess->baseExpression.reset(valueAccess);
 
                 auto parent = node->parent->as<StructContext>();
+                memberAccess->member = 0;
                 for(auto& m : parent->variables)
                 {
                     if(m->identifier.text == identifier)
@@ -1105,17 +1355,14 @@ namespace BraneScript
             popDoc();
             valueAccess->value = node->as<LabeledValueContext>();
 
-            valueAccess->referenceIndex = valueAccess->value->references.size();
-            valueAccess->value->references.push_back(LabeledValueContext::Reference{valueAccess, false});
-
             valueAccess->returnType = *valueAccess->value;
             RETURN_EXPR(valueAccess);
         }
 
         std::any visitMemberAccess(braneParser::MemberAccessContext* ctx) override
         {
-            EXPR_ASSERT_EXISTS(ctx->base);
-            EXPR_ASSERT_EXISTS(ctx->member);
+            EXPR_ASSERT_EXISTS(ctx->base, "expected base expression");
+            EXPR_ASSERT_EXISTS(ctx->member, "expected member identifier");
             auto accessCtx = new MemberAccessContext{};
             initDoc(accessCtx, ctx);
             accessCtx->baseExpression = asExpr(visit(ctx->base));
@@ -1130,6 +1377,7 @@ namespace BraneScript
                 if(type)
                 {
                     std::string memberName = safeGetText(ctx->member);
+                    accessCtx->member = 0;
                     for(auto& m : type->variables)
                     {
                         if(m->identifier.text == memberName)
@@ -1154,8 +1402,8 @@ namespace BraneScript
 
         std::any visitMemberFunctionCall(braneParser::MemberFunctionCallContext* ctx) override
         {
-            EXPR_ASSERT_EXISTS(ctx->base);
-            EXPR_ASSERT_EXISTS(ctx->name);
+            EXPR_ASSERT_EXISTS(ctx->base, "expected base expression");
+            EXPR_ASSERT_EXISTS(ctx->name, "expected member function call");
             auto callCtx = new FunctionCallContext{};
             initDoc(callCtx, ctx);
             callCtx->arguments.push_back(asExpr(visit(ctx->base)));
@@ -1171,7 +1419,7 @@ namespace BraneScript
 
         std::any visitFunctionCall(braneParser::FunctionCallContext* ctx) override
         {
-            EXPR_ASSERT_EXISTS(ctx->name);
+            EXPR_ASSERT_EXISTS(ctx->name, "expected function identifier");
             auto callCtx = new FunctionCallContext{};
             initDoc(callCtx, ctx);
             for(auto* a : ctx->argumentPack()->expression())
@@ -1209,6 +1457,68 @@ namespace BraneScript
             RETURN_EXPR(callCtx);
         }
 
+        std::any visitProgram(braneParser::ProgramContext* ctx) override
+        {
+            visitChildren(ctx);
+            if(globals.empty())
+                return {};
+
+            std::vector<LabeledValueContext> args = {};
+            // Make constructor
+            {
+                auto func = getFunctionNode("_construct", args);
+                initDoc(func, ctx->start);
+                popDoc();
+                func->body = std::make_unique<ScopeContext>();
+
+                size_t varIndex = 0;
+                for(auto var : globals)
+                {
+                    if(var->type.storageType == ValueType::Struct)
+                    {
+                        auto globalRef = new LabeledValueReferenceContext{};
+                        globalRef->value = var;
+                        globalRef->returnType = *var;
+
+                        auto constructCall = new FunctionCallContext{};
+                        constructCall->arguments.emplace_back(globalRef);
+                        std::string error;
+                        if(!resolveFunctionCall(var->type.identifier + "::_construct", constructCall, error))
+                            recordError(ctx->start, error);
+                        func->body->statements.emplace_back(constructCall);
+                    }
+                    varIndex++;
+                }
+            }
+            // Make destructor
+            {
+                auto func = getFunctionNode("_destruct", args);
+                initDoc(func, ctx->start);
+                popDoc();
+                func->body = std::make_unique<ScopeContext>();
+
+                size_t varIndex = 0;
+                for(auto var : globals)
+                {
+                    if(var->type.storageType == ValueType::Struct)
+                    {
+                        auto globalRef = new LabeledValueReferenceContext{};
+                        globalRef->value = var;
+                        globalRef->returnType = *var;
+
+                        auto constructCall = new FunctionCallContext{};
+                        constructCall->arguments.emplace_back(globalRef);
+                        std::string error;
+                        if(!resolveFunctionCall(var->type.identifier + "::_destruct", constructCall, error))
+                            recordError(ctx->start, error);
+                        func->body->statements.emplace_back(constructCall);
+                    }
+                    varIndex++;
+                }
+            }
+            return {};
+        }
+
         void recordError(TextRange range, const std::string& message) { _result.errors.push_back({range, message}); }
 
         void recordError(antlr4::Token* token, const std::string& message) { recordError(toRange(token), message); }
@@ -1234,6 +1544,7 @@ namespace BraneScript
             _result.version++;
             _result.errors.clear();
             _result.warnings.clear();
+            _result.scriptContext->functionOrder.clear();
 
             /* To avoid invalid pointers being left over, we just remove all exports this script has defined in the past
              * This shouldn't affect script analyzation since inter-script linking is still recursively possible through

@@ -15,12 +15,12 @@ namespace BraneScript
     AotNode* AotCastNode::optimize()
     {
         AotUnaryArgNode::optimize();
-
+        assert(arg);
         if(arg->is<AotConstNode>())
         {
             if(arg->resType() == _resType)
                 return arg.release();
-            switch(arg->resType()->type())
+            switch(_resType->type())
             {
                 case ValueType::Void:
                 case ValueType::Struct:
@@ -223,18 +223,26 @@ namespace BraneScript
 
     AotAssignNode::AotAssignNode(AotNode* lvalue, AotNode* rvalue) : AotBinaryArgNode(lvalue, rvalue, lvalue->resType())
     {
+        assert(argA->resType());
+        assert(argB->resType());
         assert(argB->resType() == _resType);
     }
 
     AotValue* AotAssignNode::generateBytecode(FunctionCompilerCtx& ctx) const
     {
         auto rValue = ctx.castValue(argB->generateBytecode(ctx));
-        auto lValue = argA->generateBytecode(ctx);
+        auto lValue = ctx.castValue(argA->generateBytecode(ctx));
 
-        if(lValue->isRef() && rValue->isRef())
+        if((rValue->storageType == ValueStorageType_Global || rValue->storageType == ValueStorageType_DerefPtr) &&
+           (lValue->storageType == ValueStorageType_Global || lValue->storageType == ValueStorageType_DerefPtr))
+        {
+            rValue = ctx.castReg(rValue);
+        }
+
+        if(lValue->isStruct() && rValue->isStruct())
         {
             auto s = static_cast<const StructDef*>(lValue->type);
-            bool shouldMove = rValue->isExternalRef() && rValue->isTemp();
+            bool shouldMove = rValue->isTemp();
             int16_t cIndex;
             if(shouldMove)
                 cIndex = ctx.script.linkMoveConstructor(s);
@@ -245,18 +253,17 @@ namespace BraneScript
             ctx.appendCode(Operand::CALL, cIndex);
             ctx.appendCode(ctx.serialize(lValue));
             ctx.appendCode(ctx.serialize(rValue));
-
-            if(shouldMove)
-            {
-                // Destruct the temp struct before deleting
-                ctx.appendCode(Operand::CALL, ctx.script.linkDestructor(s));
-                ctx.appendCode(ctx.serialize(rValue));
-                ctx.appendCode(FREE, ctx.serialize(rValue));
-            }
         }
         else
             ctx.appendCode(MOV, ctx.serialize(lValue), ctx.serialize(rValue));
 
+        if(rValue->isStruct() && rValue->isTemp() && rValue->isHeapRef() && !(rValue->flags & AotValue::Const))
+        {
+            auto s = static_cast<const StructDef*>(rValue->type);
+            ctx.appendCode(Operand::CALL, ctx.script.linkDestructor(s));
+            ctx.appendCode(ctx.serialize(rValue));
+            ctx.appendCode(Operand::FREE, ctx.serialize((rValue)));
+        }
         if(rValue->isTemp())
             ctx.releaseValue(rValue);
 

@@ -5,6 +5,8 @@ file.write("""/* This file was auto generated, please use generateIncludesFile.p
 
 export as "BraneScript" 
  {
+    struct string{}
+    
  """)
 
 scalarTypes = ["uint", "uint64", "int", "int64", "float", "double"]
@@ -31,8 +33,11 @@ file.write("""
 for opr in ["==", "!=", "<", "<=", ">", ">="]:
     for t1 in scalarTypes:
         file.write(f"\tbool opr {opr}({t1} left, {t1} right) ext;\n")
-file.write("""\tbool opr ==(const ref string left, const ref string right) ext;
+file.write("""
+\tbool opr ==(const ref string left, const ref string right) ext;
 \tbool opr !=(const ref string left, const ref string right) ext;
+\tchar opr [](const ref string source, int index) ext;
+\tstring opr +(const ref string left, const ref string right) ext;
 """)
 
 file.write("}")

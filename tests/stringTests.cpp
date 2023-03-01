@@ -42,14 +42,11 @@ TEST(BraneScript, Strings)
 
     StaticAnalyzer analyzer;
     analyzer.load("test", testString);
-    if(!analyzer.validate("test"))
-    {
-        for(auto& error : analyzer.getCtx("test")->errors)
-            std::cerr << error.message << std::endl;
-        ASSERT_TRUE(false);
-    }
+    analyzer.validate("test");
+    checkCompileErrors(analyzer, testString);
 
     Compiler compiler;
+    compiler.setLinker(&l);
     auto* ir = compiler.compile(analyzer.getCtx("test")->scriptContext.get());
     ASSERT_TRUE(ir);
 
@@ -71,18 +68,18 @@ TEST(BraneScript, Strings)
     ASSERT_TRUE(returnE);
     EXPECT_EQ('E', returnE());
 
-    auto concat = testScript->getFunction<std::string*, std::string*, std::string*>("concat(ref string,ref string)");
+    auto concat = testScript->getFunction<std::string*, std::string*, std::string*>("concat(ref BraneScript::string,ref BraneScript::string)");
     ASSERT_TRUE(concat);
     str = concat(&argA, &argB);
     EXPECT_STREQ(str->c_str(), "ab");
     delete str;
 
-    auto strEQ = testScript->getFunction<bool, std::string*, std::string*>("strEQ(ref string,ref string)");
+    auto strEQ = testScript->getFunction<bool, std::string*, std::string*>("strEQ(ref BraneScript::string,ref BraneScript::string)");
     ASSERT_TRUE(strEQ);
     EXPECT_TRUE(strEQ(&argA, &argA));
     EXPECT_FALSE(strEQ(&argA, &argB));
 
-    auto strNEQ = testScript->getFunction<bool, std::string*, std::string*>("strNEQ(ref string,ref string)");
+    auto strNEQ = testScript->getFunction<bool, std::string*, std::string*>("strNEQ(ref BraneScript::string,ref BraneScript::string)");
     ASSERT_TRUE(strNEQ);
     EXPECT_FALSE(strNEQ(&argA, &argA));
     EXPECT_TRUE(strNEQ(&argA, &argB));

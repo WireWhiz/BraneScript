@@ -20,7 +20,6 @@ namespace BraneScript
         AotInlineFunction(std::string name, const TypeDef* resType);
         virtual ~AotInlineFunction() = default;
 
-        virtual bool argsMatch(const std::vector<AotNode*>& args) const = 0;
         virtual AotNode* generateAotTree(const std::vector<AotNode*>& args) const = 0;
 
         inline const std::string& name() const {return _name;};

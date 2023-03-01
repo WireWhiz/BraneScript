@@ -24,6 +24,7 @@ namespace BraneScript
         asmjit::JitRuntime _runtime;
         std::vector<std::unique_ptr<Script>> _scripts;
         Linker* _linker = nullptr;
+        size_t maxStackSize = 32768;
 
     public:
         Script* assembleScript(IRScript* irScript);

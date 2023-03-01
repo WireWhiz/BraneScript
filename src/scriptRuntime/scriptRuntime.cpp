@@ -98,8 +98,9 @@ namespace BraneScript
             case ValueStorageType_Reg:
                 break; // goto next switch statement
             case ValueStorageType_Ptr:
-                return ValueRegType::gp;
+            case ValueStorageType_GlobalPtr:
             case ValueStorageType_Global:
+                return ValueRegType::gp;
             case ValueStorageType_DerefPtr:
             case ValueStorageType_Const:
                 return ValueRegType::mem;
@@ -152,11 +153,14 @@ namespace BraneScript
         size_t iptr = 0;
 
         IRFunction* currentFunction = nullptr;
+        IRScript* currentScript = nullptr;
 
-        asmjit::x86::Mem globalsPtr;
+        asmjit::x86::Gp globalsPtr;
         std::vector<asmjit::x86::Reg> registers;
         std::vector<asmjit::x86::Mem> constants;
         std::vector<asmjit::Label> labels;
+
+        size_t stackSize = 0;
 
         template<typename T>
         T readCode()
@@ -176,18 +180,22 @@ namespace BraneScript
                     assert(value.index < constants.size());
                     return constants[value.index];
                 }
-                if(value.storageType == ValueStorageType_Global)
-                    return globalsPtr;
                 // If this isn't a constant, it's safe to assume that it's a dereferenced pointer
                 assert(value.storageType == ValueStorageType_DerefPtr);
                 assert(value.index < registers.size());
+                assert(registers[value.index].isGp());
                 return asmjit::x86::ptr(registers[value.index].as<Gp>(), value.offset);
             }
             else
             {
+
                 assert(value.index < registers.size());
                 if constexpr(std::is_same<RT, Gp>())
+                {
+                    if(value.storageType == ValueStorageType_Global)
+                        return globalsPtr;
                     assert(registers[value.index].isGp());
+                }
                 if constexpr(std::is_same<RT, Xmm>())
                     assert(registers[value.index].isXmm());
                 return registers[value.index].as<RT>();
@@ -299,6 +307,7 @@ namespace BraneScript
             AssemblyCtx ctx;
             asmjit::CodeHolder ch;
             ctx.currentFunction = &func;
+            ctx.currentScript = irScript;
 
             ch.init(_runtime.environment());
             ch.setErrorHandler(&errorHandler);
@@ -309,11 +318,8 @@ namespace BraneScript
 
             printf("Assembling function: %s\n", ctx.currentFunction->sig.c_str());
 
-
-            auto globalsPtr = script->globalVars.data();
-            ctx.globalsPtr = cc.newConst(asmjit::ConstPoolScope::kGlobal, &globalsPtr, sizeof(globalsPtr));
-
             ctx.registers.resize(func.maxRegs);
+            ctx.constants.resize(func.maxMemLocations);
 
             asmjit::FuncSignatureBuilder sigBuilder;
             std::vector<asmjit::TypeId> argTypes;
@@ -331,6 +337,11 @@ namespace BraneScript
             auto retType = strToASMType(func.returnType.type);
             sigBuilder.setRet(retType);
             auto* f = cc.addFunc(sigBuilder);
+
+            auto globalsPtr = script->globalVars.data();
+            auto globalsMem = cc.newConst(asmjit::ConstPoolScope::kGlobal, &globalsPtr, sizeof(globalsPtr));
+            ctx.globalsPtr = cc.newIntPtr();
+            cc.mov(ctx.globalsPtr, globalsMem);
 
             for(size_t i = 0; i < func.arguments.size(); ++i)
             {
@@ -358,7 +369,7 @@ namespace BraneScript
                         ctx.registers[i] = cc.newXmmSd();
                         break;
                     case asmjit::TypeId::kIntPtr:
-                        ctx.registers.push_back(cc.newIntPtr());
+                        ctx.registers[i] = cc.newIntPtr();
                         break;
                     default:
                         assert(false);
@@ -397,12 +408,14 @@ namespace BraneScript
                         if(valIndex.index >= ctx.registers.size())
                             throw std::runtime_error("Undefined register index");
 
+                        printf("INITR reg%hu ", valIndex.index);
+
                         if(valIndex.storageType == ValueStorageType_Ptr)
                         {
-                            ctx.registers.push_back(cc.newIntPtr());
+                            printf("ptr\n");
+                            ctx.registers[valIndex.index] = cc.newIntPtr();
                             break;
                         }
-                        printf("INITR reg%hu ", valIndex.index);
 
                         Reg newReg;
                         switch(valIndex.valueType)
@@ -451,58 +464,27 @@ namespace BraneScript
                     {
                         auto valIndex = ctx.readCode<Value>();
                         assert(valIndex.storageType == ValueStorageType_Ptr);
-                        auto structIndex = ctx.readCode<int16_t>();
-                        if(structIndex >= 0)
-                        {
-                            // Local struct alloc
-                            assert(structIndex < localStructs.size());
-                            auto& structDef = localStructs[structIndex];
-                            printf("ALLOC gp%hu, %s\n", valIndex.index, structDef->name());
-                            auto stackMem = cc.newStack(structDef->size(), 4);
-                            cc.lea(ctx.getReg<Gp>(valIndex), stackMem);
-                            break;
-                        }
-                        // External struct alloc
-                        structIndex = -structIndex - int16_t{1};
-                        assert(structIndex < linkedStructs.size());
-                        auto& structDef = linkedStructs[structIndex];
-                        printf("EXALLOC gp%hu, %s\n", valIndex.index, structDef->name());
-                        auto size = structDef->size();
-                        auto stackMem = cc.newStack(size, 4);
+                        auto allocSize = ctx.readCode<uint16_t>();
+                        printf("ALLOC gp%hu, %hubytes\n", valIndex.index, allocSize);
+                        ctx.stackSize += allocSize;
+                        if(ctx.stackSize > maxStackSize)
+                            throw std::runtime_error("Attempted to compile function that requires more stack memory than the set maximum stack size");
+                        auto stackMem = cc.newStack(allocSize, 4);
                         cc.lea(ctx.getReg<Gp>(valIndex), stackMem);
-                        break;
                         break;
                     }
                     case MALLOC:
                     {
                         auto valIndex = ctx.readCode<Value>();
                         assert(valIndex.storageType == ValueStorageType_Ptr);
-                        int16_t structIndex = ctx.readCode<int16_t>();
-                        if(structIndex >= 0)
-                        {
-                            // Internal struct malloc
-                            assert(structIndex < localStructs.size());
-                            auto& structDef = localStructs[structIndex];
-                            printf("MALLOC gp%hu, %s\n", valIndex.index, structDef->name());
-
-                            asmjit::InvokeNode* in;
-                            cc.invoke(&in, &scriptAlloc, asmjit::FuncSignatureT<void*, uint16_t>());
-
-                            in->setRet(0, ctx.getReg<Gp>(valIndex));
-                            in->setArg(0, asmjit::Imm((uint16_t)structDef->size()));
-                            break;
-                        }
-                        // External struct malloc
-                        structIndex = -structIndex - int16_t{1};
-                        assert(structIndex < linkedStructs.size());
-                        auto& structDef = linkedStructs[structIndex];
-                        printf("EXMALLOC gp%hu, %s\n", valIndex.index, structDef->name());
+                        auto allocSize = ctx.readCode<uint16_t>();
+                        printf("EXMALLOC gp%hu, %hubytes\n", valIndex.index, allocSize);
 
                         asmjit::InvokeNode* in;
                         cc.invoke(&in, &scriptAlloc, asmjit::FuncSignatureT<void*, uint16_t>());
 
                         in->setRet(0, ctx.getReg<Gp>(valIndex));
-                        in->setArg(0, asmjit::Imm((uint16_t)structDef->size()));
+                        in->setArg(0, asmjit::Imm(allocSize));
                         break;
                     }
                     case FREE:
@@ -517,7 +499,8 @@ namespace BraneScript
                     {
                         Value constant = ctx.readCode<Value>();
                         printf("LOADC mem%hu ", constant.index);
-                        assert(ctx.constants.size() == constant.index);
+                        if(ctx.constants.size() <= constant.index)
+                            throw std::runtime_error("attempted to use unallocated memory locations");
                         switch(constant.valueType)
                         {
                             case ValueType::Char:
@@ -525,49 +508,49 @@ namespace BraneScript
                             {
                                 auto val = ctx.readCode<uint8_t>();
                                 printf("uint8 (char/bool) %u\n", val);
-                                ctx.constants.push_back(cc.newByteConst(asmjit::ConstPoolScope::kLocal, val));
+                                ctx.constants[constant.index] = cc.newByteConst(asmjit::ConstPoolScope::kLocal, val);
                                 break;
                             }
                             case ValueType::UInt32:
                             {
                                 auto val = ctx.readCode<uint32_t>();
                                 printf("uint32 %u\n", val);
-                                ctx.constants.push_back(cc.newUInt32Const(asmjit::ConstPoolScope::kLocal, val));
+                                ctx.constants[constant.index] = cc.newUInt32Const(asmjit::ConstPoolScope::kLocal, val);
                                 break;
                             }
                             case ValueType::Int32:
                             {
                                 auto val = ctx.readCode<int32_t>();
                                 printf("int32 %i\n", val);
-                                ctx.constants.push_back(cc.newInt32Const(asmjit::ConstPoolScope::kLocal, val));
+                                ctx.constants[constant.index] = cc.newInt32Const(asmjit::ConstPoolScope::kLocal, val);
                                 break;
                             }
                             case ValueType::UInt64:
                             {
                                 auto val = ctx.readCode<uint64_t>();
                                 printf("uint64 %llu\n", val);
-                                ctx.constants.push_back(cc.newUInt64Const(asmjit::ConstPoolScope::kLocal, val));
+                                ctx.constants[constant.index] = cc.newUInt64Const(asmjit::ConstPoolScope::kLocal, val);
                                 break;
                             }
                             case ValueType::Int64:
                             {
                                 auto val = ctx.readCode<int64_t>();
                                 printf("int64 %lli\n", val);
-                                ctx.constants.push_back(cc.newInt64Const(asmjit::ConstPoolScope::kLocal, val));
+                                ctx.constants[constant.index] = cc.newInt64Const(asmjit::ConstPoolScope::kLocal, val);
                                 break;
                             }
                             case ValueType::Float32:
                             {
                                 auto val = ctx.readCode<float>();
                                 printf("float %f\n", val);
-                                ctx.constants.push_back(cc.newFloatConst(asmjit::ConstPoolScope::kLocal, val));
+                                ctx.constants[constant.index] = cc.newFloatConst(asmjit::ConstPoolScope::kLocal, val);
                                 break;
                             }
                             case ValueType::Float64:
                             {
                                 auto val = ctx.readCode<double>();
                                 printf("double %f\n", val);
-                                ctx.constants.push_back(cc.newDoubleConst(asmjit::ConstPoolScope::kLocal, val));
+                                ctx.constants[constant.index] = cc.newDoubleConst(asmjit::ConstPoolScope::kLocal, val);
                                 break;
                             }
                             default:
@@ -578,15 +561,16 @@ namespace BraneScript
                     }
                     case LOADS:
                     {
+                        auto value = ctx.readCode<Value>();
                         auto size = ctx.readCode<uint32_t>();
                         auto* text = new std::string();
                         text->resize(size);
                         for(char& c : *text)
                             c = ctx.readCode<char>();
 
-                        printf("LOADS %s", text->c_str());
+                        printf("LOADS mem%hu %s\n", value.index, text->c_str());
                         script->constStrings.push_back(std::unique_ptr<std::string>(text));
-                        ctx.constants.push_back(cc.newConst(asmjit::ConstPoolScope::kLocal, &text, sizeof(text)));
+                        ctx.constants[value.index] = cc.newConst(asmjit::ConstPoolScope::kLocal, &text, sizeof(text));
                     }
                     break;
                     case MARK:
@@ -755,6 +739,7 @@ namespace BraneScript
                             else
                                 cc.invoke(&in, f->label(), sb);
 
+                            printf("%s %s(", function.returnType.type.c_str(), function.sig.c_str());
                             if(function.returnType.type != "void")
                             {
                                 auto retVal = ctx.readCode<Value>();
@@ -764,8 +749,11 @@ namespace BraneScript
                             {
                                 auto argVal = ctx.readCode<Value>();
                                 in->setArg(i, ctx.getReg<Reg>(argVal));
+                                printf("reg%hu = %s", argVal.index,  function.arguments[i].type.c_str());
+                                if(i != function.arguments.size() - 1)
+                                    printf(", ");
                             }
-                            printf("%s %s\n", function.returnType.type.c_str(), function.sig.c_str());
+                            printf(")\n");
                             break;
                         }
 
@@ -778,7 +766,7 @@ namespace BraneScript
                             sb.setRet(strToASMType(function->ret));
                         else
                             sb.setRet(asmjit::TypeId::kVoid);
-                        for(size_t arg = 0; arg < function->def.argCount(); ++arg)
+                        for(size_t arg = 0; arg < function->argCount; ++arg)
                             sb.addArg(strToASMType(function->def.argType(arg)));
 
                         asmjit::InvokeNode* in;
@@ -789,7 +777,7 @@ namespace BraneScript
                             auto retVal = ctx.readCode<Value>();
                             in->setRet(0, ctx.getReg<Reg>(retVal));
                         }
-                        for(uint32_t i = 0; i < function->def.argCount(); ++i)
+                        for(uint32_t i = 0; i < function->argCount; ++i)
                         {
                             auto argVal = ctx.readCode<Value>();
                             in->setArg(i, ctx.getReg<Reg>(argVal));

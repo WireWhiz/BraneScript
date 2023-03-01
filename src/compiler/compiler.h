@@ -30,9 +30,10 @@ namespace BraneScript
     {
         robin_hood::unordered_map<std::string, const TypeDef*> _nativeTypes;
         robin_hood::unordered_map<std::string, std::unique_ptr<StructDef>> _registeredStructs;
-        robin_hood::unordered_map<std::string, std::vector<std::unique_ptr<AotInlineFunction>>> _inlineFunctions;
+        robin_hood::unordered_map<std::string, std::unique_ptr<AotInlineFunction>> _inlineFunctions;
 
         StructDef structFromDocumentContext(const StructContext* ctx);
+        Linker* _linker = nullptr;
       public:
         Compiler();
 
@@ -41,11 +42,14 @@ namespace BraneScript
         /** @brief Used to create and update struct definitions.
          * Must be called with every script linked to a script you wish to compile so that all types will be defined.
          */
+        void updateDefinedStructs(const LibraryContext* lib);
         void updateDefinedStructs(const ScriptContext* script);
         void clearDefinedStructs();
 
         const TypeDef* getType(const std::string& id) const;
         IRScript* compile(const ScriptContext* script);
+
+        void setLinker(Linker* linker);
 
         void registerInlineFunction(AotInlineFunction* function);
         const AotInlineFunction* getInlineFunction(const std::string& name, const std::vector<AotNode*>& args);
@@ -58,7 +62,7 @@ namespace BraneScript
         std::unique_ptr<IRScript> script;
         std::vector<std::unique_ptr<const StructDef>> localStructDefs;
 
-        std::vector<std::unique_ptr<FunctionCompilerCtx>> functions;
+        robin_hood::unordered_map<std::string, int16_t> functionIndices;
 
         std::vector<std::unique_ptr<AotValue>> globalValues;
         AotValue* newGlobal(const TypeDef* type, uint8_t flags);
@@ -75,6 +79,7 @@ namespace BraneScript
     struct FunctionCompilerCtx
     {
         ScriptCompilerCtx& script;
+        const FunctionContext* source;
         IRFunction* function;
         std::string signature;
 
@@ -85,6 +90,7 @@ namespace BraneScript
             bool isReg;
         };
         staticIndexVector<ValueIndex> values;
+        AotValue* staticPtr = nullptr;
 
         bool compareFlagsInUse = false;
 
@@ -99,6 +105,7 @@ namespace BraneScript
         uint32_t newJumpTargetID();
 
         AotValue* newReg(const TypeDef* type, uint8_t flags);
+        AotValue* newCustomReg(const TypeDef* type, ValueStorageType storageType, uint8_t flags);
         AotValue* newConst(const TypeDef* type, uint8_t flags = AotValue::Const | AotValue::Constexpr);
         AotValue* newCompareResult();
         AotValue* castValue(AotValue* value);

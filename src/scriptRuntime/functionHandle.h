@@ -93,10 +93,11 @@ namespace BraneScript
     {
         std::string name;
         std::string ret;
+        size_t argCount = 0;
         FuncDef def;
         void* pointer;
 
-        FunctionData(std::string name, std::string ret, void* pointer);
+        FunctionData(std::string name, std::string ret, size_t argCount, void* pointer);
         FunctionData(const FunctionData&);
         FunctionData(FunctionData&&) noexcept ;
 

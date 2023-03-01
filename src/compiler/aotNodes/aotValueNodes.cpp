@@ -13,8 +13,9 @@ namespace BraneScript
 
     AotValue* AotConstNode::generateBytecode(FunctionCompilerCtx& ctx) const
     {
-        auto value = ctx.newConst(
-            _resType, AotValue::Const | AotValue::ExternalRef | AotValue::Constexpr);
+        auto value = ctx.newConst(_resType, AotValue::Const | AotValue::ExternalRef | AotValue::Constexpr);
+
+        value->flags |= AotValue::Initialized;
         switch(_resType->type())
         {
             case ValueType::Bool:
@@ -42,9 +43,9 @@ namespace BraneScript
                 ctx.appendCode(LOADC, ctx.serialize(value), asFloat64);
                 break;
             case ValueType::Struct:
-                if(std::string_view(_resType->name()) != "string")
+                if(std::string_view(_resType->name()) != "BraneScript::string")
                     throw std::runtime_error("Unknown type");
-                ctx.appendCode(LOADS, (uint32_t)asString.size());
+                ctx.appendCode(LOADS, ctx.serialize(value),(uint32_t)asString.size());
                 for(char c : asString)
                     ctx.appendCode(c);
                 break;
@@ -52,7 +53,7 @@ namespace BraneScript
         return value;
     }
 
-    ValueType AotConstNode::type() const { return _type; }
+    ValueType AotConstNode::type() const { return _resType->type(); }
 
     AotConstNode::AotConstNode(bool value) : AotNode(getNativeTypeDef(ValueType::Bool)) { asBool = value; }
 
@@ -125,9 +126,7 @@ namespace BraneScript
         return {};
     }
 
-    AotValueConstruction::AotValueConstruction(AotValue* value) : AotNode(value->type), _value(value) {
-        assert(value);
-    }
+    AotValueConstruction::AotValueConstruction(AotValue* value) : AotNode(value->type), _value(value) { assert(value); }
 
     AotNode* AotValueConstruction::optimize() { return this; }
 
@@ -139,21 +138,21 @@ namespace BraneScript
                 throw std::runtime_error("can not construct void type!");
             case ValueType::Bool:
             case ValueType::Char:
-                ctx.appendCode(Operand::MOVI, ctx.serialize(_value),(int8_t)0);
+                ctx.appendCode(Operand::MOVI, ctx.serialize(_value), (int8_t)0);
                 break;
             case ValueType::UInt32:
             case ValueType::Int32:
-                ctx.appendCode(Operand::MOVI, ctx.serialize(_value),(int32_t)0);
+                ctx.appendCode(Operand::MOVI, ctx.serialize(_value), (int32_t)0);
                 break;
             case ValueType::UInt64:
             case ValueType::Int64:
-                ctx.appendCode(Operand::MOVI, ctx.serialize(_value),(int64_t)0);
+                ctx.appendCode(Operand::MOVI, ctx.serialize(_value), (int64_t)0);
                 break;
             case ValueType::Float32:
-                ctx.appendCode(Operand::MOVI, ctx.serialize(_value),(float)0);
+                ctx.appendCode(Operand::MOVI, ctx.serialize(_value), (float)0);
                 break;
             case ValueType::Float64:
-                ctx.appendCode(Operand::MOVI, ctx.serialize(_value),(double)0);
+                ctx.appendCode(Operand::MOVI, ctx.serialize(_value), (double)0);
                 break;
             case ValueType::Struct:
             {
@@ -161,24 +160,62 @@ namespace BraneScript
                 ctx.appendCode(Operand::CALL, ctx.script.linkConstructor(s));
                 ctx.appendCode(ctx.serialize(_value));
             }
-                break;
+            break;
         }
         return _value;
     }
 
-    AotValueDestruction::AotValueDestruction(AotValue* value) : AotNode(nullptr) {_value = value;}
+    AotValueDestruction::AotValueDestruction(AotValue* value) : AotNode(nullptr) { _value = value; }
 
-    AotNode* AotValueDestruction::optimize() {
-        if(_value->type->type() != ValueType::Struct)
+    AotNode* AotValueDestruction::optimize()
+    {
+        if(_value && _value->type->type() != ValueType::Struct)
             return nullptr;
         return this;
     }
 
     AotValue* AotValueDestruction::generateBytecode(FunctionCompilerCtx& ctx) const
     {
-        auto s = dynamic_cast<const StructDef*>(_value->type);
-        ctx.appendCode(Operand::CALL, ctx.script.linkDestructor(s));
-        ctx.appendCode(ctx.serialize(_value));
+        if(auto s = dynamic_cast<const StructDef*>(_value->type))
+        {
+            ctx.appendCode(Operand::CALL, ctx.script.linkDestructor(s));
+            ctx.appendCode(ctx.serialize(_value));
+            if(_value->isHeapRef())
+                ctx.appendCode(Operand::FREE, ctx.serialize(_value));
+
+        }
         return nullptr;
+    }
+
+    AotAllocNode::AotAllocNode(AotValue* value) : AotNode(value->type), _value(value) {}
+
+    AotNode* AotAllocNode::optimize() { return this; }
+
+    AotValue* AotAllocNode::generateBytecode(FunctionCompilerCtx& ctx) const
+    {
+        ctx.appendCode(Operand::ALLOC, ctx.serialize(_value), (uint16_t)_resType->size());
+        if(auto s = dynamic_cast<const StructDef*>(_value->type))
+        {
+            ctx.appendCode(Operand::CALL, ctx.script.linkConstructor(s));
+            ctx.appendCode(ctx.serialize(_value));
+            _value->flags |= AotValue::StackRef;
+        }
+        return _value;
+    }
+
+    AotMallocNode::AotMallocNode(AotValue* value) : AotNode(value->type), _value(value) {}
+
+    AotNode* AotMallocNode::optimize() { return this; }
+
+    AotValue* AotMallocNode::generateBytecode(FunctionCompilerCtx& ctx) const
+    {
+        ctx.appendCode(Operand::MALLOC, ctx.serialize(_value), (uint16_t)_resType->size());
+        if(auto s = dynamic_cast<const StructDef*>(_value->type))
+        {
+            ctx.appendCode(Operand::CALL, ctx.script.linkConstructor(s));
+            ctx.appendCode(ctx.serialize(_value));
+            _value->flags |= AotValue::HeapRef;
+        }
+        return _value;
     }
 } // namespace BraneScript

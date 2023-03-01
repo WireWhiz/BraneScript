@@ -36,8 +36,9 @@ namespace BraneScript
         ValueStorageType_Reg = 1,
         ValueStorageType_Const = 2,
         ValueStorageType_Global = 3,
-        ValueStorageType_Ptr = 4,
-        ValueStorageType_DerefPtr = 5
+        ValueStorageType_GlobalPtr = 4,
+        ValueStorageType_Ptr = 5,
+        ValueStorageType_DerefPtr = 6
     };
 
     struct alignas(2) Value

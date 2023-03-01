@@ -16,8 +16,6 @@ namespace BraneScript
         for(auto& t : getNativeTypes())
             _globalTypes.emplace(t->name(), t);
         _global.addStruct(*dynamic_cast<const StructDef*>(getNativeTypes()[8]));
-        for(auto& f : getNativeFunctions())
-            _global.addFunction(f.name, f.ret, f.pointer);
         addLibrary(getNativeLibrary());
     }
 
@@ -59,7 +57,7 @@ namespace BraneScript
     }
 
     void Linker::addGlobalFunction(const std::string& sig, const std::string& ret, void* func) {
-        _global.addFunction(sig, ret, func);
+        _global.addFunction(sig, ret, 0, func);
     }
 
     const TypeDef* Linker::getType(const std::string& name) const
@@ -80,9 +78,7 @@ namespace BraneScript
         auto lib = getLibrary(prefix);
         if(!lib)
             return _global.getStruct(name);
-        auto nameOffset = del + 2;
-        assert(nameOffset < name.size());
-        return lib->getStruct(std::string{name.data() + nameOffset, name.size() - nameOffset});
+        return lib->getStruct(name);
 
     }
 
@@ -95,8 +91,6 @@ namespace BraneScript
         auto lib = getLibrary(prefix);
         if(!lib)
             return _global.getFunction(name);
-        auto nameOffset = del + 2;
-        assert(nameOffset < name.size());
-        return lib->getFunction(std::string{name.data() + nameOffset, name.size() - nameOffset});
+        return lib->getFunction(name);
     }
 }

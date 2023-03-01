@@ -21,16 +21,9 @@ namespace BraneScript
             return sizeof...(Args) - 2 + i;
         }
     public:
-      NativeBinaryOperator(const char* symbol, const TypeDef* type, Args... args) : AotInlineFunction("BraneScript::opr " + std::string(symbol), type)
+      NativeBinaryOperator(const char* symbol, const TypeDef* type, Args... args) : AotInlineFunction("BraneScript::opr " + std::string(symbol) + "(" + type->name() + ","+ type->name() + ")", type)
         {
             _args = std::make_tuple(args...);
-        }
-
-        bool argsMatch(const std::vector<AotNode*>& args) const override
-        {
-            if(args.size() != 2)
-                return false;
-            return args[0]->resType() == _resType && args[1]->resType() == _resType;
         }
         Node* generateAotTree(const std::vector<AotNode*>& args) const override
         {
@@ -46,8 +39,6 @@ namespace BraneScript
         const TypeDef* _currentType;
       public:
         NativeCastOperator(const TypeDef* currentType, const TypeDef* targetType);
-
-        bool argsMatch(const std::vector<AotNode*>& args) const override;
 
         AotNode* generateAotTree(const std::vector<AotNode*>& args) const override;
     };

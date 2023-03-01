@@ -17,7 +17,7 @@ namespace BraneScript
         RETV,   // (Value value) Return int32 value
         INITR,  // (Value value) Initialize or reset a register to a type used by this value
         LOADC,  // (Value value, T constant) load constant defined by byte array into the value
-        LOADS,  // (Value value, uint32_t size, char[]) load constant string
+        LOADS,  // (Value value, uint32_t index) load constant string ptr
 
         ALLOC,     // (Value ptr, uint16_t size) allocate local stack memory
         MALLOC,    // (Value ptr, uint16_t size) allocate local struct on the heap

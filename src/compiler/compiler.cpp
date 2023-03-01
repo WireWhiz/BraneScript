@@ -41,10 +41,12 @@ namespace BraneScript
 
         const StructDef* visitStruct(StructContext* ctx)
         {
-            auto def = new StructDef(ctx->getLongID());
+            std::string id = ctx->longId();
+            auto def = new StructDef(id);
             for(auto& m : ctx->variables)
                 def->addMemberVar(m->identifier, _compileCtx->getType(m->type.identifier));
             def->padMembers();
+
             return def;
         }
 
@@ -91,11 +93,13 @@ namespace BraneScript
             return nullptr;
         }
 
-        AotValueConstruction* visitDeclaration(const LabeledValueConstructionContext* ctx)
+        AotNode* visitDeclaration(const LabeledValueConstructionContext* ctx)
         {
             AotValue* value = regFromValueCtx(ctx->value);
             currentScope().localValues.insert({ctx->value->identifier, value});
-            return new AotValueConstruction(value);
+            if(value->type->type() != ValueType::Struct)
+                return new AotValueConstruction(value);
+            return new AotAllocNode(value);
         }
 
         AotNode* visitFunctionCall(const FunctionCallContext* ctx)
@@ -105,7 +109,7 @@ namespace BraneScript
                 args.push_back(visitExpression(arg.get()));
 
             // Replace a call with inline code if this is an inlined function
-            std::string name = ctx->function->getLongID();
+            std::string name = ctx->function->signature();
             if(const AotInlineFunction* func = _compileCtx->compiler->getInlineFunction(name, args))
                 return func->generateAotTree(args);
 
@@ -130,6 +134,7 @@ namespace BraneScript
 
         AotNode* visitExpression(const ExpressionContext* ctx)
         {
+            assert(ctx);
             if(auto* node = dynamic_cast<const ConstValueContext*>(ctx))
                 return visitConst(node);
             if(auto* node = dynamic_cast<const LabeledValueConstructionContext*>(ctx))
@@ -140,6 +145,9 @@ namespace BraneScript
                 return visitMemberAccess(node);
             if(auto* node = dynamic_cast<const LabeledValueReferenceContext*>(ctx))
                 return visitValueAccess(node);
+            if(auto error = dynamic_cast<const ExpressionErrorContext*>(ctx))
+                throw std::runtime_error("Document with expression error node cannot be compiled (error: " +
+                                         error->message + ". line: " + std::to_string(error->line) + ")");
             assert(false);
             return nullptr;
         }
@@ -177,7 +185,9 @@ namespace BraneScript
             if(ctx->value && cleanup)
             {
                 auto result = visitExpression(ctx->value.get());
-                retValHolder = _currentFunc->newReg(result->resType(), 0);
+                retValHolder = _currentFunc->newReg(result->resType(), AotValue::Temp);
+                if(result->resType()->type() == ValueType::Struct)
+                    nodes->appendStatement(new AotMallocNode(retValHolder));
                 nodes->appendStatement(new AotAssignNode(new AotValueReference(retValHolder), result));
             }
 
@@ -236,6 +246,7 @@ namespace BraneScript
 
         AotNode* visitStatement(const StatementContext* ctx)
         {
+            assert(ctx);
             if(auto expr = dynamic_cast<const ExpressionContext*>(ctx))
                 return visitExpression(expr);
             if(auto assignment = dynamic_cast<const AssignmentContext*>(ctx))
@@ -246,6 +257,9 @@ namespace BraneScript
                 return visitIf(ifStmt);
             if(auto whileStmt = dynamic_cast<const WhileContext*>(ctx))
                 return visitWhile(whileStmt);
+            if(auto error = dynamic_cast<const StatementErrorContext*>(ctx))
+                throw std::runtime_error("Document with statement error node cannot be compiled (error: " +
+                                         error->message + ". line: " + std::to_string(error->line) + ")");
 
             assert(false);
             return nullptr;
@@ -275,34 +289,24 @@ namespace BraneScript
 
         void visitFunction(const FunctionContext* ctx)
         {
-            std::string sig = ctx->getLongID();
-            FunctionCompilerCtx* funcCtx = _compileCtx->functions[_compileCtx->script->localFunctions.size()].get();
-            assert(funcCtx);
-            _currentFunc = funcCtx;
+            FunctionCompilerCtx funcCtx(*_compileCtx, ctx->signature());
+            _currentFunc = &funcCtx;
 
             IRFunction irFunc;
-            irFunc.sig = sig + "(";
+            irFunc.sig = funcCtx.signature;
             irFunc.returnType = {ctx->returnType.type.identifier, ctx->returnType.isConst, ctx->returnType.isRef};
 
-            funcCtx->function = &irFunc;
+            funcCtx.function = &irFunc;
 
             pushScope();
-            size_t argIndex = 0;
             for(auto& arg : ctx->arguments)
             {
                 irFunc.arguments.push_back({arg.type.identifier, arg.isConst, arg.isRef});
-                currentScope().localValues.insert(
-                    {arg.identifier.text,
-                     funcCtx->newReg(_compileCtx->getType(arg.type.identifier), AotValue::Initialized)});
-                if(arg.isConst)
-                    irFunc.sig += "const ";
-                if(arg.isRef)
-                    irFunc.sig += "ref ";
-                irFunc.sig += arg.type.identifier;
-                if(++argIndex != ctx->arguments.size())
-                    irFunc.sig += ",";
+                auto type = _compileCtx->getType(arg.type.identifier);
+                if(!type)
+                    throw std::runtime_error("Could not find type! " + arg.type.identifier);
+                currentScope().localValues.insert({arg.identifier.text, funcCtx.newReg(type, AotValue::Initialized)});
             }
-            irFunc.sig += ")";
 
             auto operations = std::unique_ptr<AotNode>(visitScope(ctx->body.get()));
             // TODO in the future figure out a way to run constant expressions at compile time using this node tree
@@ -310,55 +314,54 @@ namespace BraneScript
             popScope();
             assert(_scopes.empty());
 
-            operations->generateBytecode(*funcCtx);
+            operations->optimize();
+            operations->generateBytecode(funcCtx);
 
             _compileCtx->script->localFunctions.push_back(std::move(irFunc));
+            _currentFunc = nullptr;
         }
 
         void visitScript(const ScriptContext* script)
         {
+
             for(auto& e : script->exports)
             {
                 for(auto& s : e.second->structs)
-                {
-                    _compileCtx->localStructDefs.emplace_back(visitStruct(s.second.get()));
-                }
+                    _compileCtx->localStructDefs.emplace_back(visitStruct(s.get()));
             }
             for(auto& s : script->structs)
-                _compileCtx->localStructDefs.emplace_back(visitStruct(s.second.get()));
+                _compileCtx->localStructDefs.emplace_back(visitStruct(s.get()));
 
             for(auto& g : script->globals)
-                _globals.insert({g.second->getLongID(),
-                                 _compileCtx->newGlobal(_compileCtx->getType(g.second->type.identifier), 0)});
+                _globals.insert({g->longId(), _compileCtx->newGlobal(_compileCtx->getType(g->type.identifier), 0)});
 
             // Pre-register every function so that linking works correctly
+
+            int16_t funcIndex = 0;
             for(auto& exp : script->exports)
             {
                 for(auto& s : exp.second->structs)
                 {
-                    for(auto& f : s.second->functions)
-                        _compileCtx->functions.push_back(
-                            std::make_unique<FunctionCompilerCtx>(*_compileCtx, f->getLongID()));
+                    for(auto& f : s->functions)
+                        _compileCtx->functionIndices.insert({f->signature(), funcIndex++});
                 }
                 for(auto& f : exp.second->functions)
-                    _compileCtx->functions.push_back(
-                        std::make_unique<FunctionCompilerCtx>(*_compileCtx, f->getLongID()));
+                    _compileCtx->functionIndices.insert({f->signature(), funcIndex++});
             }
             for(auto& s : script->structs)
             {
-                for(auto& f : s.second->functions)
-                    _compileCtx->functions.push_back(
-                        std::make_unique<FunctionCompilerCtx>(*_compileCtx, f->getLongID()));
+                for(auto& f : s->functions)
+                    _compileCtx->functionIndices.insert({f->signature(), funcIndex++});
             }
             for(auto& f : script->functions)
-                _compileCtx->functions.push_back(std::make_unique<FunctionCompilerCtx>(*_compileCtx, f->getLongID()));
+                _compileCtx->functionIndices.insert({f->signature(), funcIndex++});
 
             // Visit and compile functions
             for(auto& exp : script->exports)
             {
                 for(auto& s : exp.second->structs)
                 {
-                    for(auto& f : s.second->functions)
+                    for(auto& f : s->functions)
                         visitFunction(f.get());
                 }
                 for(auto& f : exp.second->functions)
@@ -366,7 +369,7 @@ namespace BraneScript
             }
             for(auto& s : script->structs)
             {
-                for(auto& f : s.second->functions)
+                for(auto& f : s->functions)
                     visitFunction(f.get());
             }
             for(auto& f : script->functions)
@@ -454,7 +457,7 @@ namespace BraneScript
 
     StructDef Compiler::structFromDocumentContext(const StructContext* ctx)
     {
-        auto def = StructDef(ctx->getLongID());
+        auto def = StructDef(ctx->longId());
         for(auto& var : ctx->variables)
         {
             if(_nativeTypes.contains(var->type.identifier))
@@ -474,20 +477,23 @@ namespace BraneScript
         return std::move(def);
     }
 
+    void Compiler::updateDefinedStructs(const LibraryContext* lib)
+    {
+        for(auto& s : lib->structs)
+        {
+            auto newDef = structFromDocumentContext(s.get());
+            std::string id = newDef.name();
+            if(!_registeredStructs.contains(id))
+                _registeredStructs.insert({id, std::make_unique<StructDef>(std::move(newDef))});
+            else
+                *_registeredStructs[id] = std::move(newDef);
+        }
+    }
+
     void Compiler::updateDefinedStructs(const ScriptContext* script)
     {
         for(auto& lib : script->exports)
-        {
-            for(auto& s : lib.second->structs)
-            {
-                auto newDef = structFromDocumentContext(s.second.get());
-                std::string id = newDef.name();
-                if(!_registeredStructs.contains(id))
-                    _registeredStructs.insert({id, std::make_unique<StructDef>(std::move(newDef))});
-                else
-                    *_registeredStructs[id] = std::move(newDef);
-            }
-        }
+            updateDefinedStructs(lib.second.get());
     }
 
     void Compiler::clearDefinedStructs() { _registeredStructs.clear(); }
@@ -497,6 +503,11 @@ namespace BraneScript
         auto nt = _nativeTypes.find(id);
         if(nt != _nativeTypes.end())
             return nt->second;
+        if(_linker)
+        {
+            if(auto lt = _linker->getType(id))
+                return lt;
+        }
         auto rt = _registeredStructs.find(id);
         if(rt != _registeredStructs.end())
             return rt->second.get();
@@ -505,7 +516,7 @@ namespace BraneScript
 
     void Compiler::registerInlineFunction(AotInlineFunction* function)
     {
-        _inlineFunctions[function->name()].push_back(std::unique_ptr<AotInlineFunction>(function));
+        _inlineFunctions.insert({function->name(), std::unique_ptr<AotInlineFunction>(function)});
     }
 
     const AotInlineFunction* Compiler::getInlineFunction(const std::string& name, const std::vector<AotNode*>& args)
@@ -513,21 +524,17 @@ namespace BraneScript
         const auto list = _inlineFunctions.find(name);
         if(list == _inlineFunctions.end())
             return nullptr;
-        for(auto& func : list->second)
-        {
-            if(func->argsMatch(args))
-                return func.get();
-        }
-
-        return nullptr;
+        return list->second.get();
     }
+
+    void Compiler::setLinker(Linker* linker) { _linker = linker; }
 
     AotValue* ScriptCompilerCtx::newGlobal(const TypeDef* type, uint8_t flags)
     {
         assert(type);
         auto value = new AotValue();
         value->type = type;
-        value->flags = flags;
+        value->flags = flags | AotValue::Initialized;
         value->storageType = ValueStorageType_Global;
         value->ptrOffset = script->globalVarAllocSize;
         script->globalVarAllocSize += type->size();
@@ -538,46 +545,40 @@ namespace BraneScript
     int16_t ScriptCompilerCtx::linkFunction(const std::string& sig)
     {
         assert(!sig.empty());
-        uint16_t index = 0;
-        for(auto& f : functions)
-        {
-            if(f->signature == sig)
-                return index;
-            index++;
-        }
-        index = -1;
-        for(auto& f : script->linkedFunctions)
-        {
-            if(f == sig)
-                return index;
-            index--;
-        }
-        index = script->linkedFunctions.size();
+        if(functionIndices.contains(sig))
+            return functionIndices.at(sig);
+        int16_t index = -static_cast<int16_t>(script->linkedFunctions.size() + 1);
+        functionIndices.insert({sig, index});
         script->linkedFunctions.push_back(sig);
         return index;
     }
 
     int16_t ScriptCompilerCtx::linkConstructor(const StructDef* type)
     {
-        return linkFunction(std::string(type->name()) + "::_construct()");
+        std::string name = type->name();
+        return linkFunction(std::string(type->name()) + "::_construct(ref " + name + ")");
     }
 
     int16_t ScriptCompilerCtx::linkMoveConstructor(const StructDef* type)
     {
-        return linkFunction(std::string(type->name()) + "::_move(ref " + type->name() + ")");
+        std::string name = type->name();
+        return linkFunction(std::string(type->name()) + "::_move(ref " + name + ",ref " + type->name() + ")");
     }
 
     int16_t ScriptCompilerCtx::linkCopyConstructor(const StructDef* type)
     {
-        return linkFunction(std::string(type->name()) + "::_copy(const ref " + type->name() + ")");
+        std::string name = type->name();
+        return linkFunction(std::string(type->name()) + "::_copy(ref " + name + ",const ref " + type->name() + ")");
     }
 
     int16_t ScriptCompilerCtx::linkDestructor(const StructDef* type)
     {
-        return linkFunction(std::string(type->name()) + "::_destructor()");
+        std::string name = type->name();
+        return linkFunction(name + "::_destruct(ref " + name + ")");
     }
 
-    const TypeDef* ScriptCompilerCtx::getType(const std::string& id) const {
+    const TypeDef* ScriptCompilerCtx::getType(const std::string& id) const
+    {
         for(auto& ls : localStructDefs)
         {
             if(ls->name() == id)
@@ -592,12 +593,16 @@ namespace BraneScript
 
     AotValue* FunctionCompilerCtx::newReg(const TypeDef* type, uint8_t flags)
     {
+        return newCustomReg(type, (type->type() != ValueType::Struct) ? ValueStorageType_Reg : ValueStorageType_Ptr, flags);
+    }
+
+    AotValue* FunctionCompilerCtx::newCustomReg(const TypeDef* type, ValueStorageType storageType, uint8_t flags)
+    {
         assert(type);
         auto* value = new AotValue{};
         value->type = type;
         value->flags = flags;
-        if(!value->isVoid())
-            value->storageType = (type->type() != ValueType::Struct) ? ValueStorageType_Reg : ValueStorageType_Ptr;
+        value->storageType = storageType;
 
         size_t newValIndex = registers.push({});
         Value& newVal = registers[newValIndex];
@@ -605,10 +610,11 @@ namespace BraneScript
         newVal.valueType = type->type();
         newVal.storageType = value->storageType;
 
-        if(!(flags & AotValue::Initialized))
+        if(!(value->flags & AotValue::Initialized))
         {
+            assert(value->storageType != ValueStorageType_Null);
             appendCode(Operand::INITR, newVal);
-            flags |= AotValue::Initialized;
+            value->flags |= AotValue::Initialized;
         }
 
         if(function->maxRegs < registers.size())
@@ -661,9 +667,6 @@ namespace BraneScript
         assert(!compareFlagsInUse);
         compareFlagsInUse = true;
 
-        if(function->maxMemLocations < memoryLocations.size())
-            function->maxMemLocations = memoryLocations.size();
-
         auto id = values.push({std::unique_ptr<AotValue>(value), 0, false});
         return value;
     }
@@ -684,9 +687,10 @@ namespace BraneScript
             return value;
         if(value->isGlobal())
             return castReg(derefPtr(value, value->type, value->ptrOffset));
-        auto* regValue = newReg(value->type, AotValue::Temp | value->flags);
+        auto* regValue = newReg(value->type, AotValue::Temp);
         if(!value->isCompare())
         {
+            assert(regValue->flags & AotValue::Initialized);
             appendCode(MOV, serialize(regValue), serialize(value));
             return regValue;
         }
@@ -733,11 +737,9 @@ namespace BraneScript
     AotValue* FunctionCompilerCtx::derefPtr(AotValue* value, const TypeDef* type, uint16_t offset)
     {
         assert(offset == 0 || value->type->type() == ValueType::Struct || value->isGlobal());
-        bool global = value->isGlobal();
-        if(global)
+        if(value->isGlobal())
         {
-            auto temp = newReg(value->type, value->flags);
-            temp->storageType = ValueStorageType_Ptr;
+            auto temp = newCustomReg(value->type, ValueStorageType_Ptr,  AotValue::Temp | value->flags & ~AotValue::Initialized);
             temp->ptrOffset = value->ptrOffset;
             appendCode(Operand::MOV, serialize(temp), serialize(value));
             value = temp;
@@ -746,34 +748,25 @@ namespace BraneScript
         assert(type);
         if(type->type() == ValueType::Struct)
         {
-            auto* offsetPtr = value;
-            if(!global)
-            {
-                offsetPtr = newReg(type, AotValue::Initialized & value->flags);
-                appendCode(Operand::MOV, serialize(offsetPtr), serialize(value));
-            }
+            auto* offsetPtr = newReg(type, AotValue::Temp | (value->flags & ~AotValue::Initialized));
+            appendCode(Operand::MOV, serialize(offsetPtr), serialize(value));
             appendCode(Operand::ADDI, serialize(offsetPtr), (int32_t)offset);
             return offsetPtr;
         }
 
-        auto* drefValue = new AotValue(*value);
-        drefValue->storageType = ValueStorageType_DerefPtr;
-        drefValue->type = type;
-        drefValue->ptrOffset = offset;
+        auto* derefValue = new AotValue(*value);
+        derefValue->storageType = ValueStorageType_DerefPtr;
+        derefValue->type = type;
+        derefValue->ptrOffset = offset;
 
-        auto newValIndex = memoryLocations.push({});
-        Value& newVal = memoryLocations[newValIndex];
-        newVal.index = newValIndex;
-        newVal.valueType = type->type();
-        newVal.storageType = value->storageType;
-
-        auto id = values.push({std::unique_ptr<AotValue>(value), newValIndex, false});
+        auto id = values.push({std::unique_ptr<AotValue>(derefValue), values[value->id].index, true});
         value->id = id;
-        return drefValue;
+        return derefValue;
     }
 
     Value FunctionCompilerCtx::serialize(AotValue* value) const
     {
+        assert(value->flags & AotValue::Initialized);
         assert(value->storageType != ValueStorageType_Null);
         if(value->isGlobal())
         {
@@ -781,7 +774,14 @@ namespace BraneScript
         }
         auto& index = values[value->id];
         if(index.isReg)
-            return registers[index.index];
+        {
+            Value output = registers[index.index];
+
+            // We reuse register indexes for pointers, so we need to pull these from the value pointer
+            output.storageType = value->storageType;
+            output.offset = value->ptrOffset;
+            return output;
+        }
         return memoryLocations[index.index];
     }
 
@@ -796,7 +796,7 @@ namespace BraneScript
         }
 
         auto& index = values[value->id];
-        if(index.isReg)
+        if(index.isReg && registers[index.index].storageType != ValueStorageType_DerefPtr)
             registers.remove(index.index);
         else
             memoryLocations.remove(index.index);

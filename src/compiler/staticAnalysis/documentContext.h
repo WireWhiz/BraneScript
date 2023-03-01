@@ -85,7 +85,7 @@ namespace BraneScript
         virtual DocumentContext* getNodeAtChar(TextPos pos);
         virtual DocumentContext* findIdentifier(const std::string& identifier, uint8_t searchOptions = 0);
         virtual void getFunction(const std::string& identifier, std::list<FunctionContext*>& overrides);
-        virtual std::string getLongID() const;
+        virtual std::string longId() const;
 
         template<typename T>
         T* as()
@@ -115,24 +115,29 @@ namespace BraneScript
     struct LabeledValueContext : public DocumentContext, ValueContext
     {
         Identifier identifier;
-        /* Last assignment to check if this value is a constant expression */
-        struct Reference
-        {
-            LabeledValueReferenceContext* ctx;
-            bool isAssignment = false;
-        };
-        std::list<Reference> references;
 
         std::string signature() const override;
-        std::string getLongID() const override;
+        std::string longId() const override;
+    };
+
+    struct ErrorContext
+    {
+        std::string message;
+        size_t line = 0;
     };
 
     struct StatementContext : public DocumentContext
     {
+
     };
 
-    struct StatementErrorContext : public StatementContext
+    struct StatementErrorContext : public StatementContext, ErrorContext
     {
+        inline StatementErrorContext(std::string message, size_t line)
+        {
+            this->message = std::move(message);
+            this->line = line;
+        }
     };
 
     struct ExpressionContext : public StatementContext
@@ -142,8 +147,13 @@ namespace BraneScript
         bool isConstexpr = false;
     };
 
-    struct ExpressionErrorContext : public ExpressionContext
+    struct ExpressionErrorContext : public ExpressionContext, ErrorContext
     {
+        inline ExpressionErrorContext(std::string message, size_t line)
+        {
+            this->message = std::move(message);
+            this->line = line;
+        }
     };
 
     struct ScopeContext : public StatementContext
@@ -222,14 +232,12 @@ namespace BraneScript
     struct LabeledValueReferenceContext : public ExpressionContext
     {
         LabeledValueContext* value = nullptr;
-        uint32_t referenceIndex = 0;
-        bool isAssignment = false;
     };
 
     struct MemberAccessContext : public ExpressionContext
     {
         std::unique_ptr<ExpressionContext> baseExpression;
-        size_t member = 0;
+        size_t member = -1;
     };
 
     struct FunctionCallContext : public ExpressionContext
@@ -253,7 +261,8 @@ namespace BraneScript
         std::unique_ptr<ScopeContext> body;
 
         DocumentContext* findIdentifier(const std::string& identifier, uint8_t searchOptions) override;
-        std::string getLongID() const override;
+        std::string longId() const override;
+        std::string signature() const;
     };
 
     struct StructContext : public DocumentContext
@@ -266,20 +275,20 @@ namespace BraneScript
         DocumentContext* getNodeAtChar(TextPos pos) override;
         DocumentContext* findIdentifier(const std::string& identifier, uint8_t searchOptions) override;
         void getFunction(const std::string& identifier, std::list<FunctionContext*>& overrides) override;
-        std::string getLongID() const override;
+        std::string longId() const override;
     };
 
     struct LibraryContext : public DocumentContext
     {
         Identifier identifier;
-        LabeledNodeMap<LabeledValueContext> globals;
-        LabeledNodeMap<StructContext> structs;
+        LabeledNodeList<LabeledValueContext> globals;
+        LabeledNodeList<StructContext> structs;
         LabeledNodeList<FunctionContext> functions;
 
         DocumentContext* getNodeAtChar(TextPos pos) override;
         DocumentContext* findIdentifier(const std::string& identifier, uint8_t searchOptions) override;
         void getFunction(const std::string& identifier, std::list<FunctionContext*>& overrides) override;
-        std::string getLongID() const override;
+        std::string longId() const override;
     };
 
     struct LibrarySet : public DocumentContext
@@ -298,11 +307,13 @@ namespace BraneScript
 
     struct ScriptContext : public DocumentContext
     {
-        LabeledNodeMap<LabeledValueContext> globals;
-        LabeledNodeMap<StructContext> structs;
+        LabeledNodeList<LabeledValueContext> globals;
+        LabeledNodeList<StructContext> structs;
         LabeledNodeList<FunctionContext> functions;
         LabeledNodeMap<LibraryContext> exports;
         std::vector<ImportContext> imports;
+
+        std::vector<FunctionContext*> functionOrder;
 
         DocumentContext* getNodeAtChar(TextPos pos) override;
         DocumentContext* findIdentifier(const std::string& identifier, uint8_t searchOptions) override;

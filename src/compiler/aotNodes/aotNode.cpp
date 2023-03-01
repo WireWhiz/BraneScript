@@ -55,4 +55,9 @@ namespace BraneScript
     {
         return ValueType::Float_Begin <= type->type() && type->type() <= ValueType::Float_End;
     }
+
+    bool AotValue::isStruct() const
+    {
+        return ValueType::Struct == type->type();
+    }
 } // namespace BraneScript

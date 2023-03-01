@@ -54,12 +54,8 @@ TEST(BraneScript, Speed)
 )";
     StaticAnalyzer analyzer;
     analyzer.load("test", testString);
-    if(!analyzer.validate("test"))
-    {
-        for(auto& error : analyzer.getCtx("test")->errors)
-            std::cerr << error.message << std::endl;
-        ASSERT_TRUE(false);
-    }
+    analyzer.validate("test");
+    checkCompileErrors(analyzer, testString);
 
     Compiler compiler;
     auto* ir = compiler.compile(analyzer.getCtx("test")->scriptContext.get());
@@ -75,10 +71,10 @@ TEST(BraneScript, Speed)
     auto scFFib = testScript->getFunction<float, float>("fFib");
     ASSERT_TRUE(scFFib);
 
-    ASSERT_EQ(iFib(6), 8);
-    ASSERT_EQ(fFib(6), 8.0f);
-    ASSERT_EQ(scIFib(6), 8);
-    ASSERT_EQ(scFFib(6), 8.0f);
+    EXPECT_EQ(iFib(6), 8);
+    EXPECT_EQ(fFib(6), 8.0f);
+    EXPECT_EQ(scIFib(6), 8);
+    EXPECT_EQ(scFFib(6), 8.0f);
 
     size_t c = 2000;
     int n = 30;

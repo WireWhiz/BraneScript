@@ -103,11 +103,11 @@ namespace BraneScript
             parent->getFunction(identifier, overrides);
     }
 
-    std::string DocumentContext::getLongID() const
+    std::string DocumentContext::longId() const
     {
         if(!parent)
             return "";
-        return parent->getLongID();
+        return parent->longId();
     }
 
     std::string ValueContext::signature() const
@@ -122,9 +122,9 @@ namespace BraneScript
     }
 
     std::string LabeledValueContext::signature() const { return ValueContext::signature() + " " + identifier.text; }
-    std::string LabeledValueContext::getLongID() const
+    std::string LabeledValueContext::longId() const
     {
-        auto prefix = DocumentContext::getLongID();
+        auto prefix = DocumentContext::longId();
         if(prefix.empty())
             return identifier.text;
         return prefix + "::" + identifier.text;
@@ -166,7 +166,7 @@ namespace BraneScript
 
     ConstStringContext::ConstStringContext()
     {
-        returnType.type = {"string", ValueType::Struct};
+        returnType.type = {"BraneScript::string", ValueType::Struct};
         returnType.isConst = true;
     }
 
@@ -180,12 +180,34 @@ namespace BraneScript
         return DocumentContext::findIdentifier(identifier, searchOptions);
     }
 
-    std::string FunctionContext::getLongID() const
+    std::string FunctionContext::longId() const
     {
-        auto prefix = DocumentContext::getLongID();
+        auto prefix = DocumentContext::longId();
         if(prefix.empty())
             return identifier.text;
         return prefix + "::" + identifier.text;
+    }
+
+    std::string FunctionContext::signature() const {
+        std::string sig = longId();
+        sig += "(";
+
+        size_t argIndex = 0;
+        for(auto itr = arguments.begin();itr != arguments.end();)
+        {
+            auto& arg = *itr;
+            if(arg.isConst)
+                sig += "const ";
+            if(arg.isRef)
+                sig += "ref ";
+            sig += arg.type.identifier;
+            if(++itr != arguments.end())
+                sig += ",";
+            else
+                break;
+        }
+        sig+= ")";
+        return sig;
     }
 
     DocumentContext* StructContext::getNodeAtChar(TextPos pos)
@@ -233,9 +255,9 @@ namespace BraneScript
         }
         DocumentContext::getFunction(identifier, overrides);
     }
-    std::string StructContext::getLongID() const
+    std::string StructContext::longId() const
     {
-        auto prefix = DocumentContext::getLongID();
+        auto prefix = DocumentContext::longId();
         if(prefix.empty())
             return identifier.text;
         return prefix + "::" + identifier.text;
@@ -251,13 +273,13 @@ namespace BraneScript
         }
         for(auto& s : structs)
         {
-            auto node = s.second->getNodeAtChar(pos);
+            auto node = s->getNodeAtChar(pos);
             if(node)
                 return node;
         }
         for(auto& g : globals)
         {
-            auto node = g.second->getNodeAtChar(pos);
+            auto node = g->getNodeAtChar(pos);
             if(node)
                 return node;
         }
@@ -268,9 +290,11 @@ namespace BraneScript
 
     DocumentContext* LibraryContext::findIdentifier(const std::string& id, uint8_t searchOptions)
     {
-        auto v = globals.find(id);
-        if(v != globals.end())
-            return v->second.get();
+        for(auto& g : globals)
+        {
+            if(g->identifier.text == id)
+                return g.get();
+        }
 
         for(auto& f : functions)
         {
@@ -278,9 +302,11 @@ namespace BraneScript
                 return f.get();
         }
 
-        auto s = structs.find(id);
-        if(s != structs.end())
-            return s->second.get();
+        for(auto& s : structs)
+        {
+            if(s->identifier.text == id)
+                return s.get();
+        }
 
         if(searchOptions & IDSearchOptions_ChildrenOnly)
             return nullptr;
@@ -295,9 +321,9 @@ namespace BraneScript
                 overrides.push_back(f.get());
         }
     }
-    std::string LibraryContext::getLongID() const
+    std::string LibraryContext::longId() const
     {
-        auto prefix = DocumentContext::getLongID();
+        auto prefix = DocumentContext::longId();
         if(prefix.empty())
             return identifier.text;
         return prefix + "::" + identifier.text;
@@ -313,13 +339,13 @@ namespace BraneScript
         }
         for(auto& s : structs)
         {
-            auto node = s.second->getNodeAtChar(pos);
+            auto node = s->getNodeAtChar(pos);
             if(node)
                 return node;
         }
         for(auto& g : globals)
         {
-            auto node = g.second->getNodeAtChar(pos);
+            auto node = g->getNodeAtChar(pos);
             if(node)
                 return node;
         }
@@ -346,9 +372,11 @@ namespace BraneScript
         if(l != exports.end())
             return l->second.get();
 
-        auto v = globals.find(identifier);
-        if(v != globals.end())
-            return v->second.get();
+        for(auto& g : globals)
+        {
+            if(g->identifier.text == identifier)
+                return g.get();
+        }
 
         for(auto& f : functions)
         {
@@ -356,9 +384,11 @@ namespace BraneScript
                 return f.get();
         }
 
-        auto s = structs.find(identifier);
-        if(s != structs.end())
-            return s->second.get();
+        for(auto& s : structs)
+        {
+            if(s->identifier.text == identifier)
+                return s.get();
+        }
         return nullptr;
     }
 

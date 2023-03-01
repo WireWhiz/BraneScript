@@ -3,6 +3,8 @@
 
 export as "BraneScript" 
  {
+    struct string{}
+    
  	// uint casts
 	opr uint(uint64 arg) ext;
 	opr uint(int arg) ext;
@@ -112,6 +114,9 @@ export as "BraneScript"
 	bool opr >=(int64 left, int64 right) ext;
 	bool opr >=(float left, float right) ext;
 	bool opr >=(double left, double right) ext;
+
 	bool opr ==(const ref string left, const ref string right) ext;
 	bool opr !=(const ref string left, const ref string right) ext;
+	char opr [](const ref string left, int index) ext;
+	string opr +(const ref string left, const ref string right) ext;
 }

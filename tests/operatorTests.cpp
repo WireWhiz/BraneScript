@@ -87,15 +87,8 @@ TEST(BraneScript, Operators)
 
     StaticAnalyzer analyzer;
     analyzer.load("test", testString, true);
-    if(!analyzer.validate("test"))
-    {
-        for(auto& error : analyzer.getCtx("test")->errors)
-        {
-            auto bounds = error.range.getBoundsForText(testString);
-            std::cerr << "(" << bounds.first << ", " << bounds.second << ") " << error.message << std::endl;
-        }
-        ASSERT_TRUE(false);
-    }
+    analyzer.validate("test");
+    checkCompileErrors(analyzer, testString);
 
     Compiler compiler;
     auto* ir = compiler.compile(analyzer.getCtx("test")->scriptContext.get());
@@ -108,9 +101,13 @@ TEST(BraneScript, Operators)
     fflush(0);
     ASSERT_TRUE(testScript);
 
+    std::cout << "script contains functions: " << std::endl;
+    for(auto& f : testScript->functionNames)
+        std::cout << f.first << std::endl;
+
     //Casting
     auto testBoolCast = testScript->getFunction<bool, int, int>("testBoolCast");
-    ASSERT_TRUE(testBoolCast);
+    ASSERT_TRUE(testBoolCast) << "Function was not found in script";
     EXPECT_TRUE(testBoolCast(5, 3));
     EXPECT_FALSE(testBoolCast(2,4));
 

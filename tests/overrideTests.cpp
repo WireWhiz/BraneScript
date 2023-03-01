@@ -34,12 +34,8 @@ TEST(BraneScript, Overrides)
     Linker l;
     StaticAnalyzer analyzer;
     analyzer.load("test", testString);
-    if(!analyzer.validate("test"))
-    {
-        for(auto& error : analyzer.getCtx("test")->errors)
-            std::cerr << error.message << std::endl;
-        ASSERT_TRUE(false);
-    }
+    !analyzer.validate("test");
+    checkCompileErrors(analyzer, testString);
 
     Compiler compiler;
     auto* ir = compiler.compile(analyzer.getCtx("test")->scriptContext.get());

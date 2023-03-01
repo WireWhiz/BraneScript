@@ -9,16 +9,9 @@ namespace BraneScript
 {
     NativeCastOperator::NativeCastOperator(const BraneScript::TypeDef* currentType,
                                            const BraneScript::TypeDef* targetType)
-        : AotInlineFunction("BraneScript::opr " + std::string(targetType->name()), targetType)
+        : AotInlineFunction("BraneScript::opr " + std::string(targetType->name()) + "(" + currentType->name() + ")", targetType)
     {
         _currentType = currentType;
-    }
-
-    bool NativeCastOperator::argsMatch(const std::vector<AotNode*>& args) const
-    {
-        if(args.size() != 1)
-            return false;
-        return args[0]->resType() == _currentType;
     }
 
     AotNode* NativeCastOperator::generateAotTree(const std::vector<AotNode*>& args) const

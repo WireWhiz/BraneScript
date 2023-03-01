@@ -19,7 +19,7 @@ namespace BraneScript
     AotValue* AotCompareNode::generateBytecode(FunctionCompilerCtx& ctx) const
     {
         auto a = ctx.castValue(argA->generateBytecode(ctx));
-        auto b = argB->generateBytecode(ctx);
+        auto b = ctx.castValue(argB->generateBytecode(ctx));
 
         auto mode = _mode;
         if(mode == Less)
@@ -36,7 +36,7 @@ namespace BraneScript
         a = ctx.castReg(a);
 
         AotValue* result = ctx.newCompareResult();
-        bool sign = !a->isUnsigned();
+        bool sign = !a->isUnsigned() && !a->isFloat();
         switch(mode)
         {
             case Equal:

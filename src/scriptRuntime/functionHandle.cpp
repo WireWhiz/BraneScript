@@ -93,17 +93,17 @@ namespace BraneScript
         return _argIndices[index].flags & ArgFlags_Ref;
     }
 
-    FunctionData::FunctionData(std::string name, std::string ret, void* pointer) : name(std::move(name)), def(this->name), ret(std::move(ret)), pointer(pointer)
+    FunctionData::FunctionData(std::string name, std::string ret, size_t argCount, void* pointer) : name(std::move(name)), def(this->name), ret(std::move(ret)), argCount(argCount), pointer(pointer)
     {
 
     }
 
-    FunctionData::FunctionData(const FunctionData& o) : name(o.name), def(this->name), ret(o.ret), pointer(o.pointer)
+    FunctionData::FunctionData(const FunctionData& o) : name(o.name), def(this->name), ret(o.ret), argCount(o.argCount), pointer(o.pointer)
     {
 
     }
 
-    FunctionData::FunctionData(FunctionData&& o) noexcept : name(std::move(o.name)), def(this->name), ret(std::move(o.ret)), pointer(o.pointer)
+    FunctionData::FunctionData(FunctionData&& o) noexcept : name(std::move(o.name)), def(this->name), ret(std::move(o.ret)), argCount(o.argCount), pointer(o.pointer)
     {
 
     }
