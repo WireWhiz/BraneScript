@@ -5,11 +5,11 @@
 #ifndef BRANESCRIPT_NATIVELIBRARY_H
 #define BRANESCRIPT_NATIVELIBRARY_H
 
-#include "library.h"
 
 namespace BraneScript
 {
-    Library* getNativeLibrary();
+    class Linker;
+    void addNativeFunctions(Linker& linker);
 }
 
 

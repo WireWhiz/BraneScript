@@ -1,38 +1,46 @@
 #ifndef BRANESCRIPT_LINKER_H
 #define BRANESCRIPT_LINKER_H
 
-#include <unordered_map>
 #include <string>
 #include "functionHandle.h"
-#include "library.h"
 #include <robin_hood.h>
+#include <unordered_map>
+
+#include "structDefinition.h"
 
 namespace BraneScript
 {
     class Operator;
     class TypeDef;
+
     class Linker
     {
-        Library _global;
         robin_hood::unordered_map<std::string, const TypeDef*> _globalTypes;
-        robin_hood::unordered_map<std::string, Library*> _libraries;
-    public:
+
+        robin_hood::unordered_node_map<std::string, FunctionData> _functions;
+        robin_hood::unordered_node_map<std::string, StructDef> _structs;
+
+      public:
         Linker();
-        Library* getLibrary(const std::string& name) const;
 
-        void addLibrary(Library* lib);
-        void removeLibrary(const std::string& name);
+        template<typename Ret, typename... Args>
+        void addFunction(std::string name, FunctionHandle<Ret, Args...> f)
+        {
+            std::string decl = std::move(name) + "(" + argsToString<Args...>() + ")";
+            addFunction(decl, typeName<Ret>(), sizeof...(Args), (void*)f);
+        }
 
-        Library& globalLib();
+        void addFunction(const std::string& sig, const std::string& ret, size_t argCount, void* f);
+        void addStruct(StructDef def);
 
-        void addGlobalType(const TypeDef* type);
-        void addGlobalFunction(const std::string& sig, const std::string& ret, void* func);
+        void removeFunction(const std::string& sig);
+        void removeStruct(const std::string& sig);
 
-        const TypeDef* getType(const std::string& name) const;
-        const StructDef* getStruct(const std::string& name) const;
-        const FunctionData* getFunction(const std::string& name) const;
+        const TypeDef* getType(const std::string& sig) const;
+        const FunctionData* getFunction(const std::string& sig) const;
+        const StructDef* getStruct(const std::string& sig) const;
     };
-}
+} // namespace BraneScript
 
 
-#endif //BRANESCRIPT_LINKER_H
+#endif // BRANESCRIPT_LINKER_H

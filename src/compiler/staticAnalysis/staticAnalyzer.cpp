@@ -1311,7 +1311,7 @@ namespace BraneScript
             auto node = lastNode()->findIdentifier(identifier, 0);
             if(!node)
             {
-                recordError(ctx, "Identifier not found!");
+                recordError(ctx, "\"" + identifier + "\" is not a variable!");
                 return NULL_EXPR;
             }
             if(!node->is<LabeledValueContext>())

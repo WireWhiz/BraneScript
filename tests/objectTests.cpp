@@ -142,6 +142,18 @@ TEST(BraneScript, Objects)
 
 )";
 
+    std::string header = R"(
+    export as "BraneScript"
+    {
+        struct TestStruct1
+        {
+            bool c;
+            float a;
+            int b;
+        }
+    }
+)";
+
     StructDef testStruct1Def("BraneScript::TestStruct1");
 
     testStruct1Def.addMemberVar("c", getNativeTypeDef(ValueType::Bool));
@@ -149,47 +161,21 @@ TEST(BraneScript, Objects)
     testStruct1Def.addMemberVar("b", getNativeTypeDef(ValueType::Int32));
     testStruct1Def.padMembers();
 
-    auto libraryContext = new LibraryContext{};
-    libraryContext->identifier.text = "BraneScript";
-    auto structCtx = new StructContext{};
-    structCtx->identifier.text = "TestStruct1";
-    structCtx->variables.emplace_back(new LabeledValueContext{});
-    structCtx->variables.emplace_back(new LabeledValueContext{});
-    structCtx->variables.emplace_back(new LabeledValueContext{});
-    structCtx->variables[0]->identifier.text = "c";
-    structCtx->variables[0]->type = {
-        "bool",
-        ValueType::Bool
-    };
-    structCtx->variables[1]->identifier.text = "a";
-    structCtx->variables[1]->type = {
-        "float",
-        ValueType::Float32
-    };
-    structCtx->variables[2]->identifier.text = "b";
-    structCtx->variables[2]->type = {
-        "int",
-        ValueType::Int32
-    };
-    structCtx->parent = libraryContext;
-    libraryContext->structs.emplace_back(structCtx);
-
     EXPECT_EQ(testStruct1Def.memberVars()[0].offset, offsetof(TestStruct1, c));
     EXPECT_EQ(testStruct1Def.memberVars()[1].offset, offsetof(TestStruct1, a));
     EXPECT_EQ(testStruct1Def.memberVars()[2].offset, offsetof(TestStruct1, b));
 
-    Linker l;
-    auto bs = l.getLibrary("BraneScript");
-    bs->addStruct(testStruct1Def);
+    Linker linker;
+    linker.addStruct(testStruct1Def);
     auto sSig = std::string(testStruct1Def.name());
-    bs->addFunction(sSig + "::_construct(ref " + sSig + ")",
+    linker.addFunction(sSig + "::_construct(ref " + sSig + ")",
         "void",
         1,
         (void*)(FunctionHandle<void, void*>)[](void* data) {
             new(data) TestStruct1();
             constructorCalled = true;
         });
-    bs->addFunction(
+    linker.addFunction(
         sSig + "::_copy(ref " + sSig + ",const ref " + sSig + ")",
         "void",
         2,
@@ -197,7 +183,7 @@ TEST(BraneScript, Objects)
             *((TestStruct1*)dest) = *((TestStruct1*)src);
             copyConstructorCalled = true;
         });
-    bs->addFunction(
+    linker.addFunction(
         sSig + "::_move(ref " + sSig + ",ref " + sSig + ")",
         "void",
         2,
@@ -205,7 +191,7 @@ TEST(BraneScript, Objects)
             *((TestStruct1*)dest) = std::move(*((TestStruct1*)src));
             moveConstructorCalled = true;
         });
-    bs->addFunction(
+    linker.addFunction(
         sSig + "::_destruct(ref " + sSig + ")",
         "void",
         1,
@@ -215,14 +201,13 @@ TEST(BraneScript, Objects)
         });
 
     StaticAnalyzer analyzer;
-    analyzer.registerLibrary(libraryContext);
+    analyzer.load("header", header);
     analyzer.load("test", testString);
     analyzer.validate("test");
     checkCompileErrors(analyzer, testString);
 
     Compiler compiler;
-    compiler.setLinker(&l);
-    compiler.updateDefinedStructs(libraryContext);
+    compiler.setLinker(&linker);
     auto* ir = compiler.compile(analyzer.getCtx("test")->scriptContext.get());
     ASSERT_TRUE(ir);
 
@@ -233,7 +218,7 @@ TEST(BraneScript, Objects)
     EXPECT_EQ(scriptStructDef.members[2].offset, offsetof(TestStruct2, c));*/
 
     ScriptRuntime rt;
-    rt.setLinker(&l);
+    rt.setLinker(&linker);
     Script* testScript = rt.assembleScript(ir);
     ASSERT_TRUE(testScript);
 

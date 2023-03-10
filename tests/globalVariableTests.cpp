@@ -2,7 +2,6 @@
 
 #include "testing.h"
 
-#include "library.h"
 #include "linker.h"
 #include "script.h"
 #include "scriptRuntime.h"

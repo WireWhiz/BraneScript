@@ -5,7 +5,6 @@
 #include "scriptRuntime.h"
 #include "asmjit/core/globals.h"
 #include "irScript.h"
-#include "library.h"
 #include "linker.h"
 #include "script.h"
 #include "structDefinition.h"
@@ -269,21 +268,6 @@ namespace BraneScript
             auto def = dynamic_cast<const StructDef*>(_linker->getType(s));
             assert(def);
             linkedStructs.push_back(def);
-        }
-
-        // Find linked libraries
-        std::vector<const Library*> linkedLibraries;
-        for(auto& lib : irScript->linkedLibraries)
-        {
-            assert(_linker);
-            auto libPtr = _linker->getLibrary(lib);
-            if(!libPtr)
-            {
-                // TODO error system for script runtime;
-                assert(false);
-                return nullptr;
-            }
-            linkedLibraries.push_back(libPtr);
         }
 
         // Find linked functions

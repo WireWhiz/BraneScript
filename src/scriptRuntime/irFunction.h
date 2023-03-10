@@ -6,17 +6,18 @@
 #define BRANESCRIPT_IRFUNCTION_H
 
 #include <cstdint>
-#include <vector>
+#include <stdexcept>
 #include <string>
-#include <unordered_map>
+#include <vector>
 #include "operands.h"
 #include "typeInfo.h"
+#include <unordered_map>
 
 namespace BraneScript
 {
     class IRFunction
     {
-    public:
+      public:
         std::string sig;
         TypeInfo returnType = {"void"};
         std::vector<TypeInfo> arguments;
@@ -27,11 +28,13 @@ namespace BraneScript
         template<typename T>
         T readCode(size_t& index)
         {
+            if(index + sizeof(T) > code.size())
+                throw std::runtime_error("Attempted to read past end of code!");
             T value = *(T*)&code[index];
             index += sizeof(T);
             return value;
         }
     };
-}
+} // namespace BraneScript
 
-#endif //BRANESCRIPT_IRFUNCTION_H
+#endif // BRANESCRIPT_IRFUNCTION_H

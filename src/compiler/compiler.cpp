@@ -12,7 +12,6 @@
 #include "aotNodes/aotLogicNodes.h"
 #include "aotNodes/aotModifierNodes.h"
 #include "aotNodes/aotValueNodes.h"
-#include "library.h"
 #include "linker.h"
 #include "nativeTypes.h"
 #include "structDefinition.h"

@@ -8,10 +8,9 @@ add_executable(bs_tests
         flowStatementTests.cpp
         overrideTests.cpp
         recursionTest.cpp
-        libraryTests.cpp
+        apiTests.cpp
         objectTests.cpp
         speedTests.cpp
-        funcDefTests.cpp
         stringTests.cpp
         globalVariableTests.cpp)
 target_link_libraries(bs_tests PUBLIC GTest::gtest_main BraneScriptCompiler)

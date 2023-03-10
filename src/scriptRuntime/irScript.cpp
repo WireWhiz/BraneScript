@@ -23,11 +23,6 @@ int16_t BraneScript::IRScript::findLocalFuncIndex(const std::string& name) const
     return -1;
 }
 
-int16_t BraneScript::IRScript::linkLibrary(const std::string& name)
-{
-    return insertOnce(linkedLibraries, name);
-}
-
 int16_t BraneScript::IRScript::linkFunction(const std::string& name)
 {
     return insertOnce(linkedFunctions, name);

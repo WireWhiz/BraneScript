@@ -30,13 +30,11 @@ namespace BraneScript
         };
         std::vector<IRStructDef> localStructs;
 
-        std::vector<std::string> linkedLibraries;
         std::vector<std::string> linkedFunctions;
         std::vector<std::string> linkedStructs;
 
         int16_t findLocalFuncIndex(const std::string& name) const;
 
-        int16_t linkLibrary(const std::string& name);
         int16_t linkFunction(const std::string& name);
         int16_t linkStruct(const std::string& name);
     };

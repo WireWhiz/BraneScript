@@ -10,6 +10,7 @@
 
 namespace BraneScript
 {
+    class Library;
 
     struct AnalyzationMessage
     {
@@ -37,6 +38,7 @@ namespace BraneScript
         };
 
         std::vector<std::string> _workspaceRoots;
+        robin_hood::unordered_map<const Library*, std::unique_ptr<LibraryContext>> _nativeLibraries;
         robin_hood::unordered_map<std::string, std::unique_ptr<LibrarySet>> _libraries;
         robin_hood::unordered_map<std::string, std::unique_ptr<AnalyzationContext>> _analyzationContexts;
 

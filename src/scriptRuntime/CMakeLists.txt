@@ -7,7 +7,6 @@ add_library(BraneScriptRuntime STATIC
         irScript.cpp
         nativeTypes.cpp
         valueIndex.cpp
-        library.cpp
         functionHandle.cpp
         linker.cpp
         structDefinition.cpp

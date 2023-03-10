@@ -1,12 +1,10 @@
 
 #include "testing.h"
-/*
 
-#include "../src/compiler.h"
-#include "../src/scriptRuntime.h"
-#include "../src/script.h"
-#include "../src/library.h"
-#include "../src/linker.h"
+#include "compiler.h"
+#include "scriptRuntime.h"
+#include "script.h"
+#include "linker.h"
 
 using namespace BraneScript;
 
@@ -17,7 +15,7 @@ void BS_API_CALL setRef(int newVal)
     refValue = newVal;
 }
 
-TEST(BraneScript, Libraries)
+TEST(BraneScript, API)
 {
 #ifndef NDEBUG
     scriptMallocDiff = 0;
@@ -27,24 +25,34 @@ TEST(BraneScript, Libraries)
 
     void setRef(int v)
     {
-        lib.setRef(v);
+        lib::setRef(v);
     }
 )";
-    Library testLib("testLib");
-    testLib.addFunction("setRef", setRef);
+
+    std::string testLibString = R"(
+    export as "testLib"
+    {
+        void setRef(int v) ext;
+    }
+)";
 
     Linker linker;
-    linker.addLibrary(&testLib);
+    linker.addFunction("testLib::setRef", setRef);
 
-    Compiler compiler(&linker);
-    auto* ir = compiler.compile(testString);
-    checkCompileErrors(compiler);
+    StaticAnalyzer analyzer;
+    analyzer.load("testLibHeader", testLibString);
+    analyzer.load("test", testString);
+    analyzer.validate("test");
+    checkCompileErrors(analyzer, testString);
+
+    Compiler compiler;
+    compiler.setLinker(&linker);
+    auto* ir = compiler.compile(analyzer.getCtx("test")->scriptContext.get());
     ASSERT_TRUE(ir);
 
     ScriptRuntime rt;
     rt.setLinker(&linker);
     Script* testScript = rt.assembleScript(ir);
-    checkCompileErrors(compiler);
     ASSERT_TRUE(testScript);
 
     auto scriptSetRef = testScript->getFunction<void, int>("setRef");
@@ -56,4 +64,4 @@ TEST(BraneScript, Libraries)
 #ifndef NDEBUG
     EXPECT_EQ(scriptMallocDiff, 0);
 #endif
-}*/
+}
