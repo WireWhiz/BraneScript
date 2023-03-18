@@ -33,12 +33,17 @@ progSegment : function
 
 global      : type id=ID ';';
 
-type        : isConst='const'? isRef='ref'? id=ID;
+
+templateArgDef : id=ID isPack='...';
+template    : 'template' '<' templateArgDef (',' templateArgDef)* '>';
+templateArgs: '<'type (',' type)*'>';
+
+type        : isConst='const'? isRef='ref'? id=ID tArgs=templateArgs?;
 declaration : type id=ID;
 argumentList: (declaration (',' declaration)*)?;
 argumentPack: (expression (',' expression)*)?;
 functionStub: ((type (id=ID | ('opr' oprID=(ADD|SUB|MUL|DIV|COMPARE|LOGIC|'[]')))) | ('opr' castType=type)) '(' arguments=argumentList ')' isConst='const'? 'ext' ';';
-function    : ((type (id=ID | ('opr' oprID=(ADD|SUB|MUL|DIV|COMPARE|LOGIC|'[]')))) | ('opr' castType=type)) '(' arguments=argumentList ')' isConst='const'? '{' statements=statement* '}';
+function    : template? ((type (id=ID | ('opr' oprID=(ADD|SUB|MUL|DIV|COMPARE|LOGIC|'[]')))) | ('opr' castType=type)) '(' arguments=argumentList ')' isConst='const'? '{' statements=statement* '}';
 
 link          : 'link' library=STRING ('as' alias=STRING)? ';';
 export        : 'export as' libID=STRING '{' exportSegment* '}';
@@ -50,7 +55,7 @@ exportSegment : function
 
 structMember  : (var=declaration ';' | func=function);
 structMembers : structMember*;
-structDef     : packed='packed'? 'struct' id=ID '{' memberVars=structMembers '}';
+structDef     : template? packed='packed'? 'struct' id=ID '{' memberVars=structMembers '}';
 
 statement   : expression ';'                                                              #exprStatement
             | lValue=expression '=' rValue=expression ';'                                 #assignment
@@ -77,5 +82,9 @@ expression  : INT                                                           #con
             | left=expression opr=LOGIC       right=expression              #logic
             | left=expression opr=COMPARE     right=expression              #comparison
             | '(' expression ')'                                            #paren
+            | templateExpr                                                  #templateExpr
+            ;
+
+templateExpr: ID '...' #templateExpansion
             ;
 

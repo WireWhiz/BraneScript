@@ -42,6 +42,8 @@ namespace BraneScript
         robin_hood::unordered_map<std::string, std::unique_ptr<LibrarySet>> _libraries;
         robin_hood::unordered_map<std::string, std::unique_ptr<AnalyzationContext>> _analyzationContexts;
 
+        robin_hood::unordered_map<std::string, > _functionTemplates;
+
       public:
         StaticAnalyzer();
 

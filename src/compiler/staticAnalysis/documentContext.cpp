@@ -3,6 +3,7 @@
 //
 
 #include "documentContext.h"
+#include <cassert>
 
 namespace BraneScript
 {
@@ -140,10 +141,20 @@ namespace BraneScript
         return DocumentContext::findIdentifier(identifier, searchOptions);
     }
 
+    StatementContext* ScopeContext::instantiateTemplate(StaticAnalyzer& analyzer, const TemplateArgs& args)
+    {
+        return nullptr;
+    }
+
     ConstBoolContext::ConstBoolContext()
     {
         returnType.type = {"bool", ValueType::Bool};
         returnType.isConst = true;
+    }
+
+    StatementContext* ConstBoolContext::instantiateTemplate(StaticAnalyzer& analyzer, const TemplateArgs& args)
+    {
+        return new ConstBoolContext(*this);
     }
 
     ConstCharContext::ConstCharContext()
@@ -152,10 +163,20 @@ namespace BraneScript
         returnType.isConst = true;
     }
 
+    StatementContext* ConstCharContext::instantiateTemplate(StaticAnalyzer& analyzer, const TemplateArgs& args)
+    {
+        return new ConstCharContext(*this);
+    }
+
     ConstIntContext::ConstIntContext()
     {
         returnType.type = {"int", ValueType::Int32};
         returnType.isConst = true;
+    }
+
+    StatementContext* ConstIntContext::instantiateTemplate(StaticAnalyzer& analyzer, const TemplateArgs& args)
+    {
+        return new ConstIntContext(*this);
     }
 
     ConstFloatContext::ConstFloatContext()
@@ -164,10 +185,20 @@ namespace BraneScript
         returnType.isConst = true;
     }
 
+    StatementContext* ConstFloatContext::instantiateTemplate(StaticAnalyzer& analyzer, const TemplateArgs& args)
+    {
+        return new ConstFloatContext(*this);
+    }
+
     ConstStringContext::ConstStringContext()
     {
         returnType.type = {"BraneScript::string", ValueType::Struct};
         returnType.isConst = true;
+    }
+
+    StatementContext* ConstStringContext::instantiateTemplate(StaticAnalyzer& analyzer, const TemplateArgs& args)
+    {
+        return new ConstStringContext(*this);
     }
 
     DocumentContext* FunctionContext::findIdentifier(const std::string& identifier, uint8_t searchOptions)
@@ -208,6 +239,20 @@ namespace BraneScript
         }
         sig+= ")";
         return sig;
+    }
+
+    FunctionContext* FunctionContext::instantiateTemplate(StaticAnalyzer& analyzer, const TemplateArgs& args)
+    {
+        auto* func = new FunctionContext{};
+        func->arguments = arguments;
+        for(auto& arg : func->arguments)
+        {
+            if(args.contains(arg.type.identifier))
+            {
+                arg.type = ((TemplateTypeArgContext*)(args.at(arg.type.identifier).get()))->type;
+            }
+        }
+        return nullptr;
     }
 
     DocumentContext* StructContext::getNodeAtChar(TextPos pos)
@@ -255,6 +300,7 @@ namespace BraneScript
         }
         DocumentContext::getFunction(identifier, overrides);
     }
+
     std::string StructContext::longId() const
     {
         auto prefix = DocumentContext::longId();
@@ -416,5 +462,127 @@ namespace BraneScript
     {
         for(auto& lib : exports)
             lib->getFunction(identifier, overrides);
+    }
+
+    StatementContext* StatementErrorContext::instantiateTemplate(StaticAnalyzer& analyzer, const TemplateArgs& args)
+    {
+        return new StatementErrorContext(*this);
+    }
+
+    StatementContext* ExpressionErrorContext::instantiateTemplate(StaticAnalyzer& analyzer, const TemplateArgs& args)
+    {
+        return new ExpressionErrorContext(*this);
+    }
+
+    StatementContext* ReturnContext::instantiateTemplate(StaticAnalyzer& analyzer, const TemplateArgs& args)
+    {
+        auto output = new ReturnContext();
+        if(output->value)
+            output->value.reset(value->instantiateTemplate(analyzer, args)->as<ExpressionContext>());
+        assert((bool)output->value == (bool)value);
+        if(output->value)
+            output->value->parent = output;
+        output->range = range;
+        output->version = version;
+
+        return output;
+    }
+
+    StatementContext* IfContext::instantiateTemplate(StaticAnalyzer& analyzer, const TemplateArgs& args)
+    {
+        auto output = new IfContext();
+        output->condition.reset(condition->instantiateTemplate(analyzer, args)->as<ExpressionContext>());
+        output->body.reset(body->instantiateTemplate(analyzer, args)->as<ExpressionContext>());
+        if(elseBody)
+            output->elseBody.reset(elseBody->instantiateTemplate(analyzer, args)->as<ExpressionContext>());
+        assert(output->condition);
+        assert(output->body);
+        assert((bool)elseBody == (bool)output->elseBody);
+        output->condition->parent = output;
+        output->body->parent = output;
+        if(output->elseBody)
+            output->elseBody->parent = output;
+
+        output->range = range;
+        output->version = version;
+
+        return output;
+    }
+
+    StatementContext* WhileContext::instantiateTemplate(StaticAnalyzer& analyzer, const TemplateArgs& args)
+    {
+        auto output = new WhileContext();
+        output->condition.reset(condition->instantiateTemplate(analyzer, args)->as<ExpressionContext>());
+        output->body.reset(body->instantiateTemplate(analyzer, args)->as<ExpressionContext>());
+        assert(output->condition);
+        assert(output->body);
+        output->condition->parent = output;
+        output->body->parent = output;
+
+        output->range = range;
+        output->version = version;
+
+        return output;
+    }
+
+    StatementContext* AssignmentContext::instantiateTemplate(StaticAnalyzer& analyzer, const TemplateArgs& args)
+    {
+        auto output = new AssignmentContext();
+        output->lValue.reset(lValue->instantiateTemplate(analyzer, args)->as<ExpressionContext>());
+        output->rValue.reset(rValue->instantiateTemplate(analyzer, args)->as<ExpressionContext>());
+        assert(output->lValue);
+        assert(output->rValue);
+        output->lValue->parent = output;
+        output->rValue->parent = output;
+
+        output->range = range;
+        output->version = version;
+
+        return output;
+    }
+
+    LabeledValueConstructionContext::LabeledValueConstructionContext(const LabeledValueContext& value)
+    {
+        identifier = value.longId();
+        returnType = value;
+    }
+
+    LabeledValueReferenceContext::LabeledValueReferenceContext(const LabeledValueContext& value)
+    {
+        identifier = value.longId();
+        returnType = value;
+
+    }
+
+    StatementContext* LabeledValueReferenceContext::instantiateTemplate(StaticAnalyzer& analyzer,
+                                                                        const TemplateArgs& args)
+    {
+        return new LabeledValueReferenceContext(*this);
+    }
+
+    MemberAccessContext::MemberAccessContext(ExpressionContext* base, StructContext* baseType, size_t member)
+    {
+        baseExpression.reset(base);
+        assert(base->returnType.type.identifier == baseType->longId());
+        assert(member < baseType->variables.size());
+        returnType = *baseType->variables[member];
+        this->member = member;
+    }
+
+    StatementContext* MemberAccessContext::instantiateTemplate(StaticAnalyzer& analyzer, const TemplateArgs& args)
+    {
+        auto output = new MemberAccessContext();
+        output->baseExpression.reset(baseExpression->instantiateTemplate(analyzer, args)->as<ExpressionContext>());
+        assert(baseExpression);
+        output->baseExpression->parent = output;
+        output->range = range;
+        output->version = version;
+
+        return output;
+    }
+
+    StatementContext* FunctionCallContext::instantiateTemplate(StaticAnalyzer& analyzer, const TemplateArgs& args)
+    {
+        return new FunctionCallContext(*this);
     }
 } // namespace BraneScript

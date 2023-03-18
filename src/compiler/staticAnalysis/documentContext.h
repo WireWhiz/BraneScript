@@ -5,13 +5,14 @@
 #ifndef BRANESCRIPT_FUNCTIONCONTEXT_H
 #define BRANESCRIPT_FUNCTIONCONTEXT_H
 
+#include <cstdarg>
+#include <list>
+#include <string>
+#include <vector>
 #include "robin_hood.h"
 #include "src/scriptRuntime/valueIndex.h"
 #include "textPos.h"
-#include <string>
-#include <vector>
 #include <json/json.h>
-#include <list>
 
 namespace BraneScript
 {
@@ -20,16 +21,15 @@ namespace BraneScript
         TextRange range;
         std::string text;
         operator std::string&();
-        bool operator ==(const Identifier&) const;
+        bool operator==(const Identifier&) const;
         bool operator!=(const Identifier&) const;
-
     };
 
     struct TypeContext
     {
         std::string identifier = "void";
         ValueType storageType = ValueType::Void;
-        bool operator ==(const TypeContext&) const;
+        bool operator==(const TypeContext&) const;
         bool operator!=(const TypeContext&) const;
         bool isScalar() const;
         bool isUnsigned() const;
@@ -39,6 +39,7 @@ namespace BraneScript
     };
 
     struct LabeledValueContext;
+
     struct ValueContext
     {
         // reference to the type this value holds
@@ -51,8 +52,8 @@ namespace BraneScript
         // Is this a reference
         bool isRef = false;
 
-        bool operator ==(const ValueContext& o) const;
-        bool operator !=(const ValueContext& o) const;
+        bool operator==(const ValueContext& o) const;
+        bool operator!=(const ValueContext& o) const;
 
         void operator=(const LabeledValueContext& o);
 
@@ -64,16 +65,32 @@ namespace BraneScript
     template<typename T>
     using LabeledNodeList = std::vector<std::unique_ptr<T>>;
 
+    class StaticAnalyzer;
     struct FunctionContext;
     struct StructContext;
+    struct TemplateArgumentContext
+    {
+        std::string identifier;
+    };
+    using TemplateArgs = robin_hood::unordered_map<std::string, std::unique_ptr<TemplateArgumentContext>>;
+
+    struct TemplateTypeArgContext : public TemplateArgumentContext
+    {
+        TypeContext type;
+    };
+
+    struct TemplateTypePackContext : public TemplateArgumentContext
+    {
+        std::vector<TypeContext> types;
+    };
 
     // Not yet implemented
     enum IDSearchOptions : uint8_t
     {
         IDSearchOptions_ChildrenOnly = 1 << 0, // Don't search upwards through the tree
-        IDSearchOptions_ParentsOnly  = 1 << 1, // Don't search downwards through the tree
-        IDSearchOptions_ValuesOnly   = 1 << 2 // Will only return values from scopes, functions, and global variables.
-                                              // excludes struct member variables so that "this" pointer must be used
+        IDSearchOptions_ParentsOnly = 1 << 1,  // Don't search downwards through the tree
+        IDSearchOptions_ValuesOnly = 1 << 2    // Will only return values from scopes, functions, and global variables.
+                                               // excludes struct member variables so that "this" pointer must be used
     };
 
     struct DocumentContext
@@ -112,7 +129,8 @@ namespace BraneScript
     };
 
     struct LabeledValueReferenceContext;
-    struct LabeledValueContext : public DocumentContext, ValueContext
+
+    struct LabeledValueContext : public DocumentContext, public ValueContext
     {
         Identifier identifier;
 
@@ -128,7 +146,7 @@ namespace BraneScript
 
     struct StatementContext : public DocumentContext
     {
-
+        virtual StatementContext* instantiateTemplate(StaticAnalyzer& analyzer, const TemplateArgs& args) = 0;
     };
 
     struct StatementErrorContext : public StatementContext, ErrorContext
@@ -138,6 +156,8 @@ namespace BraneScript
             this->message = std::move(message);
             this->line = line;
         }
+
+        StatementContext* instantiateTemplate(StaticAnalyzer& analyzer, const TemplateArgs& args) override;
     };
 
     struct ExpressionContext : public StatementContext
@@ -154,6 +174,13 @@ namespace BraneScript
             this->message = std::move(message);
             this->line = line;
         }
+
+        StatementContext* instantiateTemplate(StaticAnalyzer& analyzer, const TemplateArgs& args) override;
+    };
+
+    struct PackExpansionContext : public StatementContext
+    {
+        std::unique_ptr<StatementContext>
     };
 
     struct ScopeContext : public StatementContext
@@ -163,11 +190,13 @@ namespace BraneScript
         std::vector<std::unique_ptr<StatementContext>> statements;
 
         DocumentContext* findIdentifier(const std::string& identifier, uint8_t searchOptions) override;
+        StatementContext* instantiateTemplate(StaticAnalyzer& analyzer, const TemplateArgs& args) override;
     };
 
     struct ReturnContext : public StatementContext
     {
         std::unique_ptr<ExpressionContext> value;
+        StatementContext* instantiateTemplate(StaticAnalyzer& analyzer, const TemplateArgs& args) override;
     };
 
     struct IfContext : public StatementContext
@@ -175,75 +204,90 @@ namespace BraneScript
         std::unique_ptr<ExpressionContext> condition;
         std::unique_ptr<StatementContext> body;
         std::unique_ptr<StatementContext> elseBody;
+        StatementContext* instantiateTemplate(StaticAnalyzer& analyzer, const TemplateArgs& args) override;
     };
 
     struct WhileContext : public StatementContext
     {
         std::unique_ptr<ExpressionContext> condition;
         std::unique_ptr<StatementContext> body;
+        StatementContext* instantiateTemplate(StaticAnalyzer& analyzer, const TemplateArgs& args) override;
     };
 
     struct AssignmentContext : public StatementContext
     {
         std::unique_ptr<ExpressionContext> lValue;
         std::unique_ptr<ExpressionContext> rValue;
+        StatementContext* instantiateTemplate(StaticAnalyzer& analyzer, const TemplateArgs& args) override;
     };
 
     struct ConstValueContext : public ExpressionContext
     {
-
     };
 
     struct ConstBoolContext : public ConstValueContext
     {
         bool value;
         ConstBoolContext();
+        StatementContext* instantiateTemplate(StaticAnalyzer& analyzer, const TemplateArgs& args) override;
     };
 
     struct ConstCharContext : public ConstValueContext
     {
         char value;
         ConstCharContext();
+        StatementContext* instantiateTemplate(StaticAnalyzer& analyzer, const TemplateArgs& args) override;
     };
 
     struct ConstIntContext : public ConstValueContext
     {
         int value;
         ConstIntContext();
+        StatementContext* instantiateTemplate(StaticAnalyzer& analyzer, const TemplateArgs& args) override;
     };
 
     struct ConstFloatContext : public ConstValueContext
     {
         float value;
         ConstFloatContext();
+        StatementContext* instantiateTemplate(StaticAnalyzer& analyzer, const TemplateArgs& args) override;
     };
 
     struct ConstStringContext : public ConstValueContext
     {
         std::string value;
         ConstStringContext();
+        StatementContext* instantiateTemplate(StaticAnalyzer& analyzer, const TemplateArgs& args) override;
     };
 
     struct LabeledValueConstructionContext : public ExpressionContext
     {
-        LabeledValueContext* value = nullptr;
+        std::string identifier;
+        LabeledValueConstructionContext(const LabeledValueContext& value);
+        StatementContext* instantiateTemplate(StaticAnalyzer& analyzer, const TemplateArgs& args) override;
     };
 
     struct LabeledValueReferenceContext : public ExpressionContext
     {
-        LabeledValueContext* value = nullptr;
+        std::string identifier;
+        LabeledValueReferenceContext(const LabeledValueContext& value);
+        StatementContext* instantiateTemplate(StaticAnalyzer& analyzer, const TemplateArgs& args) override;
     };
 
     struct MemberAccessContext : public ExpressionContext
     {
         std::unique_ptr<ExpressionContext> baseExpression;
         size_t member = -1;
+        MemberAccessContext() = default;
+        MemberAccessContext(ExpressionContext* base, StructContext* baseType, size_t member);
+        StatementContext* instantiateTemplate(StaticAnalyzer& analyzer, const TemplateArgs& args) override;
     };
 
     struct FunctionCallContext : public ExpressionContext
     {
         FunctionContext* function;
         std::vector<std::unique_ptr<ExpressionContext>> arguments;
+        StatementContext* instantiateTemplate(StaticAnalyzer& analyzer, const TemplateArgs& args) override;
     };
 
     struct FunctionContext : public DocumentContext
@@ -263,6 +307,8 @@ namespace BraneScript
         DocumentContext* findIdentifier(const std::string& identifier, uint8_t searchOptions) override;
         std::string longId() const override;
         std::string signature() const;
+
+        FunctionContext* instantiateTemplate(StaticAnalyzer& analyzer, const TemplateArgs& args);
     };
 
     struct StructContext : public DocumentContext
@@ -276,6 +322,16 @@ namespace BraneScript
         DocumentContext* findIdentifier(const std::string& identifier, uint8_t searchOptions) override;
         void getFunction(const std::string& identifier, std::list<FunctionContext*>& overrides) override;
         std::string longId() const override;
+
+
+        StructContext* instantiateTemplate(StaticAnalyzer& analyzer, const TemplateArgs& args);
+    };
+
+    struct TemplateContext : public DocumentContext
+    {
+        std::vector<std::vector<ValueType*>> argumentReferences;
+        std::unique_ptr<StatementContext> root;
+
     };
 
     struct LibraryContext : public DocumentContext
