@@ -14,8 +14,17 @@
 #include "textPos.h"
 #include <json/json.h>
 
+namespace antlr4
+{
+    class TokenStream;
+}
+
 namespace BraneScript
 {
+    class StaticAnalyzer;
+    struct FunctionContext;
+    struct StructContext;
+
     struct Identifier
     {
         TextRange range;
@@ -65,24 +74,34 @@ namespace BraneScript
     template<typename T>
     using LabeledNodeList = std::vector<std::unique_ptr<T>>;
 
-    class StaticAnalyzer;
-    struct FunctionContext;
-    struct StructContext;
-    struct TemplateArgumentContext
+    struct TemplateArgDefContext
     {
         std::string identifier;
-    };
-    using TemplateArgs = robin_hood::unordered_map<std::string, std::unique_ptr<TemplateArgumentContext>>;
-
-    struct TemplateTypeArgContext : public TemplateArgumentContext
-    {
-        TypeContext type;
+        enum ArgType {
+            ValueType,
+            ValueTypePack
+        } type = ValueType;
     };
 
-    struct TemplateTypePackContext : public TemplateArgumentContext
+    struct TemplateArgContext
     {
-        std::vector<TypeContext> types;
+        std::string identifier;
+        virtual ~TemplateArgContext() = default;
     };
+
+    struct TemplateTypeArgContext : public TemplateArgContext
+    {
+        ValueContext value;
+        TemplateTypeArgContext(std::string id, ValueContext value);
+    };
+
+    struct TemplateTypePackArgContext : public TemplateArgContext
+    {
+        std::vector<ValueContext> value;
+    };
+
+    using TemplateArgDefs = robin_hood::unordered_map<std::string, TemplateArgDefContext>;
+    using TemplateArgs = robin_hood::unordered_map<std::string, std::unique_ptr<TemplateArgContext>>;
 
     // Not yet implemented
     enum IDSearchOptions : uint8_t
@@ -126,6 +145,14 @@ namespace BraneScript
                 return p;
             return parent->getParent<T>();
         }
+
+        /** Creates a deep copy of this node and it's children
+         * @param callback called each time a node is copied, said node is passed to the callback.
+         * This is intended to allow for modification of nodes
+         */
+        virtual DocumentContext* deepCopy(const std::function<DocumentContext*(DocumentContext*)>& callback) = 0;
+      protected:
+        virtual void copyBase(DocumentContext* src, DocumentContext* dest);
     };
 
     struct LabeledValueReferenceContext;
@@ -136,6 +163,7 @@ namespace BraneScript
 
         std::string signature() const override;
         std::string longId() const override;
+        DocumentContext* deepCopy(const std::function<DocumentContext*(DocumentContext*)>& callback) override;
     };
 
     struct ErrorContext
@@ -146,7 +174,6 @@ namespace BraneScript
 
     struct StatementContext : public DocumentContext
     {
-        virtual StatementContext* instantiateTemplate(StaticAnalyzer& analyzer, const TemplateArgs& args) = 0;
     };
 
     struct StatementErrorContext : public StatementContext, ErrorContext
@@ -156,8 +183,7 @@ namespace BraneScript
             this->message = std::move(message);
             this->line = line;
         }
-
-        StatementContext* instantiateTemplate(StaticAnalyzer& analyzer, const TemplateArgs& args) override;
+        DocumentContext* deepCopy(const std::function<DocumentContext*(DocumentContext*)>& callback) override;
     };
 
     struct ExpressionContext : public StatementContext
@@ -165,6 +191,8 @@ namespace BraneScript
         ValueContext returnType;
         // Is the result of this expression a constant?
         bool isConstexpr = false;
+      protected:
+        void copyBase(DocumentContext* src, DocumentContext* dest) override;
     };
 
     struct ExpressionErrorContext : public ExpressionContext, ErrorContext
@@ -174,13 +202,7 @@ namespace BraneScript
             this->message = std::move(message);
             this->line = line;
         }
-
-        StatementContext* instantiateTemplate(StaticAnalyzer& analyzer, const TemplateArgs& args) override;
-    };
-
-    struct PackExpansionContext : public StatementContext
-    {
-        std::unique_ptr<StatementContext>
+        DocumentContext* deepCopy(const std::function<DocumentContext*(DocumentContext*)>& callback) override;
     };
 
     struct ScopeContext : public StatementContext
@@ -190,13 +212,13 @@ namespace BraneScript
         std::vector<std::unique_ptr<StatementContext>> statements;
 
         DocumentContext* findIdentifier(const std::string& identifier, uint8_t searchOptions) override;
-        StatementContext* instantiateTemplate(StaticAnalyzer& analyzer, const TemplateArgs& args) override;
+        DocumentContext* deepCopy(const std::function<DocumentContext*(DocumentContext*)>& callback) override;
     };
 
     struct ReturnContext : public StatementContext
     {
         std::unique_ptr<ExpressionContext> value;
-        StatementContext* instantiateTemplate(StaticAnalyzer& analyzer, const TemplateArgs& args) override;
+        DocumentContext* deepCopy(const std::function<DocumentContext*(DocumentContext*)>& callback) override;
     };
 
     struct IfContext : public StatementContext
@@ -204,21 +226,21 @@ namespace BraneScript
         std::unique_ptr<ExpressionContext> condition;
         std::unique_ptr<StatementContext> body;
         std::unique_ptr<StatementContext> elseBody;
-        StatementContext* instantiateTemplate(StaticAnalyzer& analyzer, const TemplateArgs& args) override;
+        DocumentContext* deepCopy(const std::function<DocumentContext*(DocumentContext*)>& callback) override;
     };
 
     struct WhileContext : public StatementContext
     {
         std::unique_ptr<ExpressionContext> condition;
         std::unique_ptr<StatementContext> body;
-        StatementContext* instantiateTemplate(StaticAnalyzer& analyzer, const TemplateArgs& args) override;
+        DocumentContext* deepCopy(const std::function<DocumentContext*(DocumentContext*)>& callback) override;
     };
 
     struct AssignmentContext : public StatementContext
     {
         std::unique_ptr<ExpressionContext> lValue;
         std::unique_ptr<ExpressionContext> rValue;
-        StatementContext* instantiateTemplate(StaticAnalyzer& analyzer, const TemplateArgs& args) override;
+        DocumentContext* deepCopy(const std::function<DocumentContext*(DocumentContext*)>& callback) override;
     };
 
     struct ConstValueContext : public ExpressionContext
@@ -229,49 +251,50 @@ namespace BraneScript
     {
         bool value;
         ConstBoolContext();
-        StatementContext* instantiateTemplate(StaticAnalyzer& analyzer, const TemplateArgs& args) override;
+        DocumentContext* deepCopy(const std::function<DocumentContext*(DocumentContext*)>& callback) override;
     };
 
     struct ConstCharContext : public ConstValueContext
     {
         char value;
         ConstCharContext();
-        StatementContext* instantiateTemplate(StaticAnalyzer& analyzer, const TemplateArgs& args) override;
+        DocumentContext* deepCopy(const std::function<DocumentContext*(DocumentContext*)>& callback) override;
     };
 
     struct ConstIntContext : public ConstValueContext
     {
         int value;
         ConstIntContext();
-        StatementContext* instantiateTemplate(StaticAnalyzer& analyzer, const TemplateArgs& args) override;
+        DocumentContext* deepCopy(const std::function<DocumentContext*(DocumentContext*)>& callback) override;
     };
 
     struct ConstFloatContext : public ConstValueContext
     {
         float value;
         ConstFloatContext();
-        StatementContext* instantiateTemplate(StaticAnalyzer& analyzer, const TemplateArgs& args) override;
+        DocumentContext* deepCopy(const std::function<DocumentContext*(DocumentContext*)>& callback) override;
     };
 
     struct ConstStringContext : public ConstValueContext
     {
         std::string value;
         ConstStringContext();
-        StatementContext* instantiateTemplate(StaticAnalyzer& analyzer, const TemplateArgs& args) override;
+        DocumentContext* deepCopy(const std::function<DocumentContext*(DocumentContext*)>& callback) override;
     };
 
     struct LabeledValueConstructionContext : public ExpressionContext
     {
         std::string identifier;
         LabeledValueConstructionContext(const LabeledValueContext& value);
-        StatementContext* instantiateTemplate(StaticAnalyzer& analyzer, const TemplateArgs& args) override;
+        LabeledValueConstructionContext() = default;
+        DocumentContext* deepCopy(const std::function<DocumentContext*(DocumentContext*)>& callback) override;
     };
 
     struct LabeledValueReferenceContext : public ExpressionContext
     {
         std::string identifier;
         LabeledValueReferenceContext(const LabeledValueContext& value);
-        StatementContext* instantiateTemplate(StaticAnalyzer& analyzer, const TemplateArgs& args) override;
+        DocumentContext* deepCopy(const std::function<DocumentContext*(DocumentContext*)>& callback) override;
     };
 
     struct MemberAccessContext : public ExpressionContext
@@ -280,14 +303,14 @@ namespace BraneScript
         size_t member = -1;
         MemberAccessContext() = default;
         MemberAccessContext(ExpressionContext* base, StructContext* baseType, size_t member);
-        StatementContext* instantiateTemplate(StaticAnalyzer& analyzer, const TemplateArgs& args) override;
+        DocumentContext* deepCopy(const std::function<DocumentContext*(DocumentContext*)>& callback) override;
     };
 
     struct FunctionCallContext : public ExpressionContext
     {
         FunctionContext* function;
         std::vector<std::unique_ptr<ExpressionContext>> arguments;
-        StatementContext* instantiateTemplate(StaticAnalyzer& analyzer, const TemplateArgs& args) override;
+        DocumentContext* deepCopy(const std::function<DocumentContext*(DocumentContext*)>& callback) override;
     };
 
     struct FunctionContext : public DocumentContext
@@ -307,8 +330,7 @@ namespace BraneScript
         DocumentContext* findIdentifier(const std::string& identifier, uint8_t searchOptions) override;
         std::string longId() const override;
         std::string signature() const;
-
-        FunctionContext* instantiateTemplate(StaticAnalyzer& analyzer, const TemplateArgs& args);
+        DocumentContext* deepCopy(const std::function<DocumentContext*(DocumentContext*)>& callback) override;
     };
 
     struct StructContext : public DocumentContext
@@ -318,20 +340,16 @@ namespace BraneScript
         LabeledNodeList<FunctionContext> functions;
         bool packed = false;
 
+        FunctionContext* constructor = nullptr;
+        FunctionContext* destructor = nullptr;
+        FunctionContext* copyConstructor = nullptr;
+        FunctionContext* moveConstructor = nullptr;
+
         DocumentContext* getNodeAtChar(TextPos pos) override;
         DocumentContext* findIdentifier(const std::string& identifier, uint8_t searchOptions) override;
         void getFunction(const std::string& identifier, std::list<FunctionContext*>& overrides) override;
         std::string longId() const override;
-
-
-        StructContext* instantiateTemplate(StaticAnalyzer& analyzer, const TemplateArgs& args);
-    };
-
-    struct TemplateContext : public DocumentContext
-    {
-        std::vector<std::vector<ValueType*>> argumentReferences;
-        std::unique_ptr<StatementContext> root;
-
+        DocumentContext* deepCopy(const std::function<DocumentContext*(DocumentContext*)>& callback) override;
     };
 
     struct LibraryContext : public DocumentContext
@@ -345,6 +363,7 @@ namespace BraneScript
         DocumentContext* findIdentifier(const std::string& identifier, uint8_t searchOptions) override;
         void getFunction(const std::string& identifier, std::list<FunctionContext*>& overrides) override;
         std::string longId() const override;
+        DocumentContext* deepCopy(const std::function<DocumentContext*(DocumentContext*)>& callback) override;
     };
 
     struct LibrarySet : public DocumentContext
@@ -352,6 +371,7 @@ namespace BraneScript
         robin_hood::unordered_set<LibraryContext*> exports;
         DocumentContext* findIdentifier(const std::string& identifier, uint8_t searchOptions) override;
         void getFunction(const std::string& identifier, std::list<FunctionContext*>& overrides) override;
+        DocumentContext* deepCopy(const std::function<DocumentContext*(DocumentContext*)>& callback) override;
     };
 
     struct ImportContext : public DocumentContext
@@ -359,6 +379,7 @@ namespace BraneScript
         std::string library;
         // If alias is empty, that means that the library is imported without a prefix (like a using namespace)
         std::string alias;
+        DocumentContext* deepCopy(const std::function<DocumentContext*(DocumentContext*)>& callback) override;
     };
 
     struct ScriptContext : public DocumentContext
@@ -369,11 +390,12 @@ namespace BraneScript
         LabeledNodeMap<LibraryContext> exports;
         std::vector<ImportContext> imports;
 
-        std::vector<FunctionContext*> functionOrder;
+        std::vector<FunctionContext*> callOrder;
 
         DocumentContext* getNodeAtChar(TextPos pos) override;
         DocumentContext* findIdentifier(const std::string& identifier, uint8_t searchOptions) override;
         void getFunction(const std::string& identifier, std::list<FunctionContext*>& overrides) override;
+        DocumentContext* deepCopy(const std::function<DocumentContext*(DocumentContext*)>& callback) override;
     };
 } // namespace BraneScript
 

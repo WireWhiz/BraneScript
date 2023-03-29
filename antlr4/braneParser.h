@@ -15,18 +15,20 @@ public:
     T__0 = 1, T__1 = 2, T__2 = 3, T__3 = 4, T__4 = 5, T__5 = 6, T__6 = 7, 
     T__7 = 8, T__8 = 9, T__9 = 10, T__10 = 11, T__11 = 12, T__12 = 13, T__13 = 14, 
     T__14 = 15, T__15 = 16, T__16 = 17, T__17 = 18, T__18 = 19, T__19 = 20, 
-    T__20 = 21, T__21 = 22, T__22 = 23, T__23 = 24, NEWLINE = 25, COMMENT = 26, 
-    BLOCK_COMMENT = 27, SPACE = 28, BOOL = 29, INT = 30, FLOAT = 31, CHAR = 32, 
-    STRING = 33, ID = 34, MUL = 35, DIV = 36, ADD = 37, SUB = 38, COMPARE = 39, 
-    LOGIC = 40
+    T__20 = 21, T__21 = 22, T__22 = 23, T__23 = 24, T__24 = 25, T__25 = 26, 
+    T__26 = 27, T__27 = 28, T__28 = 29, T__29 = 30, T__30 = 31, T__31 = 32, 
+    NEWLINE = 33, COMMENT = 34, BLOCK_COMMENT = 35, SPACE = 36, BOOL = 37, 
+    INT = 38, FLOAT = 39, CHAR = 40, STRING = 41, ID = 42, MUL = 43, DIV = 44, 
+    ADD = 45, SUB = 46, LOGIC = 47
   };
 
   enum {
-    RuleProgram = 0, RuleProgSegment = 1, RuleGlobal = 2, RuleType = 3, 
-    RuleDeclaration = 4, RuleArgumentList = 5, RuleArgumentPack = 6, RuleFunctionStub = 7, 
-    RuleFunction = 8, RuleLink = 9, RuleExport = 10, RuleExportSegment = 11, 
-    RuleStructMember = 12, RuleStructMembers = 13, RuleStructDef = 14, RuleStatement = 15, 
-    RuleExpression = 16
+    RuleProgram = 0, RuleProgSegment = 1, RuleGlobal = 2, RuleTemplateArgument = 3, 
+    RuleTemplateDef = 4, RuleTemplateArgs = 5, RuleType = 6, RuleDeclaration = 7, 
+    RuleArgumentList = 8, RuleArgumentPack = 9, RuleFunctionSig = 10, RuleFunctionStub = 11, 
+    RuleFunction = 12, RuleLink = 13, RuleExport = 14, RuleExportSegment = 15, 
+    RuleStructMember = 16, RuleStructMembers = 17, RuleStructDef = 18, RuleStatement = 19, 
+    RuleExpression = 20
   };
 
   explicit braneParser(antlr4::TokenStream *input);
@@ -49,10 +51,14 @@ public:
   class ProgramContext;
   class ProgSegmentContext;
   class GlobalContext;
+  class TemplateArgumentContext;
+  class TemplateDefContext;
+  class TemplateArgsContext;
   class TypeContext;
   class DeclarationContext;
   class ArgumentListContext;
   class ArgumentPackContext;
+  class FunctionSigContext;
   class FunctionStubContext;
   class FunctionContext;
   class LinkContext;
@@ -112,14 +118,59 @@ public:
 
   GlobalContext* global();
 
+  class  TemplateArgumentContext : public antlr4::ParserRuleContext {
+  public:
+    antlr4::Token *id = nullptr;
+    antlr4::Token *isPack = nullptr;
+    TemplateArgumentContext(antlr4::ParserRuleContext *parent, size_t invokingState);
+    virtual size_t getRuleIndex() const override;
+    antlr4::tree::TerminalNode *ID();
+
+
+    virtual std::any accept(antlr4::tree::ParseTreeVisitor *visitor) override;
+   
+  };
+
+  TemplateArgumentContext* templateArgument();
+
+  class  TemplateDefContext : public antlr4::ParserRuleContext {
+  public:
+    TemplateDefContext(antlr4::ParserRuleContext *parent, size_t invokingState);
+    virtual size_t getRuleIndex() const override;
+    std::vector<TemplateArgumentContext *> templateArgument();
+    TemplateArgumentContext* templateArgument(size_t i);
+
+
+    virtual std::any accept(antlr4::tree::ParseTreeVisitor *visitor) override;
+   
+  };
+
+  TemplateDefContext* templateDef();
+
+  class  TemplateArgsContext : public antlr4::ParserRuleContext {
+  public:
+    TemplateArgsContext(antlr4::ParserRuleContext *parent, size_t invokingState);
+    virtual size_t getRuleIndex() const override;
+    std::vector<TypeContext *> type();
+    TypeContext* type(size_t i);
+
+
+    virtual std::any accept(antlr4::tree::ParseTreeVisitor *visitor) override;
+   
+  };
+
+  TemplateArgsContext* templateArgs();
+
   class  TypeContext : public antlr4::ParserRuleContext {
   public:
     antlr4::Token *isConst = nullptr;
     antlr4::Token *isRef = nullptr;
     antlr4::Token *id = nullptr;
+    braneParser::TemplateArgsContext *template_ = nullptr;
     TypeContext(antlr4::ParserRuleContext *parent, size_t invokingState);
     virtual size_t getRuleIndex() const override;
     antlr4::tree::TerminalNode *ID();
+    TemplateArgsContext *templateArgs();
 
 
     virtual std::any accept(antlr4::tree::ParseTreeVisitor *visitor) override;
@@ -171,24 +222,39 @@ public:
 
   ArgumentPackContext* argumentPack();
 
-  class  FunctionStubContext : public antlr4::ParserRuleContext {
+  class  FunctionSigContext : public antlr4::ParserRuleContext {
   public:
+    braneParser::TemplateDefContext *template_ = nullptr;
     antlr4::Token *id = nullptr;
     antlr4::Token *oprID = nullptr;
     braneParser::TypeContext *castType = nullptr;
-    braneParser::ArgumentListContext *arguments = nullptr;
-    antlr4::Token *isConst = nullptr;
-    FunctionStubContext(antlr4::ParserRuleContext *parent, size_t invokingState);
+    FunctionSigContext(antlr4::ParserRuleContext *parent, size_t invokingState);
     virtual size_t getRuleIndex() const override;
-    ArgumentListContext *argumentList();
+    TemplateDefContext *templateDef();
     TypeContext *type();
     antlr4::tree::TerminalNode *ID();
     antlr4::tree::TerminalNode *ADD();
     antlr4::tree::TerminalNode *SUB();
     antlr4::tree::TerminalNode *MUL();
     antlr4::tree::TerminalNode *DIV();
-    antlr4::tree::TerminalNode *COMPARE();
     antlr4::tree::TerminalNode *LOGIC();
+
+
+    virtual std::any accept(antlr4::tree::ParseTreeVisitor *visitor) override;
+   
+  };
+
+  FunctionSigContext* functionSig();
+
+  class  FunctionStubContext : public antlr4::ParserRuleContext {
+  public:
+    braneParser::FunctionSigContext *sig = nullptr;
+    braneParser::ArgumentListContext *arguments = nullptr;
+    antlr4::Token *isConst = nullptr;
+    FunctionStubContext(antlr4::ParserRuleContext *parent, size_t invokingState);
+    virtual size_t getRuleIndex() const override;
+    FunctionSigContext *functionSig();
+    ArgumentListContext *argumentList();
 
 
     virtual std::any accept(antlr4::tree::ParseTreeVisitor *visitor) override;
@@ -199,25 +265,16 @@ public:
 
   class  FunctionContext : public antlr4::ParserRuleContext {
   public:
-    antlr4::Token *id = nullptr;
-    antlr4::Token *oprID = nullptr;
-    braneParser::TypeContext *castType = nullptr;
+    braneParser::FunctionSigContext *sig = nullptr;
     braneParser::ArgumentListContext *arguments = nullptr;
     antlr4::Token *isConst = nullptr;
     braneParser::StatementContext *statements = nullptr;
     FunctionContext(antlr4::ParserRuleContext *parent, size_t invokingState);
     virtual size_t getRuleIndex() const override;
+    FunctionSigContext *functionSig();
     ArgumentListContext *argumentList();
-    TypeContext *type();
     std::vector<StatementContext *> statement();
     StatementContext* statement(size_t i);
-    antlr4::tree::TerminalNode *ID();
-    antlr4::tree::TerminalNode *ADD();
-    antlr4::tree::TerminalNode *SUB();
-    antlr4::tree::TerminalNode *MUL();
-    antlr4::tree::TerminalNode *DIV();
-    antlr4::tree::TerminalNode *COMPARE();
-    antlr4::tree::TerminalNode *LOGIC();
 
 
     virtual std::any accept(antlr4::tree::ParseTreeVisitor *visitor) override;
@@ -306,6 +363,7 @@ public:
 
   class  StructDefContext : public antlr4::ParserRuleContext {
   public:
+    braneParser::TemplateDefContext *template_ = nullptr;
     antlr4::Token *packed = nullptr;
     antlr4::Token *id = nullptr;
     braneParser::StructMembersContext *memberVars = nullptr;
@@ -313,6 +371,7 @@ public:
     virtual size_t getRuleIndex() const override;
     antlr4::tree::TerminalNode *ID();
     StructMembersContext *structMembers();
+    TemplateDefContext *templateDef();
 
 
     virtual std::any accept(antlr4::tree::ParseTreeVisitor *visitor) override;
@@ -436,7 +495,6 @@ public:
     braneParser::ExpressionContext *right = nullptr;
     std::vector<ExpressionContext *> expression();
     ExpressionContext* expression(size_t i);
-    antlr4::tree::TerminalNode *COMPARE();
 
     virtual std::any accept(antlr4::tree::ParseTreeVisitor *visitor) override;
   };
@@ -544,9 +602,11 @@ public:
 
     braneParser::ExpressionContext *base = nullptr;
     antlr4::Token *name = nullptr;
+    braneParser::TemplateArgsContext *template_ = nullptr;
     ArgumentPackContext *argumentPack();
     ExpressionContext *expression();
     antlr4::tree::TerminalNode *ID();
+    TemplateArgsContext *templateArgs();
 
     virtual std::any accept(antlr4::tree::ParseTreeVisitor *visitor) override;
   };
@@ -556,8 +616,10 @@ public:
     FunctionCallContext(ExpressionContext *ctx);
 
     antlr4::Token *name = nullptr;
+    braneParser::TemplateArgsContext *template_ = nullptr;
     ArgumentPackContext *argumentPack();
     antlr4::tree::TerminalNode *ID();
+    TemplateArgsContext *templateArgs();
 
     virtual std::any accept(antlr4::tree::ParseTreeVisitor *visitor) override;
   };

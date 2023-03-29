@@ -27,6 +27,18 @@ public:
     return visitChildren(ctx);
   }
 
+  virtual std::any visitTemplateArgument(braneParser::TemplateArgumentContext *ctx) override {
+    return visitChildren(ctx);
+  }
+
+  virtual std::any visitTemplateDef(braneParser::TemplateDefContext *ctx) override {
+    return visitChildren(ctx);
+  }
+
+  virtual std::any visitTemplateArgs(braneParser::TemplateArgsContext *ctx) override {
+    return visitChildren(ctx);
+  }
+
   virtual std::any visitType(braneParser::TypeContext *ctx) override {
     return visitChildren(ctx);
   }
@@ -40,6 +52,10 @@ public:
   }
 
   virtual std::any visitArgumentPack(braneParser::ArgumentPackContext *ctx) override {
+    return visitChildren(ctx);
+  }
+
+  virtual std::any visitFunctionSig(braneParser::FunctionSigContext *ctx) override {
     return visitChildren(ctx);
   }
 

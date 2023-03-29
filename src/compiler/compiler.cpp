@@ -49,15 +49,15 @@ namespace BraneScript
             return def;
         }
 
-        AotValue* regFromValueCtx(LabeledValueContext* valueCtx)
+        AotValue* regFromValueCtx(const ValueContext& valueCtx)
         {
-            auto* type = _compileCtx->getType(valueCtx->type.identifier);
+            auto* type = _compileCtx->getType(valueCtx.type.identifier);
             if(!type)
-                throw CompilerError("Type " + valueCtx->type.identifier + " not found!");
+                throw CompilerError("Type " + valueCtx.type.identifier + " not found!");
             uint8_t flags = 0;
-            if(valueCtx->isConst)
+            if(valueCtx.isConst)
                 flags |= AotValue::Const;
-            if(valueCtx->isRef)
+            if(valueCtx.isRef)
                 flags |= AotValue::StackRef;
             return _currentFunc->newReg(type, flags);
         }
@@ -94,8 +94,8 @@ namespace BraneScript
 
         AotNode* visitDeclaration(const LabeledValueConstructionContext* ctx)
         {
-            AotValue* value = regFromValueCtx(ctx->value);
-            currentScope().localValues.insert({ctx->value->identifier, value});
+            AotValue* value = regFromValueCtx(ctx->returnType);
+            currentScope().localValues.insert({ctx->identifier, value});
             if(value->type->type() != ValueType::Struct)
                 return new AotValueConstruction(value);
             return new AotAllocNode(value);
@@ -108,11 +108,11 @@ namespace BraneScript
                 args.push_back(visitExpression(arg.get()));
 
             // Replace a call with inline code if this is an inlined function
-            std::string name = ctx->function->signature();
-            if(const AotInlineFunction* func = _compileCtx->compiler->getInlineFunction(name, args))
+            std::string sig = ctx->function->signature();
+            if(const AotInlineFunction* func = _compileCtx->compiler->getInlineFunction(sig, args))
                 return func->generateAotTree(args);
 
-            return new AotFunctionCall(name, _compileCtx->getType(ctx->returnType.type.identifier), args);
+            return new AotFunctionCall(sig, _compileCtx->getType(ctx->returnType.type.identifier), args);
         }
 
         AotDerefNode* visitMemberAccess(const MemberAccessContext* ctx)
@@ -128,7 +128,7 @@ namespace BraneScript
 
         AotValueReference* visitValueAccess(const LabeledValueReferenceContext* ctx)
         {
-            return new AotValueReference(getVar(ctx->value->identifier));
+            return new AotValueReference(getVar(ctx->identifier));
         }
 
         AotNode* visitExpression(const ExpressionContext* ctx)
@@ -337,42 +337,12 @@ namespace BraneScript
             // Pre-register every function so that linking works correctly
 
             int16_t funcIndex = 0;
-            for(auto& exp : script->exports)
-            {
-                for(auto& s : exp.second->structs)
-                {
-                    for(auto& f : s->functions)
-                        _compileCtx->functionIndices.insert({f->signature(), funcIndex++});
-                }
-                for(auto& f : exp.second->functions)
-                    _compileCtx->functionIndices.insert({f->signature(), funcIndex++});
-            }
-            for(auto& s : script->structs)
-            {
-                for(auto& f : s->functions)
-                    _compileCtx->functionIndices.insert({f->signature(), funcIndex++});
-            }
-            for(auto& f : script->functions)
+            for(auto& f : script->callOrder)
                 _compileCtx->functionIndices.insert({f->signature(), funcIndex++});
 
             // Visit and compile functions
-            for(auto& exp : script->exports)
-            {
-                for(auto& s : exp.second->structs)
-                {
-                    for(auto& f : s->functions)
-                        visitFunction(f.get());
-                }
-                for(auto& f : exp.second->functions)
-                    visitFunction(f.get());
-            }
-            for(auto& s : script->structs)
-            {
-                for(auto& f : s->functions)
-                    visitFunction(f.get());
-            }
-            for(auto& f : script->functions)
-                visitFunction(f.get());
+            for(auto& f : script->callOrder)
+                visitFunction(f);
         }
 
       public:
@@ -545,7 +515,12 @@ namespace BraneScript
     {
         assert(!sig.empty());
         if(functionIndices.contains(sig))
-            return functionIndices.at(sig);
+        {
+            int16_t index = functionIndices.at(sig);
+            if(index > (int16_t)script->localFunctions.size())
+                throw std::runtime_error("Function order error! Function " + sig + " has not been compiled yet");
+            return index;
+        }
         int16_t index = -static_cast<int16_t>(script->linkedFunctions.size() + 1);
         functionIndices.insert({sig, index});
         script->linkedFunctions.push_back(sig);

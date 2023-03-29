@@ -84,8 +84,10 @@ namespace lsp
 
         virtual std::any visitStructDef(braneParser::StructDefContext* ctx) override
         {
+            visit(ctx->template_);
             appendToken(ctx->id, TokenType::Type);
-            return visitChildren(ctx);
+            visit(ctx->structMembers());
+            return {};
         }
 
         virtual std::any visitConstString(braneParser::ConstStringContext* ctx) override
@@ -133,11 +135,17 @@ namespace lsp
 
         virtual std::any visitFunction(braneParser::FunctionContext* ctx) override
         {
-            visit(ctx->type());
-            appendToken(ctx->id, TokenType::Function, TokenModifiers_Definition);
+            visit(ctx->sig);
+            appendToken(ctx->sig->id, TokenType::Function, TokenModifiers_Definition);
             visit(ctx->arguments);
             for(auto& stmt : ctx->statement())
                 visit(stmt);
+            return {};
+        }
+
+        virtual std::any visitTemplateArgument(braneParser::TemplateArgumentContext* ctx) override
+        {
+            appendToken(ctx->id, TokenType::Type);
             return {};
         }
 

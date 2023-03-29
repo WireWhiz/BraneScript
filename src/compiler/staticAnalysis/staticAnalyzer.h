@@ -8,6 +8,11 @@
 #include <vector>
 #include <mutex>
 
+namespace antlr4
+{
+    class ParserRuleContext;
+}
+
 namespace BraneScript
 {
     class Library;
@@ -23,6 +28,7 @@ namespace BraneScript
       public:
         struct AnalyzationContext
         {
+            std::string source;
             std::string document;
             std::unique_ptr<ScriptContext> scriptContext;
             std::vector<AnalyzationMessage> errors;
@@ -32,17 +38,14 @@ namespace BraneScript
             std::mutex lock;
         };
       private:
-        struct IdentifierContext
-        {
-            std::vector<DocumentContext*> identifiers;
-        };
 
         std::vector<std::string> _workspaceRoots;
         robin_hood::unordered_map<const Library*, std::unique_ptr<LibraryContext>> _nativeLibraries;
         robin_hood::unordered_map<std::string, std::unique_ptr<LibrarySet>> _libraries;
         robin_hood::unordered_map<std::string, std::unique_ptr<AnalyzationContext>> _analyzationContexts;
 
-        robin_hood::unordered_map<std::string, > _functionTemplates;
+        // First key is library/export name, second is the document that the section of text was exported from
+        robin_hood::unordered_map<std::string, robin_hood::unordered_map<std::string, std::string>> exportedTemplateText;
 
       public:
         StaticAnalyzer();
@@ -63,6 +66,8 @@ namespace BraneScript
         void registerLibrary(LibraryContext* lib);
         void deregisterLibrary(LibraryContext* lib);
         LibrarySet* getLibrary(const std::string& id);
+
+        void appendTemplateHeaders(const std::string& lib, const std::string& currentDocument, std::string& stream);
 
 
         /**

@@ -25,6 +25,12 @@ public:
 
     virtual std::any visitGlobal(braneParser::GlobalContext *context) = 0;
 
+    virtual std::any visitTemplateArgument(braneParser::TemplateArgumentContext *context) = 0;
+
+    virtual std::any visitTemplateDef(braneParser::TemplateDefContext *context) = 0;
+
+    virtual std::any visitTemplateArgs(braneParser::TemplateArgsContext *context) = 0;
+
     virtual std::any visitType(braneParser::TypeContext *context) = 0;
 
     virtual std::any visitDeclaration(braneParser::DeclarationContext *context) = 0;
@@ -32,6 +38,8 @@ public:
     virtual std::any visitArgumentList(braneParser::ArgumentListContext *context) = 0;
 
     virtual std::any visitArgumentPack(braneParser::ArgumentPackContext *context) = 0;
+
+    virtual std::any visitFunctionSig(braneParser::FunctionSigContext *context) = 0;
 
     virtual std::any visitFunctionStub(braneParser::FunctionStubContext *context) = 0;
 
