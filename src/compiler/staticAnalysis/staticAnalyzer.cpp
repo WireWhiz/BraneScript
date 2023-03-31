@@ -105,8 +105,10 @@ namespace BraneScript
                 Function,
                 Struct
             } type;
+
             antlr4::ParserRuleContext* root;
             std::vector<std::unique_ptr<TemplateArgDefContext>> args;
+
             TemplateHandle(Type type, antlr4::ParserRuleContext* root, const std::vector<TemplateArgDefContext*>& args)
             {
                 this->type = type;
@@ -639,11 +641,13 @@ namespace BraneScript
             {
                 if(_instantiatingTemplate && _templateArgs.contains(output.type.identifier))
                 {
-                    if(auto* tempType = dynamic_cast<TemplateTypeArgContext*>(_templateArgs.at(output.type.identifier).get()))
+                    if(auto* tempType =
+                           dynamic_cast<TemplateTypeArgContext*>(_templateArgs.at(output.type.identifier).get()))
                     {
                         output = tempType->value;
                     }
-                    else if(auto* tempTypePack = dynamic_cast<TemplateTypePackArgContext*>(_templateArgs.at(output.type.identifier).get()))
+                    else if(auto* tempTypePack = dynamic_cast<TemplateTypePackArgContext*>(
+                                _templateArgs.at(output.type.identifier).get()))
                         recordError(ctx->id, "Cannot use an argument pack as a type!");
                 }
                 else
@@ -721,13 +725,14 @@ namespace BraneScript
                 }
                 else
                 {
-                    assert(false); //TODO argument packs
+                    assert(false); // TODO argument packs
                 }
             }
             return arg == args.size();
         }
 
-        FunctionContext* instantiateTemplateFunction(const std::string& identifier, const std::vector<ValueContext>& args)
+        FunctionContext* instantiateTemplateFunction(const std::string& identifier,
+                                                     const std::vector<ValueContext>& args)
         {
             if(!_registeredTemplates.contains(identifier))
                 return nullptr;
@@ -739,10 +744,11 @@ namespace BraneScript
             FunctionContext* generated = nullptr;
             if(populateTemplateArgs(temp.get(), args))
             {
-                generated = std::any_cast<FunctionContext*>(visitFunction(dynamic_cast<braneParser::FunctionContext*>(temp->root)));
+                generated = std::any_cast<FunctionContext*>(
+                    visitFunction(dynamic_cast<braneParser::FunctionContext*>(temp->root)));
             }
 
-            _templateArgs.clear(); //TODO only remove the ones we added to support nested templates
+            _templateArgs.clear(); // TODO only remove the ones we added to support nested templates
 
             if(_templateArgs.empty())
                 _instantiatingTemplate = false;
@@ -858,7 +864,8 @@ namespace BraneScript
             {
                 std::string id = safeGetText(ctx->sig->id);
                 auto args = std::any_cast<std::vector<TemplateArgDefContext*>>(visit(ctx->sig->template_));
-                _registeredTemplates.emplace(safeGetText(ctx->sig->id), new TemplateHandle(TemplateHandle::Function, ctx, args));
+                _registeredTemplates.emplace(safeGetText(ctx->sig->id),
+                                             new TemplateHandle(TemplateHandle::Function, ctx, args));
                 return (FunctionContext*)nullptr;
             }
 
@@ -1899,14 +1906,16 @@ namespace BraneScript
 
     void StaticAnalyzer::addWorkspace(const std::string& path)
     {
+        std::cout << "Loading workspace " << path << std::endl;
         assert(std::filesystem::exists(path));
-        for(const auto& entry : std::filesystem::recursive_directory_iterator{path})
+        for(auto& entry : std::filesystem::recursive_directory_iterator(path, std::filesystem::directory_options::skip_permission_denied))
         {
+            assert(std::filesystem::exists(entry));
             if(!entry.is_regular_file())
                 continue;
             if(entry.path().extension() != ".bs")
                 continue;
-            load(entry.path().string(), false);
+            load(entry.path().generic_string(), false);
         }
         _workspaceRoots.push_back(path);
     }

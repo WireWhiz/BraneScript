@@ -1,11 +1,11 @@
 
+/*
 #include "testing.h"
 
 #include "compiler.h"
 #include "scriptRuntime.h"
 #include "script.h"
 #include "linker.h"
-/*
 
 using namespace BraneScript;
 

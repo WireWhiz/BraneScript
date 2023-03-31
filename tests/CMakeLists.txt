@@ -12,8 +12,9 @@ add_executable(bs_tests
         objectTests.cpp
         speedTests.cpp
         stringTests.cpp
+        templateTests.cpp
         globalVariableTests.cpp
-        lambdaTests.cpp templateTests.cpp)
+        lambdaTests.cpp)
 target_link_libraries(bs_tests PUBLIC GTest::gtest_main BraneScriptCompiler)
 target_compile_definitions(bs_tests PUBLIC TESTS)
 
