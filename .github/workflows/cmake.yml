@@ -20,6 +20,19 @@ jobs:
     steps:
     - uses: actions/checkout@v3
 
+    - name: Load conan cache
+      id: cache-conan
+      uses: actions/cache@v3
+      env:
+        cache-name: cache-node-modules
+      with:
+        path: ~/.conan
+        key: ${{ runner.os }}-build-${{ env.cache-name }}-${{ hashFiles('conanfile.txt') }}
+        restore-keys: |
+          ${{ runner.os }}-build-${{ env.cache-name }}-
+          ${{ runner.os }}-build-
+          ${{ runner.os }}-
+
     - name: Install & configure conan
       run: |
         pip install --upgrade conan==2.0.2
