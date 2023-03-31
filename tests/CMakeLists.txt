@@ -18,4 +18,4 @@ target_link_libraries(bs_tests PUBLIC GTest::gtest_main BraneScriptCompiler)
 target_compile_definitions(bs_tests PUBLIC TESTS)
 
 include(GoogleTest)
-gtest_discover_tests(bs_tests)
+gtest_discover_tests(bs_tests WORKING_DIRECTORY ${CMAKE_BINARY_DIR}/executables)
