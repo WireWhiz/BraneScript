@@ -7,5 +7,5 @@ add_executable(BraneScriptLspServer
         lspServer.cpp
         lspMessage.cpp tokenSerializer.cpp tokenSerializer.h)
 target_compile_definitions(BraneScriptLspServer PUBLIC )
-target_link_libraries(BraneScriptLspServer PUBLIC asio::asio jsoncpp::jsoncpp BraneScriptCompiler)
+target_link_libraries(BraneScriptLspServer PUBLIC asio::asio JsonCpp::JsonCpp BraneScriptCompiler)
 target_include_directories(BraneScriptLspServer PUBLIC ${robin_hood_INCLUDE_DIRS})
