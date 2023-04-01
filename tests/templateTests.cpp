@@ -31,6 +31,11 @@ TEST(BraneScript, Templates)
         return add<int, int>(a, b);
     }
 
+    int addIntExplicit2(int a, int b)
+    {
+        return add<int, int>(a, b) + add<int, int>(a, b);
+    }
+
     float addFloatExplicit(float a, float b)
     {
         return add<float, float>(a, b);
@@ -45,6 +50,9 @@ TEST(BraneScript, Templates)
     auto* ir = compiler.compile(analyzer.getCtx("test")->scriptContext.get());
     ASSERT_TRUE(ir);
 
+    //Make sure that the amount of functions generated is what we expect (make sure there are no duplicate template instances)
+    EXPECT_EQ(ir->localFunctions.size(), 5);
+
     ScriptRuntime rt;
     Script* testScript = rt.assembleScript(ir);
     ASSERT_TRUE(testScript);
@@ -56,6 +64,11 @@ TEST(BraneScript, Templates)
     auto addIntExplicit = testScript->getFunction<int, int, int>("addIntExplicit");
     ASSERT_TRUE(addIntExplicit);
     EXPECT_EQ(addIntExplicit(2, 4), 6);
+
+    //Make sure templates are only instantiated once
+    auto addIntExplicit2 = testScript->getFunction<int, int, int>("addIntExplicit2");
+    ASSERT_TRUE(addIntExplicit2);
+    EXPECT_EQ(addIntExplicit2(4, 5), 18);
 
     auto addFloatExplicit = testScript->getFunction<float, float, float>("addFloatExplicit");
     ASSERT_TRUE(addFloatExplicit);

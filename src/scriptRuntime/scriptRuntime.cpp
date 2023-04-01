@@ -288,6 +288,9 @@ namespace BraneScript
         JitErrorHandler errorHandler;
         for(auto& func : irScript->localFunctions)
         {
+            if(script->functionNames.contains(func.sig))
+                throw std::runtime_error("Attempted to load function with signature that is already in use");
+
             AssemblyCtx ctx;
             asmjit::CodeHolder ch;
             ctx.currentFunction = &func;

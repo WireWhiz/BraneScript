@@ -731,7 +731,7 @@ namespace BraneScript
             return arg == args.size();
         }
 
-        FunctionContext* instantiateTemplateFunction(const std::string& identifier,
+        FunctionContext* getTemplateFunctionInstance(const std::string& identifier,
                                                      const std::vector<ValueContext>& args)
         {
             if(!_registeredTemplates.contains(identifier))
@@ -908,7 +908,12 @@ namespace BraneScript
             }
 
             if(func->version == _result.version)
+            {
+                // If we are attempting to instantiate a template, but it turns out we already have, just return the existing one
+                if(_instantiatingTemplate)
+                    return func;
                 recordError(ctx->functionSig()->id, "Redefinition of already existing function!");
+            }
             bool cachedFHR = _functionHasReturn;
             _functionHasReturn = false;
 
@@ -1639,7 +1644,7 @@ namespace BraneScript
                 std::vector<ValueContext> args;
                 for(auto& arg : ctx->template_->type())
                     args.push_back(std::any_cast<ValueContext>(visitType(arg)));
-                if(FunctionContext* func = instantiateTemplateFunction(identifier, args))
+                if(FunctionContext* func = getTemplateFunctionInstance(identifier, args))
                 {
                     callCtx->function = func;
                     callCtx->returnType = func->returnType;
