@@ -106,13 +106,15 @@ namespace BraneScript
                 Struct
             } type;
 
+            DocumentContext* parent = nullptr;
             antlr4::ParserRuleContext* root;
             std::vector<std::unique_ptr<TemplateArgDefContext>> args;
 
-            TemplateHandle(Type type, antlr4::ParserRuleContext* root, const std::vector<TemplateArgDefContext*>& args)
+            TemplateHandle(Type type, antlr4::ParserRuleContext* root, DocumentContext* parent, const std::vector<TemplateArgDefContext*>& args)
             {
                 this->type = type;
                 this->root = root;
+                this->parent = parent;
                 for(auto& arg : args)
                     this->args.emplace_back(arg);
             }
@@ -245,6 +247,21 @@ namespace BraneScript
             if(!token)
                 return "";
             return token->getText();
+        }
+
+
+
+        std::string templateArgsToString(const std::vector<ValueContext>& args)
+        {
+            std::string str = "<";
+            for(int i = 0; i < args.size(); ++i)
+            {
+                str += args[i].signature();
+                if(i != args.size() - 1)
+                    str += ",";
+            }
+            str += ">";
+            return str;
         }
 
         std::string functionSig(const std::string& identifier, const std::vector<ValueContext> args)
@@ -637,6 +654,19 @@ namespace BraneScript
             output.isConst = ctx->isConst;
             output.isRef = ctx->isRef;
 
+            if(ctx->template_)
+            {
+                std::vector<ValueContext> args;
+                for(auto& arg : ctx->template_->type())
+                    args.push_back(std::any_cast<ValueContext>(visitType(arg)));
+                auto* tempStruct = getTemplateStructInstance(output.type.identifier, args);
+                if(tempStruct)
+                {
+                    output.type.identifier = tempStruct->identifier;
+                    output.type.storageType = ValueType::Struct;
+                }
+            }
+
             if(output.type.storageType == ValueType::Void && output.type.identifier != "void")
             {
                 if(_instantiatingTemplate && _templateArgs.contains(output.type.identifier))
@@ -653,6 +683,7 @@ namespace BraneScript
                 else
                     recordError(ctx->id, "Type " + output.type.identifier + " does not exist!");
             }
+
             if(output.type.storageType == ValueType::Struct)
             {
                 auto* sCtx = getStructCtx(output.type.identifier);
@@ -731,6 +762,32 @@ namespace BraneScript
             return arg == args.size();
         }
 
+        StructContext* getTemplateStructInstance(const std::string& identifier,
+                                                     const std::vector<ValueContext>& args)
+        {
+            if(!_registeredTemplates.contains(identifier))
+                return nullptr;
+            auto& temp = _registeredTemplates.at(identifier);
+            if(temp->type != TemplateHandle::Struct)
+                return nullptr;
+            _instantiatingTemplate = true;
+
+            StructContext* generated = nullptr;
+            if(populateTemplateArgs(temp.get(), args))
+            {
+                _documentContext.push(temp->parent);
+                generated = std::any_cast<StructContext*>(
+                    visitStructDef(dynamic_cast<braneParser::StructDefContext*>(temp->root)));
+                _documentContext.pop();
+            }
+
+            _templateArgs.clear(); // TODO only remove the ones we added to support nested templates
+
+            if(_templateArgs.empty())
+                _instantiatingTemplate = false;
+            return generated;
+        }
+
         FunctionContext* getTemplateFunctionInstance(const std::string& identifier,
                                                      const std::vector<ValueContext>& args)
         {
@@ -744,8 +801,10 @@ namespace BraneScript
             FunctionContext* generated = nullptr;
             if(populateTemplateArgs(temp.get(), args))
             {
+                _documentContext.push(temp->parent);
                 generated = std::any_cast<FunctionContext*>(
                     visitFunction(dynamic_cast<braneParser::FunctionContext*>(temp->root)));
+                _documentContext.pop();
             }
 
             _templateArgs.clear(); // TODO only remove the ones we added to support nested templates
@@ -813,6 +872,22 @@ namespace BraneScript
                 o.id = "opr " + safeGetText(ctx->oprID);
             else if(ctx->castType)
                 o.id = "opr " + o.returnType.signature();
+
+            //Modify id if we are instantiating a template
+            if(_instantiatingTemplate && ctx->template_)
+            {
+                std::vector<ValueContext> args;
+                for(auto& arg : ctx->template_->templateArgument())
+                {
+                    std::string argId = safeGetText(arg->id);
+                    assert(!arg->isPack);
+                    auto argInstance = dynamic_cast<TemplateTypeArgContext*>(_templateArgs.at(argId).get());
+                    assert(argInstance);
+                    args.push_back(argInstance->value);
+                }
+                o.id += templateArgsToString(args);
+            }
+
             return o;
         }
 
@@ -865,7 +940,7 @@ namespace BraneScript
                 std::string id = safeGetText(ctx->sig->id);
                 auto args = std::any_cast<std::vector<TemplateArgDefContext*>>(visit(ctx->sig->template_));
                 _registeredTemplates.emplace(safeGetText(ctx->sig->id),
-                                             new TemplateHandle(TemplateHandle::Function, ctx, args));
+                                             new TemplateHandle(TemplateHandle::Function, ctx, lastNode(), args));
                 return (FunctionContext*)nullptr;
             }
 
@@ -989,7 +1064,39 @@ namespace BraneScript
                 structs = &lastNode()->as<LibraryContext>()->structs;
             assert(structs);
 
-            auto structCtx = getNode(*structs, safeGetText(ctx->id));
+            std::string id = safeGetText(ctx->id);
+
+            // Register template
+            if(ctx->template_ && !_instantiatingTemplate)
+            {
+                auto args = std::any_cast<std::vector<TemplateArgDefContext*>>(visit(ctx->template_));
+                _registeredTemplates.emplace(id, new TemplateHandle(TemplateHandle::Struct, ctx, lastNode(), args));
+                return (StructContext*)nullptr;
+            }
+
+            //Modify id if we are instantiating a template
+            if(ctx->template_)
+            {
+                std::vector<ValueContext> args;
+                for(auto& arg : ctx->template_->templateArgument())
+                {
+                    std::string argId = safeGetText(arg->id);
+                    assert(!arg->isPack);
+                    auto argInstance = dynamic_cast<TemplateTypeArgContext*>(_templateArgs.at(argId).get());
+                    assert(argInstance);
+                    args.push_back(argInstance->value);
+                }
+                id += templateArgsToString(args);
+            }
+
+            auto structCtx = getNode(*structs, id);
+            if(structCtx->version == _result.version)
+            {
+                if(_instantiatingTemplate)
+                    return structCtx;
+                recordError(ctx->id, "Structure with this identifier has already been defined!");
+            }
+
             initDoc(structCtx, ctx);
             visitChildren(ctx);
 
@@ -1230,7 +1337,7 @@ namespace BraneScript
             pruneNodes(structCtx->variables);
             pruneNodes(structCtx->functions);
 
-            return {};
+            return structCtx;
         }
 
         std::any visitScope(braneParser::ScopeContext* ctx) override

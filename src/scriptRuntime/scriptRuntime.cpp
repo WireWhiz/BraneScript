@@ -236,7 +236,7 @@ namespace BraneScript
 
         // Generate local struct typedefs
         std::vector<std::unique_ptr<StructDef>> localStructs;
-        for(auto& s : irScript->localStructs)
+        for(auto& s : irScript->publicStructs)
         {
             assert(_linker);
             auto def = std::make_unique<StructDef>(s.name);

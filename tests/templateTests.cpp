@@ -40,6 +40,21 @@ TEST(BraneScript, Templates)
     {
         return add<float, float>(a, b);
     }
+
+    template<T1, T2>
+    struct TestPair
+    {
+        T1 first;
+        T2 second;
+    }
+
+    TestPair<int, float> generatePair(int a, float b)
+    {
+        TestPair<int, float> output;
+        output.first = a;
+        output.second = b;
+        return output;
+    }
 )";
     StaticAnalyzer analyzer;
     analyzer.load("test", testString);
@@ -50,8 +65,12 @@ TEST(BraneScript, Templates)
     auto* ir = compiler.compile(analyzer.getCtx("test")->scriptContext.get());
     ASSERT_TRUE(ir);
 
-    //Make sure that the amount of functions generated is what we expect (make sure there are no duplicate template instances)
-    EXPECT_EQ(ir->localFunctions.size(), 5);
+    /* Make sure that the amount of functions generated is what we expect (make sure there are no duplicate template instances)
+     * getter functions = 4
+     * global function template instances = 2
+     * template struct constructors = 4
+     */
+    EXPECT_EQ(ir->localFunctions.size(), 10);
 
     ScriptRuntime rt;
     Script* testScript = rt.assembleScript(ir);
@@ -73,4 +92,13 @@ TEST(BraneScript, Templates)
     auto addFloatExplicit = testScript->getFunction<float, float, float>("addFloatExplicit");
     ASSERT_TRUE(addFloatExplicit);
     EXPECT_EQ(addFloatExplicit(2.0f, 4.0f), 6.0f);
+
+    using TestPair = std::pair<int, float>;
+    auto generatePair = testScript->getFunction<TestPair*, int, float>("generatePair");
+    ASSERT_TRUE(generatePair);
+    TestPair*  testPair = generatePair(32, 42.0f);
+    ASSERT_TRUE(testPair);
+    EXPECT_EQ(testPair->first, 32);
+    EXPECT_EQ(testPair->second, 42.0f);
+    delete testPair;
 }
