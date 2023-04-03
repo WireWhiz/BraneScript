@@ -102,6 +102,7 @@ namespace BraneScript
         {
             enum Type
             {
+                Any,
                 Function,
                 Struct
             } type;
@@ -110,7 +111,10 @@ namespace BraneScript
             antlr4::ParserRuleContext* root;
             std::vector<std::unique_ptr<TemplateArgDefContext>> args;
 
-            TemplateHandle(Type type, antlr4::ParserRuleContext* root, DocumentContext* parent, const std::vector<TemplateArgDefContext*>& args)
+            TemplateHandle(Type type,
+                           antlr4::ParserRuleContext* root,
+                           DocumentContext* parent,
+                           const std::vector<TemplateArgDefContext*>& args)
             {
                 this->type = type;
                 this->root = root;
@@ -249,8 +253,6 @@ namespace BraneScript
             return token->getText();
         }
 
-
-
         std::string templateArgsToString(const std::vector<ValueContext>& args)
         {
             std::string str = "<";
@@ -290,90 +292,127 @@ namespace BraneScript
             return sig;
         }
 
-        ValueType getValueType(const std::string& identifier)
-        {
-            if(_nativeTypes.contains(identifier))
-                return _nativeTypes.at(identifier).storageType;
-            if(getStructCtx(identifier))
-                return ValueType::Struct;
-            return ValueType::Void;
-        }
-
         /**
          * Is this DocumentContext a child of the current ScriptContext being constructed
          */
-        bool isLocal(DocumentContext* node) const
+        bool isLocal(const DocumentContext* node) const
         {
             if(!node)
                 return false;
-            return node->getParent<ScriptContext>() == _result.scriptContext.get();
+            return node->getParent<const ScriptContext>() == _result.scriptContext.get();
         }
 
         /**
-         * @brief Get the document node corresponding to an identifier respecting namespaces
+         * Is this DocumentContext a child of a library
          */
-        DocumentContext* getIdentifierContext(const std::string& identifier, DocumentContext* base = nullptr)
+        bool isExported(const DocumentContext* node) const
         {
-            if(identifier.empty())
-                return nullptr;
-            if(base == nullptr)
-                base = lastNode();
+            if(!node)
+                return false;
+            return node->getParent<const LibraryContext>();
+        }
 
-            // Extract library/struct name
-            std::string prefix;
-            auto delimPos = identifier.find("::");
-            bool delimFound = delimPos != std::string::npos;
-            if(delimFound)
-                prefix = {identifier.data(), delimPos};
-            else
-                prefix = identifier;
-
-            // Search libraries aliases first, so we don't accidentally get restricted to the scope of a local export
-            DocumentContext* ident = nullptr;
+        DocumentContext* getIdentifierContextFromLibs(const std::string& identifier)
+        {
             for(auto& imp : _result.scriptContext->imports)
             {
-                if(!imp.alias.empty() && imp.alias != prefix)
+                if(!imp.alias.empty())
                     continue;
-                if(imp.alias.empty() && imp.library != prefix)
+                auto lib = _analyzer.getLibrary(imp.library);
+                if(!lib)
                     continue;
-                ident = _analyzer.getLibrary(imp.library);
-                if(ident)
-                    break;
+                if(auto* ident = lib->findIdentifier(identifier, IDSearchOptions_ChildrenOnly))
+                    return ident;
+            }
+            return nullptr;
+        }
+
+        DocumentContext* getIdentifierContext(const std::string& identifier)
+        {
+            if(auto* libCtx = _analyzer.getLibrary(identifier))
+                return libCtx;
+            if(auto* localCtx = lastNode()->findIdentifier(identifier, IDSearchOptions_ParentsOnly))
+                return localCtx;
+            if(auto* libMemberCtx = getIdentifierContextFromLibs(identifier))
+                return libMemberCtx;
+
+            for(auto& alias : _result.scriptContext->imports)
+            {
+                if(identifier == alias.alias)
+                    return _analyzer.getLibrary(alias.library);
+            }
+            return nullptr;
+        }
+
+        DocumentContext* getIdentifierContext(braneParser::ScopedIDContext* ctx, DocumentContext* parent = nullptr)
+        {
+            ASSERT_EXISTS(ctx->id);
+
+            DocumentContext* found = nullptr;
+            std::string id = ctx->id->getText();
+
+            if(ctx->template_)
+            {
+                std::vector<ValueContext> args;
+                for(auto& arg : ctx->template_->type())
+                    args.push_back(std::any_cast<ValueContext>(visitType(arg)));
+                if(parent)
+                    id = parent->longId() + "::" + id;
+                found = getTemplateInstance(id, args);
+                if(!found)
+                    recordError(ctx->template_, +"\"" + id + "\" is not a template!");
+                return found;
             }
 
-            if(!ident)
-                ident = base->findIdentifier(prefix, IDSearchOptions_ParentsOnly);
+            if(!parent)
+                found = getIdentifierContext(id );
+            else
+                found = parent->findIdentifier(id, IDSearchOptions_ChildrenOnly);
 
-            // Search linked libraries
-            if(!ident)
+            if(!found)
+                return nullptr;
+
+            if(ctx->child)
+                return getIdentifierContext(ctx->child, found);
+            return found;
+        }
+
+        TypeContext getTypeContext(braneParser::ScopedIDContext* ctx)
+        {
+            ASSERT_EXISTS(ctx->id);
+            TypeContext output;
+            output.identifier = ctx->id->getText();
+            if(output.identifier == "void")
+                return output;
+
+            if(_nativeTypes.contains(output.identifier))
             {
-                for(auto& imp : _result.scriptContext->imports)
+                output.storageType = _nativeTypes.at(output.identifier).storageType;
+                if(ctx->template_)
+                    recordError(ctx->child, "Native type " + output.identifier + " is not a template");
+                if(ctx->child)
+                    recordError(ctx->child, "Native type " + output.identifier + " has no members");
+                return output;
+            }
+
+            if(auto* sCtx = dynamic_cast<StructContext*>(getIdentifierContext(ctx)))
+            {
+                output.identifier = sCtx->longId();
+                output.structDef = sCtx;
+                output.storageType = ValueType::Struct;
+
+                if(!_extractOnlyIdentifiers && isLocal(sCtx))
                 {
-                    if(!imp.alias.empty())
-                        continue;
-                    auto lib = _analyzer.getLibrary(imp.library);
-                    if(!lib)
-                        continue;
-                    ident = lib->findIdentifier(identifier, IDSearchOptions_ChildrenOnly);
-                    if(ident)
-                        return ident;
+                    if(auto* parentFunc = lastNode()->getParent<FunctionContext>())
+                    {
+                        callTree.addDependency(parentFunc, sCtx->destructor);
+                        callTree.addDependency(parentFunc, sCtx->moveConstructor);
+                        callTree.addDependency(parentFunc, sCtx->copyConstructor);
+                    }
                 }
             }
 
-            if(!delimFound)
-                return ident;
-
-            // Find sub-symbols. Mostly used when linking to external libraries.
-            if(ident->is<LibrarySet>() || ident->is<LibraryContext>() || ident->is<StructContext>())
-                return getIdentifierContext({identifier.data() + delimPos + 2, identifier.size() - delimPos - 2},
-                                            ident);
-
-            return ident;
-        }
-
-        StructContext* getStructCtx(const std::string& identifier)
-        {
-            return getIdentifierContext(identifier)->as<StructContext>();
+            return output;
         }
 
         bool implicitCastViable(const ValueContext& current, const ValueContext& target)
@@ -446,40 +485,88 @@ namespace BraneScript
             return result;
         }
 
-        bool resolveFunctionCall(const std::string& identifier,
+        /**
+         * @return Returns a pair, with the first member being the parent context of the last element in the scoped id
+         * and the second is the last child. The first member is null if there is only one element in the scoped id.
+         */
+        std::pair<DocumentContext*, braneParser::ScopedIDContext*> getLastScopedID(braneParser::ScopedIDContext* idCtx, braneParser::ScopedIDContext* first = nullptr)
+        {
+            if(!first)
+                first = idCtx;
+            if(idCtx->child)
+                return getLastScopedID(idCtx->child, first);
+
+            std::pair<DocumentContext*, braneParser::ScopedIDContext*> output = {
+                nullptr,
+                idCtx
+            };
+
+            if(first != idCtx)
+            {
+                auto parent = dynamic_cast<braneParser::ScopedIDContext*>(idCtx->parent);
+                parent->child = nullptr;
+                output.first = getIdentifierContext(first);
+                parent->child = idCtx;
+            }
+            return output;
+        }
+
+        bool resolveFunctionCall(braneParser::ScopedIDContext* idCtx,
                                  FunctionCallContext* context,
                                  std::string& error,
                                  bool autoCast = true)
         {
-            DocumentContext* base = lastNode();
-            // Extract library/struct name path
-            auto delimPos = identifier.find_last_of("::");
-            bool delimFound = delimPos != std::string::npos;
-            std::string postfix;
-            if(delimFound)
+            auto functionID = getLastScopedID(idCtx);
+            std::string name = safeGetText(functionID.second->id);
+            if(idCtx->child && !functionID.first)
             {
-                std::string prefix = {identifier.data(), delimPos - 1};
-                base = getIdentifierContext(prefix);
-                if(!base)
-                {
-                    error += "Could not find library or object \"" + prefix + "\"";
-                    return false;
-                }
-                postfix = std::string{identifier.data() + delimPos + 1, identifier.size() - delimPos - 1};
+                error += "Namespace could not be found";
+                return false;
+            }
+            return resolveFunctionCall(name, context, error, functionID.first, functionID.second->template_, autoCast);
+        }
+
+        bool resolveFunctionCall(
+                                 const std::string& name,
+                                 FunctionCallContext* context,
+                                 std::string& error,
+                                 DocumentContext* scope = nullptr,
+                                 braneParser::TemplateArgsContext* tempArgsCtx = nullptr,
+                                 bool autoCast = true)
+        {
+
+            std::list<FunctionContext*> overrides;
+
+            if(tempArgsCtx)
+            {
+                std::string longID = name;
+                if(scope)
+                    longID = scope->longId() + "::" + name;
+                auto tempArgs = std::any_cast<std::vector<ValueContext>>(visitTemplateArgs(tempArgsCtx));
+
+                auto tempFunction = dynamic_cast<FunctionContext*>(getTemplateInstance(longID, tempArgs, TemplateHandle::Function));
+                if(tempFunction)
+                    overrides.push_back(tempFunction);
             }
             else
-                postfix = identifier;
-            std::list<FunctionContext*> overrides;
-            base->getFunction(postfix, overrides);
-
-            for(auto& imp : _result.scriptContext->imports)
             {
-                if(!imp.alias.empty())
-                    continue;
-                auto lib = _analyzer.getLibrary(imp.library);
-                if(!lib)
-                    continue;
-                lib->getFunction(identifier, overrides);
+                if(scope)
+                    scope->getFunction(name, overrides, IDSearchOptions_ChildrenOnly);
+                else
+                {
+                    lastNode()->getFunction(name, overrides, IDSearchOptions_ParentsOnly);
+                    for(auto& imp : _result.scriptContext->imports)
+                    {
+                        if(!imp.alias.empty())
+                            continue;
+                        auto lib = _analyzer.getLibrary(imp.library);
+                        if(!lib)
+                            continue;
+                        lib->getFunction(name, overrides, IDSearchOptions_ChildrenOnly);
+                    }
+                }
+
+                //this is where automatically finding templates without explicit arguments would go
             }
 
             /* We want to find the best match with the lowest amount of implicit casts. So we store the cast count for
@@ -510,7 +597,7 @@ namespace BraneScript
 
             if(!bestMatch)
             {
-                error += "Could not find override of function \"" + identifier + "\" with arguments: ";
+                error += "Could not find override of function \"" + (scope ? scope->longId() + "::" + name : name) + "\" with arguments: ";
                 for(auto& arg : args)
                     error += arg.signature() + ", ";
                 if(!overrides.empty())
@@ -644,28 +731,18 @@ namespace BraneScript
             return std::move(args);
         }
 
+        std::any visitScopedID(braneParser::ScopedIDContext* ctx) override
+        {
+            assert(false && "Allways call getIdentifier instead visit");
+            return {};
+        }
+
         std::any visitType(braneParser::TypeContext* ctx) override
         {
-            TypeContext type = {safeGetText(ctx->id), ValueType::Void};
-            type.storageType = getValueType(type.identifier);
-
             ValueContext output;
-            output.type = std::move(type);
+            output.type = getTypeContext(ctx->name);
             output.isConst = ctx->isConst;
             output.isRef = ctx->isRef;
-
-            if(ctx->template_)
-            {
-                std::vector<ValueContext> args;
-                for(auto& arg : ctx->template_->type())
-                    args.push_back(std::any_cast<ValueContext>(visitType(arg)));
-                auto* tempStruct = getTemplateStructInstance(output.type.identifier, args);
-                if(tempStruct)
-                {
-                    output.type.identifier = tempStruct->identifier;
-                    output.type.storageType = ValueType::Struct;
-                }
-            }
 
             if(output.type.storageType == ValueType::Void && output.type.identifier != "void")
             {
@@ -678,29 +755,16 @@ namespace BraneScript
                     }
                     else if(auto* tempTypePack = dynamic_cast<TemplateTypePackArgContext*>(
                                 _templateArgs.at(output.type.identifier).get()))
-                        recordError(ctx->id, "Cannot use an argument pack as a type!");
+                        recordError(ctx->name, "Cannot use an argument pack as a type!");
                 }
                 else
-                    recordError(ctx->id, "Type " + output.type.identifier + " does not exist!");
+                    recordError(ctx->name, "Type could not be found!");
             }
 
-            if(output.type.storageType == ValueType::Struct)
-            {
-                auto* sCtx = getStructCtx(output.type.identifier);
-                output.type.identifier = sCtx->longId();
-
-                if(!_extractOnlyIdentifiers && isLocal(sCtx))
-                {
-                    if(auto* parentFunc = lastNode()->getParent<FunctionContext>())
-                    {
-                        callTree.addDependency(parentFunc, sCtx->destructor);
-                        callTree.addDependency(parentFunc, sCtx->moveConstructor);
-                        callTree.addDependency(parentFunc, sCtx->copyConstructor);
-                    }
-                }
-            }
             if(ctx->isRef && output.type.storageType != ValueType::Struct)
                 recordError(ctx, "Only struct types may be marked as ref!");
+
+            assert(output.type.storageType != ValueType::Struct || output.type.structDef);
             return output;
         }
 
@@ -719,14 +783,12 @@ namespace BraneScript
                 valueContext.identifier.text = safeGetText(ctx->id);
                 valueContext.identifier.range = toRange(ctx->id);
             }
-            if(valueContext.type.storageType == ValueType::Struct && !valueContext.isRef)
+            if(valueContext.type.structDef && !valueContext.isRef)
             {
                 if(auto* parentFunc = lastNode()->getParent<FunctionContext>())
                 {
-                    auto* sCtx = getStructCtx(valueContext.type.identifier);
-
-                    if(isLocal(sCtx))
-                        callTree.addDependency(parentFunc, sCtx->constructor);
+                    if(isLocal(valueContext.type.structDef))
+                        callTree.addDependency(parentFunc, valueContext.type.structDef->constructor);
                 }
             }
 
@@ -762,48 +824,23 @@ namespace BraneScript
             return arg == args.size();
         }
 
-        StructContext* getTemplateStructInstance(const std::string& identifier,
-                                                     const std::vector<ValueContext>& args)
+        DocumentContext* getTemplateInstance(const std::string& identifier, const std::vector<ValueContext>& args, TemplateHandle::Type expectedType = TemplateHandle::Any)
         {
             if(!_registeredTemplates.contains(identifier))
                 return nullptr;
             auto& temp = _registeredTemplates.at(identifier);
-            if(temp->type != TemplateHandle::Struct)
+            if(expectedType != TemplateHandle::Any && temp->type != expectedType)
                 return nullptr;
             _instantiatingTemplate = true;
 
-            StructContext* generated = nullptr;
+            DocumentContext* generated = nullptr;
             if(populateTemplateArgs(temp.get(), args))
             {
                 _documentContext.push(temp->parent);
-                generated = std::any_cast<StructContext*>(
-                    visitStructDef(dynamic_cast<braneParser::StructDefContext*>(temp->root)));
-                _documentContext.pop();
-            }
-
-            _templateArgs.clear(); // TODO only remove the ones we added to support nested templates
-
-            if(_templateArgs.empty())
-                _instantiatingTemplate = false;
-            return generated;
-        }
-
-        FunctionContext* getTemplateFunctionInstance(const std::string& identifier,
-                                                     const std::vector<ValueContext>& args)
-        {
-            if(!_registeredTemplates.contains(identifier))
-                return nullptr;
-            auto& temp = _registeredTemplates.at(identifier);
-            if(temp->type != TemplateHandle::Function)
-                return nullptr;
-            _instantiatingTemplate = true;
-
-            FunctionContext* generated = nullptr;
-            if(populateTemplateArgs(temp.get(), args))
-            {
-                _documentContext.push(temp->parent);
-                generated = std::any_cast<FunctionContext*>(
-                    visitFunction(dynamic_cast<braneParser::FunctionContext*>(temp->root)));
+                if(auto* structDef = dynamic_cast<braneParser::StructDefContext*>(temp->root))
+                    generated = std::any_cast<StructContext*>(visitStructDef(structDef));
+                if(auto* functionDef = dynamic_cast<braneParser::FunctionContext*>(temp->root))
+                    generated = std::any_cast<FunctionContext*>(visitFunction(functionDef));
                 _documentContext.pop();
             }
 
@@ -873,7 +910,7 @@ namespace BraneScript
             else if(ctx->castType)
                 o.id = "opr " + o.returnType.signature();
 
-            //Modify id if we are instantiating a template
+            // Modify id if we are instantiating a template
             if(_instantiatingTemplate && ctx->template_)
             {
                 std::vector<ValueContext> args;
@@ -965,7 +1002,7 @@ namespace BraneScript
             }
 
             FunctionContext* func = getFunctionNode(sig.id, arguments);
-            if(!_extractOnlyIdentifiers)
+            if(!_extractOnlyIdentifiers && isExported(func))
                 callTree.addFunction(func);
 
             func->identifier.range = toRange(ctx->sig->id);
@@ -984,7 +1021,8 @@ namespace BraneScript
 
             if(func->version == _result.version)
             {
-                // If we are attempting to instantiate a template, but it turns out we already have, just return the existing one
+                // If we are attempting to instantiate a template, but it turns out we already have, just return the
+                // existing one
                 if(_instantiatingTemplate)
                     return func;
                 recordError(ctx->functionSig()->id, "Redefinition of already existing function!");
@@ -1038,11 +1076,8 @@ namespace BraneScript
             return {};
         }
 
-        std::any visitStructMember(braneParser::StructMemberContext* ctx) override
+        std::any visitMemberVariable(braneParser::MemberVariableContext* ctx) override
         {
-            assert(lastNode()->is<StructContext>());
-            if(!ctx->var)
-                return visitChildren(ctx);
             ASSERT_EXISTS(ctx->var);
             ASSERT_EXISTS(ctx->var->id);
             auto var = getNode(lastNode()->as<StructContext>()->variables, safeGetText(ctx->var->id));
@@ -1052,6 +1087,11 @@ namespace BraneScript
             // TODO default value
             popDoc();
             return {};
+        }
+
+        std::any visitMemberFunction(braneParser::MemberFunctionContext* ctx) override
+        {
+            return visitFunction(ctx->func);
         }
 
         std::any visitStructDef(braneParser::StructDefContext* ctx) override
@@ -1074,7 +1114,7 @@ namespace BraneScript
                 return (StructContext*)nullptr;
             }
 
-            //Modify id if we are instantiating a template
+            // Modify id if we are instantiating a template
             if(ctx->template_)
             {
                 std::vector<ValueContext> args;
@@ -1098,7 +1138,8 @@ namespace BraneScript
             }
 
             initDoc(structCtx, ctx);
-            visitChildren(ctx);
+            for(auto& m : ctx->structMember())
+                visit(m);
 
             structCtx->constructor = nullptr;
             structCtx->copyConstructor = nullptr;
@@ -1119,6 +1160,7 @@ namespace BraneScript
                 if(f->identifier.text == "_destruct")
                     structCtx->destructor = f.get();
             }
+            const bool structExported = isExported(structCtx);
             // Make constructor
             if(!structCtx->constructor)
             {
@@ -1150,7 +1192,7 @@ namespace BraneScript
                         auto constructCall = new FunctionCallContext{};
                         constructCall->arguments.emplace_back(memberAccess);
                         std::string error;
-                        if(!resolveFunctionCall(var->type.identifier + "::_construct", constructCall, error))
+                        if(!resolveFunctionCall("_construct", constructCall, error, var->type.structDef))
                             recordError(ctx->id, error);
 
                         if(isLocal(constructCall->function))
@@ -1159,7 +1201,8 @@ namespace BraneScript
                     }
                     varIndex++;
                 }
-                callTree.addFunction(func);
+                if(structExported)
+                    callTree.addFunction(func);
                 structCtx->constructor = func;
             }
             // Make copy constructor
@@ -1209,7 +1252,7 @@ namespace BraneScript
                         constructCall->arguments.emplace_back(memberAccess);
                         constructCall->arguments.emplace_back(otherAccess);
                         std::string error;
-                        if(!resolveFunctionCall(var->type.identifier + "::_copy", constructCall, error))
+                        if(!resolveFunctionCall("_copy", constructCall, error, var->type.structDef))
                             recordError(ctx->id, error);
                         if(isLocal(constructCall->function))
                             callTree.addDependency(func, constructCall->function);
@@ -1224,7 +1267,8 @@ namespace BraneScript
                     }
                     varIndex++;
                 }
-                callTree.addFunction(func);
+                if(structExported)
+                    callTree.addFunction(func);
                 structCtx->copyConstructor = func;
             }
             // Make move constructor
@@ -1272,7 +1316,7 @@ namespace BraneScript
                         constructCall->arguments.emplace_back(memberAccess);
                         constructCall->arguments.emplace_back(otherAccess);
                         std::string error;
-                        if(!resolveFunctionCall(var->type.identifier + "::_move", constructCall, error))
+                        if(!resolveFunctionCall("_move", constructCall, error, var->type.structDef))
                             recordError(ctx->id, error);
                         if(isLocal(constructCall->function))
                             callTree.addDependency(func, constructCall->function);
@@ -1287,7 +1331,8 @@ namespace BraneScript
                     }
                     varIndex++;
                 }
-                callTree.addFunction(func);
+                if(structExported)
+                    callTree.addFunction(func);
                 structCtx->moveConstructor = func;
             }
             // Make destructor
@@ -1321,7 +1366,7 @@ namespace BraneScript
                         auto constructCall = new FunctionCallContext{};
                         constructCall->arguments.emplace_back(memberAccess);
                         std::string error;
-                        if(!resolveFunctionCall(var->type.identifier + "::_destruct", constructCall, error))
+                        if(!resolveFunctionCall("_destruct", constructCall, error, var->type.structDef))
                             recordError(ctx->id, error);
                         if(isLocal(constructCall->function))
                             callTree.addDependency(func, constructCall->function);
@@ -1329,7 +1374,8 @@ namespace BraneScript
                     }
                     varIndex++;
                 }
-                callTree.addFunction(func);
+                if(structExported)
+                    callTree.addFunction(func);
                 structCtx->destructor = func;
             }
             structCtx->packed = ctx->packed;
@@ -1378,7 +1424,7 @@ namespace BraneScript
             }
             if(retCtx->value && retCtx->value->returnType.type.storageType == ValueType::Struct)
             {
-                auto* sCtx = getStructCtx(retCtx->value->returnType.type.identifier);
+                auto* sCtx = retCtx->value->returnType.type.structDef;
                 retCtx->value->returnType.type.identifier = sCtx->longId();
                 auto* parentFunc = lastNode()->getParent<FunctionContext>();
                 if(isLocal(sCtx))
@@ -1430,7 +1476,7 @@ namespace BraneScript
 
             if(decl->type.storageType == ValueType::Struct)
             {
-                auto* s = getStructCtx(decl->type.identifier);
+                auto* s = decl->type.structDef;
                 if(isLocal(s))
                     callTree.addDependency(lastNode()->getParent<FunctionContext>(), s->constructor);
             }
@@ -1517,6 +1563,9 @@ namespace BraneScript
             EXPR_ASSERT_EXISTS(ctx->STRING(), "constant missing");
             auto constCtx = new ConstStringContext{};
             initDoc(constCtx, ctx);
+            constCtx->returnType.type.structDef = dynamic_cast<StructContext*>(getIdentifierContext("BraneScript")->findIdentifier("string"));
+            if(!constCtx->returnType.type.structDef)
+                recordError(ctx, "To use the string type, the BraneScript library must be imported.");
             constCtx->value = ctx->getText();
             constCtx->value = {constCtx->value.data() + 1, constCtx->value.size() - 2};
             popDoc();
@@ -1685,7 +1734,7 @@ namespace BraneScript
             else
             {
                 auto& typeName = accessCtx->baseExpression->returnType.type.identifier;
-                auto type = getStructCtx(typeName);
+                auto type = accessCtx->baseExpression->returnType.type.structDef;
                 if(!type)
                     recordError(ctx, "Type " + typeName + " is not a struct");
                 if(type)
@@ -1725,8 +1774,7 @@ namespace BraneScript
                 callCtx->arguments.push_back(asExpr(visit(a)));
             popDoc();
             std::string error;
-            if(!resolveFunctionCall(
-                   callCtx->arguments[0]->returnType.type.identifier + "::" + ctx->name->getText(), callCtx, error))
+            if(!resolveFunctionCall(ctx->name->getText(), callCtx, error, callCtx->arguments[0]->returnType.type.structDef, ctx->template_))
                 recordError(ctx, error);
             else
             {
@@ -1738,40 +1786,24 @@ namespace BraneScript
 
         std::any visitFunctionCall(braneParser::FunctionCallContext* ctx) override
         {
-            EXPR_ASSERT_EXISTS(ctx->name, "expected function identifier");
+            EXPR_ASSERT_EXISTS(ctx->id, "expected function identifier");
             auto callCtx = new FunctionCallContext{};
             initDoc(callCtx, ctx);
             for(auto* a : ctx->argumentPack()->expression())
                 callCtx->arguments.push_back(asExpr(visit(a)));
 
-            std::string identifier = ctx->name->getText();
-
-            if(ctx->template_)
-            {
-                std::vector<ValueContext> args;
-                for(auto& arg : ctx->template_->type())
-                    args.push_back(std::any_cast<ValueContext>(visitType(arg)));
-                if(FunctionContext* func = getTemplateFunctionInstance(identifier, args))
-                {
-                    callCtx->function = func;
-                    callCtx->returnType = func->returnType;
-                    callTree.addDependency(lastNode()->getParent<FunctionContext>(), func);
-                    popDoc();
-                    RETURN_EXPR(callCtx);
-                }
-            }
-
             std::string error;
-            if(resolveFunctionCall(identifier, callCtx, error))
+            if(resolveFunctionCall(ctx->id, callCtx, error))
             {
                 if(isLocal(callCtx->function))
                     callTree.addDependency(lastNode()->getParent<FunctionContext>(), callCtx->function);
                 popDoc();
                 RETURN_EXPR(callCtx);
             }
-            if(!lastNode()->getParent<StructContext>())
+
+            if(ctx->id->child || !lastNode()->getParent<StructContext>())
             {
-                recordError(ctx->name, error);
+                recordError(ctx->id, error);
                 RETURN_EXPR(callCtx);
             }
             // If a non-member function was not found and this scope is in a member function, try to implicitly
@@ -1782,9 +1814,8 @@ namespace BraneScript
             initDoc(valueAccess, ctx);
 
             callCtx->arguments.insert(callCtx->arguments.begin(), std::unique_ptr<ExpressionContext>(valueAccess));
-            if(!resolveFunctionCall(
-                   valueAccess->returnType.type.identifier + "::" + ctx->name->getText(), callCtx, error))
-                recordError(ctx->name, error);
+            if(!resolveFunctionCall(ctx->id->id->getText(), callCtx, error, valueAccess->returnType.type.structDef, ctx->id->template_))
+                recordError(ctx->id, error);
             {
                 if(isLocal(callCtx->function))
                     callTree.addDependency(lastNode()->getParent<FunctionContext>(), callCtx->function);
@@ -1820,7 +1851,7 @@ namespace BraneScript
                         auto constructCall = new FunctionCallContext{};
                         constructCall->arguments.emplace_back(globalRef);
                         std::string error;
-                        if(!resolveFunctionCall(var->type.identifier + "::_construct", constructCall, error))
+                        if(!resolveFunctionCall("_construct", constructCall, error, var->type.structDef))
                             recordError(ctx->start, error);
                         if(isLocal(constructCall->function))
                             callTree.addDependency(func, constructCall->function);
@@ -1847,7 +1878,7 @@ namespace BraneScript
                         auto constructCall = new FunctionCallContext{};
                         constructCall->arguments.emplace_back(globalRef);
                         std::string error;
-                        if(!resolveFunctionCall(var->type.identifier + "::_destruct", constructCall, error))
+                        if(!resolveFunctionCall("_destruct", constructCall, error, var->type.structDef))
                             recordError(ctx->start, error);
                         if(isLocal(constructCall->function))
                             callTree.addDependency(func, constructCall->function);
@@ -2020,7 +2051,8 @@ namespace BraneScript
     {
         std::cout << "Loading workspace " << path << std::endl;
         assert(std::filesystem::exists(path));
-        for(auto& entry : std::filesystem::recursive_directory_iterator(path, std::filesystem::directory_options::skip_permission_denied))
+        for(auto& entry : std::filesystem::recursive_directory_iterator(
+                path, std::filesystem::directory_options::skip_permission_denied))
         {
             assert(std::filesystem::exists(entry));
             if(!entry.is_regular_file())

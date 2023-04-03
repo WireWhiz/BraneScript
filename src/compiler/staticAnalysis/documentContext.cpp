@@ -106,10 +106,12 @@ namespace BraneScript
         return parent->findIdentifier(identifier, searchOptions);
     }
 
-    void DocumentContext::getFunction(const std::string& identifier, std::list<FunctionContext*>& overrides)
+    void DocumentContext::getFunction(const std::string& identifier,
+                                      std::list<FunctionContext*>& overrides,
+                                      uint8_t searchOptions)
     {
-        if(parent)
-            parent->getFunction(identifier, overrides);
+        if(parent && !(searchOptions & IDSearchOptions_ChildrenOnly))
+            parent->getFunction(identifier, overrides, searchOptions);
     }
 
     std::string DocumentContext::longId() const
@@ -139,7 +141,7 @@ namespace BraneScript
     std::string LabeledValueContext::signature() const { return ValueContext::signature() + " " + identifier.text; }
     std::string LabeledValueContext::longId() const
     {
-        if(parent && !parent->is<LibraryContext>())
+        if(parent && getParent<FunctionContext>())
             return identifier.text;
         auto prefix = DocumentContext::longId();
         if(prefix.empty())
@@ -455,14 +457,16 @@ namespace BraneScript
         return DocumentContext::findIdentifier(id, searchOptions);
     }
 
-    void StructContext::getFunction(const std::string& identifier, std::list<FunctionContext*>& overrides)
+    void StructContext::getFunction(const std::string& identifier,
+                                    std::list<FunctionContext*>& overrides,
+                                    uint8_t searchOptions)
     {
         for(auto& f : functions)
         {
             if(f->identifier.text == identifier)
                 overrides.push_back(f.get());
         }
-        DocumentContext::getFunction(identifier, overrides);
+        DocumentContext::getFunction(identifier, overrides, searchOptions);
     }
 
     std::string StructContext::longId() const
@@ -538,14 +542,17 @@ namespace BraneScript
         return DocumentContext::findIdentifier(id, searchOptions);
     }
 
-    void LibraryContext::getFunction(const std::string& id, std::list<FunctionContext*>& overrides)
+    void
+    LibraryContext::getFunction(const std::string& id, std::list<FunctionContext*>& overrides, uint8_t searchOptions)
     {
+        DocumentContext::getFunction(id, overrides, searchOptions);
         for(auto& f : functions)
         {
             if(f->identifier.text == id)
                 overrides.push_back(f.get());
         }
     }
+
     std::string LibraryContext::longId() const
     {
         auto prefix = DocumentContext::longId();
@@ -633,12 +640,20 @@ namespace BraneScript
         return nullptr;
     }
 
-    void ScriptContext::getFunction(const std::string& identifier, std::list<FunctionContext*>& overrides)
+    void ScriptContext::getFunction(const std::string& identifier,
+                                    std::list<FunctionContext*>& overrides,
+                                    uint8_t searchOptions)
     {
         for(auto& f : functions)
         {
             if(f->identifier.text == identifier)
                 overrides.push_back(f.get());
+        }
+
+        if(!(searchOptions & IDSearchOptions_ParentsOnly))
+        {
+            for(auto& lib : exports)
+                lib.second->getFunction(identifier, overrides, searchOptions);
         }
     }
 
@@ -676,10 +691,12 @@ namespace BraneScript
         return nullptr;
     }
 
-    void LibrarySet::getFunction(const std::string& identifier, std::list<FunctionContext*>& overrides)
+    void LibrarySet::getFunction(const std::string& identifier,
+                                 std::list<FunctionContext*>& overrides,
+                                 uint8_t searchOptions)
     {
         for(auto& lib : exports)
-            lib->getFunction(identifier, overrides);
+            lib->getFunction(identifier, overrides, searchOptions);
     }
 
     DocumentContext* LibrarySet::deepCopy(const std::function<DocumentContext*(DocumentContext*)>& callback)

@@ -50,96 +50,98 @@ TEST(BraneScript, Objects)
 #endif
     std::string testString = R"(
     link "BraneScript";
-    float getMember1(ref TestStruct1 s)
+    export as "tests"
     {
-        return s.a;
-    }
-    int getMember2(ref TestStruct1 s)
-    {
-        return s.b;
-    }
-    bool getMember3(ref TestStruct1 s)
-    {
-        return s.c;
-    }
-
-    TestStruct1 createStruct()
-    {
-        TestStruct1 output;
-        output.a = 6.9f;
-        output.b = 420;
-        output.c = false;
-        TestStruct1 notOut = output;
-        notOut.a = 43;
-        return output;
-    }
-
-    void testDestruct()
-    {
-        TestStruct1 temp = createStruct();
-    }
-
-    struct TestStruct2
-    {
-        int a;
-        bool b;
-        float c;
-        void _construct()
+        float getMember1(ref TestStruct1 s)
         {
-            a = 5;
-            b = true;
-            c = 3.2f;
+            return s.a;
         }
-        float sum()
+        int getMember2(ref TestStruct1 s)
         {
-            return a + c;
+            return s.b;
         }
-    }
-
-    TestStruct2 testScriptStruct()
-    {
-        TestStruct2 output;
-        return output;
-    }
-
-    void modStruct(ref TestStruct2 s)
-    {
-          s.c = 4.2f;
-    }
-
-    float testMemberFunc(ref TestStruct2 s)
-    {
-        return s.sum();
-    }
-
-    struct NestedStructChild
-    {
-        float x;
-        float y;
-        float z;
-        void _construct()
+        bool getMember3(ref TestStruct1 s)
         {
-            x = 1;
-            y = 2;
-            z = 3;
+            return s.c;
+        }
+
+        TestStruct1 createStruct()
+        {
+            TestStruct1 output;
+            output.a = 6.9f;
+            output.b = 420;
+            output.c = false;
+            TestStruct1 notOut = output;
+            notOut.a = 43;
+            return output;
+        }
+
+        void testDestruct()
+        {
+            TestStruct1 temp = createStruct();
+        }
+
+        struct TestStruct2
+        {
+            int a;
+            bool b;
+            float c;
+            void _construct()
+            {
+                a = 5;
+                b = true;
+                c = 3.2f;
+            }
+            float sum()
+            {
+                return a + c;
+            }
+        }
+
+        TestStruct2 testScriptStruct()
+        {
+            TestStruct2 output;
+            return output;
+        }
+
+        void modStruct(ref TestStruct2 s)
+        {
+              s.c = 4.2f;
+        }
+
+        float testMemberFunc(ref TestStruct2 s)
+        {
+            return s.sum();
+        }
+
+        struct NestedStructChild
+        {
+            float x;
+            float y;
+            float z;
+            void _construct()
+            {
+                x = 1;
+                y = 2;
+                z = 3;
+            }
+        }
+        struct NestedStructBase
+        {
+            float a;
+            NestedStructChild b;
+            float c;
+        }
+
+        NestedStructBase nestedTest()
+        {
+            NestedStructBase base;
+            base.c = 42;
+            base.b.y = 4;
+            NestedStructBase copied = base;
+            return copied;
         }
     }
-    struct NestedStructBase
-    {
-        float a;
-        NestedStructChild b;
-        float c;
-    }
-
-    NestedStructBase nestedTest()
-    {
-        NestedStructBase base;
-        base.c = 42;
-        base.b.y = 4;
-        NestedStructBase copied = base;
-        return copied;
-    }
-
 )";
 
     std::string header = R"(
@@ -220,19 +222,20 @@ TEST(BraneScript, Objects)
     ScriptRuntime rt;
     rt.setLinker(&linker);
     Script* testScript = rt.assembleScript(ir);
+    delete ir;
     ASSERT_TRUE(testScript);
 
     TestStruct1 testStruct1{true, 23.3, 45};
 
-    auto getMember1 = testScript->getFunction<float, TestStruct1*>("getMember1(ref BraneScript::TestStruct1)");
+    auto getMember1 = testScript->getFunction<float, TestStruct1*>("tests::getMember1(ref BraneScript::TestStruct1)");
     ASSERT_TRUE(getMember1);
     EXPECT_EQ(getMember1(&testStruct1), 23.3f);
 
-    auto getMember2 =  testScript->getFunction<int, TestStruct1*>("getMember2(ref BraneScript::TestStruct1)");
+    auto getMember2 =  testScript->getFunction<int, TestStruct1*>("tests::getMember2(ref BraneScript::TestStruct1)");
     ASSERT_TRUE(getMember2);
     EXPECT_EQ(getMember2(&testStruct1), 45);
 
-    auto getMember3 = testScript->getFunction<bool, TestStruct1*>("getMember3(ref BraneScript::TestStruct1)");
+    auto getMember3 = testScript->getFunction<bool, TestStruct1*>("tests::getMember3(ref BraneScript::TestStruct1)");
     ASSERT_TRUE(getMember3);
     EXPECT_EQ(getMember3(&testStruct1), true);
 
@@ -241,7 +244,7 @@ TEST(BraneScript, Objects)
     EXPECT_FALSE(copyConstructorCalled);
     EXPECT_FALSE(destructorCalled);
 
-    auto createStruct = testScript->getFunction<TestStruct1*>("createStruct()");
+    auto createStruct = testScript->getFunction<TestStruct1*>("tests::createStruct()");
     ASSERT_TRUE(createStruct);
     TestStruct1* createdStruct = createStruct();
     ASSERT_TRUE(createdStruct);
@@ -256,13 +259,13 @@ TEST(BraneScript, Objects)
     EXPECT_TRUE(destructorCalled);
     destructorCalled = false;
 
-    auto testDestruct = testScript->getFunction<void>("testDestruct()");
+    auto testDestruct = testScript->getFunction<void>("tests::testDestruct()");
     ASSERT_TRUE(testDestruct);
     testDestruct();
 
     EXPECT_TRUE(destructorCalled);
 
-    auto testScriptStruct = testScript->getFunction<TestStruct2*>("testScriptStruct()");
+    auto testScriptStruct = testScript->getFunction<TestStruct2*>("tests::testScriptStruct()");
     ASSERT_TRUE(testScriptStruct);
     TestStruct2* ts2 = testScriptStruct();
     ASSERT_TRUE(ts2);
@@ -270,14 +273,14 @@ TEST(BraneScript, Objects)
     EXPECT_EQ(ts2->b, true);
     EXPECT_EQ(ts2->c, 3.2f);
 
-    auto modStruct = testScript->getFunction<void, TestStruct2*>("modStruct(ref TestStruct2)");
-    ASSERT_TRUE(testScriptStruct);
+    auto modStruct = testScript->getFunction<void, TestStruct2*>("tests::modStruct(ref tests::TestStruct2)");
+    ASSERT_TRUE(modStruct);
     modStruct(ts2);
     EXPECT_EQ(ts2->a, 5);
     EXPECT_EQ(ts2->b, true);
     EXPECT_EQ(ts2->c, 4.2f);
 
-    auto testMemberFunc = testScript->getFunction<float, TestStruct2*>("testMemberFunc(ref TestStruct2)");
+    auto testMemberFunc = testScript->getFunction<float, TestStruct2*>("tests::testMemberFunc(ref tests::TestStruct2)");
     ASSERT_TRUE(testMemberFunc);
     EXPECT_EQ(testMemberFunc(ts2), 5 + 4.2f);
     EXPECT_EQ(ts2->a, 5);
@@ -285,7 +288,7 @@ TEST(BraneScript, Objects)
     EXPECT_EQ(ts2->c, 4.2f);
     delete ts2;
 
-    auto nestedTest = testScript->getFunction<NestedStructBase*>("nestedTest()");
+    auto nestedTest = testScript->getFunction<NestedStructBase*>("tests::nestedTest()");
     ASSERT_TRUE(nestedTest);
     auto nestedStruct = nestedTest();
     // We don't test a and c as they are not initialized

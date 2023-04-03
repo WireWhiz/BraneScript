@@ -13,7 +13,7 @@ TEST(BraneScript, Templates)
     std::string testString = R"(
     link "BraneScript";
 
-    template<Arg1, Arg2>
+    template<type Arg1, type Arg2>
     Arg1 add(Arg1 a, Arg2 b)
     {
         return a + b;
@@ -41,7 +41,7 @@ TEST(BraneScript, Templates)
         return add<float, float>(a, b);
     }
 
-    template<T1, T2>
+    template<type T1, type T2>
     struct TestPair
     {
         T1 first;
@@ -55,6 +55,12 @@ TEST(BraneScript, Templates)
         output.second = b;
         return output;
     }
+
+    /*template<T...>
+    int sumFlat(T... args)
+    {
+
+    }*/
 )";
     StaticAnalyzer analyzer;
     analyzer.load("test", testString);
@@ -74,6 +80,7 @@ TEST(BraneScript, Templates)
 
     ScriptRuntime rt;
     Script* testScript = rt.assembleScript(ir);
+    delete ir;
     ASSERT_TRUE(testScript);
 
     /*auto addInt = testScript->getFunction<int, int, int>("addInt");

@@ -1,5 +1,5 @@
 
-// Generated from /home/wirewhiz/Documents/git/BraneEngine/libraries/internal/BraneScript/antlr4/brane.g4 by ANTLR 4.11.1
+// Generated from /home/wirewhiz/Documents/git/BraneEngine/libraries/internal/BraneScript/antlr4/brane.g4 by ANTLR 4.12.0
 
 #pragma once
 
@@ -31,6 +31,8 @@ public:
 
     virtual std::any visitTemplateArgs(braneParser::TemplateArgsContext *context) = 0;
 
+    virtual std::any visitScopedID(braneParser::ScopedIDContext *context) = 0;
+
     virtual std::any visitType(braneParser::TypeContext *context) = 0;
 
     virtual std::any visitDeclaration(braneParser::DeclarationContext *context) = 0;
@@ -51,11 +53,11 @@ public:
 
     virtual std::any visitExportSegment(braneParser::ExportSegmentContext *context) = 0;
 
-    virtual std::any visitStructMember(braneParser::StructMemberContext *context) = 0;
-
-    virtual std::any visitStructMembers(braneParser::StructMembersContext *context) = 0;
-
     virtual std::any visitStructDef(braneParser::StructDefContext *context) = 0;
+
+    virtual std::any visitMemberVariable(braneParser::MemberVariableContext *context) = 0;
+
+    virtual std::any visitMemberFunction(braneParser::MemberFunctionContext *context) = 0;
 
     virtual std::any visitExprStatement(braneParser::ExprStatementContext *context) = 0;
 
@@ -68,6 +70,8 @@ public:
     virtual std::any visitIf(braneParser::IfContext *context) = 0;
 
     virtual std::any visitWhile(braneParser::WhileContext *context) = 0;
+
+    virtual std::any visitUnroll(braneParser::UnrollContext *context) = 0;
 
     virtual std::any visitMemberAccess(braneParser::MemberAccessContext *context) = 0;
 

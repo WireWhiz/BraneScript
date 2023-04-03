@@ -38,16 +38,16 @@ void addScalarTestFunctions(const std::string& typeName, std::string& script)
 template<typename T>
 void runScalarTestFunctions(const std::string& typeName, const Script* testScript, const std::vector<std::pair<T, T>>& testArgs)
 {
-    auto add = testScript->getFunction<T, T, T>("add");
+    auto add = testScript->getFunction<T, T, T>("tests::add");
     ASSERT_TRUE(add);
     TEST_DUAL_ARG_OPERATOR(+, add, testArgs);
-    auto sub = testScript->getFunction<T, T, T>("sub");
+    auto sub = testScript->getFunction<T, T, T>("tests::sub");
     ASSERT_TRUE(sub);
     TEST_DUAL_ARG_OPERATOR(-, sub, testArgs);
-    auto mul = testScript->getFunction<T, T, T>("mul");
+    auto mul = testScript->getFunction<T, T, T>("tests::mul");
     ASSERT_TRUE(mul);
     TEST_DUAL_ARG_OPERATOR(*, mul, testArgs);
-    auto div = testScript->getFunction<T, T, T>("div");
+    auto div = testScript->getFunction<T, T, T>("tests::div");
     ASSERT_TRUE(div);
     TEST_DUAL_ARG_OPERATOR(/, div, testArgs);
 }
@@ -61,10 +61,13 @@ TEST(BraneScript, Operators)
 {
     std::string testString = R"(
     link "BraneScript";
-    bool testBoolCast(int a, int b)
+
+    export as "tests"
     {
-        return a > b;
-    }
+        bool testBoolCast(int a, int b)
+        {
+            return a > b;
+        }
 )";
 
     auto scalarCasts = {"uint", "uint64", "int", "int64", "float", "double"};
@@ -85,6 +88,8 @@ TEST(BraneScript, Operators)
     addScalarTestFunctions("float", testString);
     addScalarTestFunctions("double", testString);
 
+    testString += "}";
+
     StaticAnalyzer analyzer;
     analyzer.load("test", testString, true);
     analyzer.validate("test");
@@ -98,7 +103,7 @@ TEST(BraneScript, Operators)
     ScriptRuntime rt;
     rt.setLinker(&linker);
     Script* testScript = rt.assembleScript(ir);
-    fflush(0);
+    delete ir;
     ASSERT_TRUE(testScript);
 
     std::cout << "script contains functions: " << std::endl;
@@ -106,12 +111,10 @@ TEST(BraneScript, Operators)
         std::cout << f.first << std::endl;
 
     //Casting
-    auto testBoolCast = testScript->getFunction<bool, int, int>("testBoolCast");
+    auto testBoolCast = testScript->getFunction<bool, int, int>("tests::testBoolCast");
     ASSERT_TRUE(testBoolCast) << "Function was not found in script";
     EXPECT_TRUE(testBoolCast(5, 3));
     EXPECT_FALSE(testBoolCast(2,4));
-
-
 
     //Arithmatic
     runScalarTestFunctions<int32_t>("int", testScript, {

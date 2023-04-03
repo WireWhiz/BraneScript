@@ -39,17 +39,20 @@ TEST(BraneScript, Speed)
 
     std::string testString = R"(
     link "BraneScript";
-    int iFib(int n)
+    export as "tests"
     {
-        if(n < 2)
-            return n;
-        return iFib(n-1) + iFib(n-2);
-    }
-    float fFib(float n)
-    {
-        if(n < 2f)
-            return n;
-        return fFib(n-1) + fFib(n-2);
+        int iFib(int n)
+        {
+            if(n < 2)
+                return n;
+            return iFib(n-1) + iFib(n-2);
+        }
+        float fFib(float n)
+        {
+            if(n < 2f)
+                return n;
+            return fFib(n-1) + fFib(n-2);
+        }
     }
 )";
     StaticAnalyzer analyzer;
@@ -63,12 +66,13 @@ TEST(BraneScript, Speed)
 
     ScriptRuntime rt;
     Script* testScript = rt.assembleScript(ir);
+    delete ir;
     ASSERT_TRUE(testScript);
 
-    auto scIFib = testScript->getFunction<int, int>("iFib");
+    auto scIFib = testScript->getFunction<int, int>("tests::iFib");
     ASSERT_TRUE(scIFib);
 
-    auto scFFib = testScript->getFunction<float, float>("fFib");
+    auto scFFib = testScript->getFunction<float, float>("tests::fFib");
     ASSERT_TRUE(scFFib);
 
     EXPECT_EQ(iFib(6), 8);

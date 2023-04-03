@@ -38,6 +38,8 @@ namespace BraneScript
     {
         std::string identifier = "void";
         ValueType storageType = ValueType::Void;
+        StructContext* structDef = nullptr;
+
         bool operator==(const TypeContext&) const;
         bool operator!=(const TypeContext&) const;
         bool isScalar() const;
@@ -120,8 +122,10 @@ namespace BraneScript
 
         virtual DocumentContext* getNodeAtChar(TextPos pos);
         virtual DocumentContext* findIdentifier(const std::string& identifier, uint8_t searchOptions = 0);
-        virtual void getFunction(const std::string& identifier, std::list<FunctionContext*>& overrides);
+        virtual void
+        getFunction(const std::string& identifier, std::list<FunctionContext*>& overrides, uint8_t searchOptions = 0);
         virtual std::string longId() const;
+        virtual ~DocumentContext() = default;
 
         template<typename T>
         T* as()
@@ -136,7 +140,7 @@ namespace BraneScript
         }
 
         template<typename T>
-        T* getParent()
+        T* getParent() const
         {
             if(!parent)
                 return nullptr;
@@ -347,7 +351,9 @@ namespace BraneScript
 
         DocumentContext* getNodeAtChar(TextPos pos) override;
         DocumentContext* findIdentifier(const std::string& identifier, uint8_t searchOptions) override;
-        void getFunction(const std::string& identifier, std::list<FunctionContext*>& overrides) override;
+        void getFunction(const std::string& identifier,
+                         std::list<FunctionContext*>& overrides,
+                         uint8_t searchOptions) override;
         std::string longId() const override;
         DocumentContext* deepCopy(const std::function<DocumentContext*(DocumentContext*)>& callback) override;
     };
@@ -361,7 +367,9 @@ namespace BraneScript
 
         DocumentContext* getNodeAtChar(TextPos pos) override;
         DocumentContext* findIdentifier(const std::string& identifier, uint8_t searchOptions) override;
-        void getFunction(const std::string& identifier, std::list<FunctionContext*>& overrides) override;
+        void getFunction(const std::string& identifier,
+                         std::list<FunctionContext*>& overrides,
+                         uint8_t searchOptions) override;
         std::string longId() const override;
         DocumentContext* deepCopy(const std::function<DocumentContext*(DocumentContext*)>& callback) override;
     };
@@ -370,7 +378,9 @@ namespace BraneScript
     {
         robin_hood::unordered_set<LibraryContext*> exports;
         DocumentContext* findIdentifier(const std::string& identifier, uint8_t searchOptions) override;
-        void getFunction(const std::string& identifier, std::list<FunctionContext*>& overrides) override;
+        void getFunction(const std::string& identifier,
+                         std::list<FunctionContext*>& overrides,
+                         uint8_t searchOptions) override;
         DocumentContext* deepCopy(const std::function<DocumentContext*(DocumentContext*)>& callback) override;
     };
 
@@ -394,7 +404,9 @@ namespace BraneScript
 
         DocumentContext* getNodeAtChar(TextPos pos) override;
         DocumentContext* findIdentifier(const std::string& identifier, uint8_t searchOptions) override;
-        void getFunction(const std::string& identifier, std::list<FunctionContext*>& overrides) override;
+        void getFunction(const std::string& identifier,
+                         std::list<FunctionContext*>& overrides,
+                         uint8_t searchOptions) override;
         DocumentContext* deepCopy(const std::function<DocumentContext*(DocumentContext*)>& callback) override;
     };
 } // namespace BraneScript

@@ -61,11 +61,20 @@ namespace lsp
         std::vector<uint32_t> tokens;
 
       public:
+
+        virtual std::any visitTypeName(braneParser::TypeNameContext* ctx) override
+        {
+            appendToken(ctx->id, TokenType::Type);
+
+            if(ctx->template_)
+                visit(ctx->template_);
+            if(ctx->child)
+                visitTypeName(ctx->child);
+            return {};
+        }
+
         virtual std::any visitType(braneParser::TypeContext* ctx) override
         {
-            if(!ctx->id)
-                return {};
-            appendToken(ctx->id, TokenType::Type);
             return visitChildren(ctx);
         }
 
@@ -86,7 +95,8 @@ namespace lsp
         {
             visit(ctx->template_);
             appendToken(ctx->id, TokenType::Type);
-            visit(ctx->structMembers());
+            for(auto m : ctx->structMember())
+                visit(m);
             return {};
         }
 

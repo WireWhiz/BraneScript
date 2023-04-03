@@ -20,43 +20,46 @@ TEST(BraneScript, FlowStatements)
 {
     std::string testString = R"(
     link "BraneScript";
-    bool testConstTrueIf()
+    export as "tests"
     {
-        if(true)
-            return true;
-        return false;
-    }
-    bool testConstFalseIf()
-    {
-        if(false)
+        bool testConstTrueIf()
+        {
+            if(true)
+                return true;
             return false;
-        return true;
-    }
-    bool testTrueVarIf()
-    {
-        bool condition = true;
-        if(condition)
+        }
+        bool testConstFalseIf()
+        {
+            if(false)
+                return false;
             return true;
-        return false;
-    }
-    bool testFalseVarIf()
-    {
-        bool condition = false;
-        if(condition)
+        }
+        bool testTrueVarIf()
+        {
+            bool condition = true;
+            if(condition)
+                return true;
             return false;
-        return true;
-    }
-    bool testIfInlineCompareInt1()
-    {
-        if(5 < 10)
+        }
+        bool testFalseVarIf()
+        {
+            bool condition = false;
+            if(condition)
+                return false;
             return true;
-        return false;
-    }
-    bool testIfInlineCompareInt2()
-    {
-        if(10 < 10)
+        }
+        bool testIfInlineCompareInt1()
+        {
+            if(5 < 10)
+                return true;
             return false;
-        return true;
+        }
+        bool testIfInlineCompareInt2()
+        {
+            if(10 < 10)
+                return false;
+            return true;
+        }
     }
 )";
     StaticAnalyzer analyzer;
@@ -69,13 +72,14 @@ TEST(BraneScript, FlowStatements)
 
     ScriptRuntime rt;
     Script* testScript = rt.assembleScript(ir);
+    delete ir;
     ASSERT_TRUE(testScript);
 
-    testFunction("testConstTrueIf", testScript);
-    testFunction("testConstFalseIf", testScript);
-    testFunction("testTrueVarIf", testScript);
-    testFunction("testFalseVarIf", testScript);
-    testFunction("testIfInlineCompareInt1", testScript);
-    testFunction("testIfInlineCompareInt2", testScript);
+    testFunction("tests::testConstTrueIf", testScript);
+    testFunction("tests::testConstFalseIf", testScript);
+    testFunction("tests::testTrueVarIf", testScript);
+    testFunction("tests::testFalseVarIf", testScript);
+    testFunction("tests::testIfInlineCompareInt1", testScript);
+    testFunction("tests::testIfInlineCompareInt2", testScript);
 
 }

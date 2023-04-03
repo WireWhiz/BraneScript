@@ -19,7 +19,7 @@ namespace BraneScript
             *thisRef = std::move(*other);
         });
         linker.addFunction("BraneScript::string::_destruct(ref BraneScript::string)", "void", 1, (void*)(FunctionHandle<void, std::string*>)[](std::string* data){
-            delete data;
+            data->~basic_string();
         });
         linker.addFunction("BraneScript::opr ==(const ref BraneScript::string,const ref BraneScript::string)", "BraneScript::string", 2, (void*)(FunctionHandle<bool, const std::string*, const std::string*>)[](const std::string* a, const std::string* b){
             return *a == *b;

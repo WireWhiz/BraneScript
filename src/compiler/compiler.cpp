@@ -320,19 +320,29 @@ namespace BraneScript
             _currentFunc = nullptr;
         }
 
+        void visitGlobal(const LabeledValueContext* g)
+        {
+            _globals.insert({g->longId(), _compileCtx->newGlobal(_compileCtx->getType(g->type.identifier), 0)});
+        }
+
+        void visitLibrary(const LibraryContext* lib)
+        {
+            for(auto& s : lib->structs)
+                _compileCtx->localStructDefs.emplace_back(visitStruct(s.get()));
+            for(auto& g : lib->globals)
+                visitGlobal(g.get());
+        }
+
         void visitScript(const ScriptContext* script)
         {
-
-            for(auto& e : script->exports)
-            {
-                for(auto& s : e.second->structs)
-                    _compileCtx->localStructDefs.emplace_back(visitStruct(s.get()));
-            }
             for(auto& s : script->structs)
                 _compileCtx->localStructDefs.emplace_back(visitStruct(s.get()));
 
             for(auto& g : script->globals)
-                _globals.insert({g->longId(), _compileCtx->newGlobal(_compileCtx->getType(g->type.identifier), 0)});
+                visitGlobal(g.get());
+
+            for(auto& e : script->exports)
+                visitLibrary(e.second.get());
 
             // Pre-register every function so that linking works correctly
 

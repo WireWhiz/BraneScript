@@ -23,9 +23,12 @@ TEST(BraneScript, API)
     std::string testString = R"(
     link "testLib" as "lib";
 
-    void setRef(int v)
+    export as "tests"
     {
-        lib::setRef(v);
+        void setRef(int v)
+        {
+            lib::setRef(v);
+        }
     }
 )";
 
@@ -53,9 +56,10 @@ TEST(BraneScript, API)
     ScriptRuntime rt;
     rt.setLinker(&linker);
     Script* testScript = rt.assembleScript(ir);
+    delete ir;
     ASSERT_TRUE(testScript);
 
-    auto scriptSetRef = testScript->getFunction<void, int>("setRef");
+    auto scriptSetRef = testScript->getFunction<void, int>("tests::setRef");
     ASSERT_TRUE(scriptSetRef);
     scriptSetRef(5);
 

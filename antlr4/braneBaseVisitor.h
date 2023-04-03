@@ -1,5 +1,5 @@
 
-// Generated from /home/wirewhiz/Documents/git/BraneEngine/libraries/internal/BraneScript/antlr4/brane.g4 by ANTLR 4.11.1
+// Generated from /home/wirewhiz/Documents/git/BraneEngine/libraries/internal/BraneScript/antlr4/brane.g4 by ANTLR 4.12.0
 
 #pragma once
 
@@ -36,6 +36,10 @@ public:
   }
 
   virtual std::any visitTemplateArgs(braneParser::TemplateArgsContext *ctx) override {
+    return visitChildren(ctx);
+  }
+
+  virtual std::any visitScopedID(braneParser::ScopedIDContext *ctx) override {
     return visitChildren(ctx);
   }
 
@@ -79,15 +83,15 @@ public:
     return visitChildren(ctx);
   }
 
-  virtual std::any visitStructMember(braneParser::StructMemberContext *ctx) override {
-    return visitChildren(ctx);
-  }
-
-  virtual std::any visitStructMembers(braneParser::StructMembersContext *ctx) override {
-    return visitChildren(ctx);
-  }
-
   virtual std::any visitStructDef(braneParser::StructDefContext *ctx) override {
+    return visitChildren(ctx);
+  }
+
+  virtual std::any visitMemberVariable(braneParser::MemberVariableContext *ctx) override {
+    return visitChildren(ctx);
+  }
+
+  virtual std::any visitMemberFunction(braneParser::MemberFunctionContext *ctx) override {
     return visitChildren(ctx);
   }
 
@@ -112,6 +116,10 @@ public:
   }
 
   virtual std::any visitWhile(braneParser::WhileContext *ctx) override {
+    return visitChildren(ctx);
+  }
+
+  virtual std::any visitUnroll(braneParser::UnrollContext *ctx) override {
     return visitChildren(ctx);
   }
 

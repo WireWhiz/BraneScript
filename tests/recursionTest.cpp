@@ -12,21 +12,24 @@ TEST(BraneScript, Recursion)
 {
     std::string testString = R"(
     link "BraneScript";
-    int called1(int in)
+    export as "tests"
     {
-        return in;
-    }
-    int caller1(int in)
-    {
-        return called1(in);
-    }
+        int called1(int in)
+        {
+            return in;
+        }
+        int caller1(int in)
+        {
+            return called1(in);
+        }
 
-    //recursively calculate x to the nth power
-    int pow(int x, int n)
-    {
-        if(n == 1)
-            return x;
-        return x * pow(x, n - 1);
+        //recursively calculate x to the nth power
+        int pow(int x, int n)
+        {
+            if(n == 1)
+                return x;
+            return x * pow(x, n - 1);
+        }
     }
 )";
     StaticAnalyzer analyzer;
@@ -40,13 +43,14 @@ TEST(BraneScript, Recursion)
 
     ScriptRuntime rt;
     Script* testScript = rt.assembleScript(ir);
+    delete ir;
     ASSERT_TRUE(testScript);
 
-    auto f0 = testScript->getFunction<int, int>("caller1");
+    auto f0 = testScript->getFunction<int, int>("tests::caller1");
     ASSERT_TRUE(f0);
     EXPECT_EQ(f0(5), 5);
 
-    auto pow = testScript->getFunction<int, int, int>("pow");
+    auto pow = testScript->getFunction<int, int, int>("tests::pow");
     ASSERT_TRUE(pow);
     EXPECT_EQ(pow(2, 4), 16);
 }

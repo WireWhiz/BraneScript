@@ -11,7 +11,7 @@ FLOAT   : INT('.'([0-9]*))?'f';
 CHAR    : '\''.'\'';
 STRING  : '"'.*?'"';
 
-ID      : [a-zA-Z_]([a-zA-Z0-9_:]*);
+ID      : [a-zA-Z_]([a-zA-Z0-9_]*);
 
 MUL     : '*';
 DIV     : '/';
@@ -32,15 +32,19 @@ progSegment : function
 global      : type id=ID ';';
 
 
-templateArgument : id=ID isPack='...'?;
+templateArgument : 'type' id=ID isPack='...'?
+                 | expressionType=type id=ID isPack='...'
+                 ;
 templateDef      : 'template' '<' templateArgument (',' templateArgument)* '>';
 templateArgs     : '<' type (',' type)* '>';
 
-type        : isConst='const'? isRef='ref'? id=ID (template=templateArgs)?;
+scopedID    : id=ID (template=templateArgs)? ('::' child=scopedID)?;
+
+type        : isConst='const'? isRef='ref'? name=scopedID;
 declaration : type id=ID;
 argumentList: (declaration (',' declaration)*)?;
 argumentPack: (expression (',' expression)*)?;
-functionSig : (template=templateDef)? ((type (id=ID | ('opr' oprID=(ADD|SUB|MUL|DIV|'==' | '!=' | '<' | '>' | '<=' | '>='|LOGIC|'[]')))) | ('opr' castType=type));
+functionSig : (template=templateDef)? ((type (id=ID | ('opr' oprID=(ADD|SUB|MUL|DIV|'=='|'!='|'<'|'>'|'<='|'>='|LOGIC|'[]')))) | ('opr' castType=type));
 functionStub: sig=functionSig '(' arguments=argumentList ')' isConst='const'? 'ext' ';';
 function    : sig=functionSig '(' arguments=argumentList ')' isConst='const'? '{' statements=statement* '}';
 
@@ -52,9 +56,10 @@ exportSegment : function
               | global
               ;
 
-structMember  : (var=declaration ';' | func=function);
-structMembers : structMember*;
-structDef     : (template=templateDef)?  packed='packed'? 'struct' id=ID '{' memberVars=structMembers '}';
+structDef     : (template=templateDef)?  packed='packed'? 'struct' id=ID '{' memberVars=structMember* '}';
+structMember  : var=declaration ';' #memberVariable
+              | func=function       #memberFunction
+              ;
 
 statement   : expression ';'                                                              #exprStatement
             | lValue=expression '=' rValue=expression ';'                                 #assignment
@@ -62,7 +67,10 @@ statement   : expression ';'                                                    
             | 'return' expression? ';'                                                    #return
             | 'if' '(' cond=expression ')' operation=statement ('else' elseOp=statement)? #if
             | 'while' '(' cond=expression ')' operation=statement                         #while
+            | 'unroll' '(' id=ID ')' body=statement                                       #unroll
             ;
+
+
 
 expression  : INT                                                           #constInt
             | FLOAT                                                         #constFloat
@@ -70,7 +78,7 @@ expression  : INT                                                           #con
             | STRING                                                        #constString
             | BOOL                                                          #constBool
             | declaration                                                   #decl
-            | name=ID (template=templateArgs)? '(' argumentPack ')'         #functionCall
+            | id=scopedID '(' argumentPack ')'                                 #functionCall
             | base=expression '.' name=ID (template=templateArgs)? '(' argumentPack ')' #memberFunctionCall
             | ID                                                            #id
             | base=expression '[' arg=expression ']'                        #indexAccess

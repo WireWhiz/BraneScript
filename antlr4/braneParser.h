@@ -1,5 +1,5 @@
 
-// Generated from /home/wirewhiz/Documents/git/BraneEngine/libraries/internal/BraneScript/antlr4/brane.g4 by ANTLR 4.11.1
+// Generated from /home/wirewhiz/Documents/git/BraneEngine/libraries/internal/BraneScript/antlr4/brane.g4 by ANTLR 4.12.0
 
 #pragma once
 
@@ -17,17 +17,17 @@ public:
     T__14 = 15, T__15 = 16, T__16 = 17, T__17 = 18, T__18 = 19, T__19 = 20, 
     T__20 = 21, T__21 = 22, T__22 = 23, T__23 = 24, T__24 = 25, T__25 = 26, 
     T__26 = 27, T__27 = 28, T__28 = 29, T__29 = 30, T__30 = 31, T__31 = 32, 
-    NEWLINE = 33, COMMENT = 34, BLOCK_COMMENT = 35, SPACE = 36, BOOL = 37, 
-    INT = 38, FLOAT = 39, CHAR = 40, STRING = 41, ID = 42, MUL = 43, DIV = 44, 
-    ADD = 45, SUB = 46, LOGIC = 47
+    T__32 = 33, T__33 = 34, T__34 = 35, NEWLINE = 36, COMMENT = 37, BLOCK_COMMENT = 38, 
+    SPACE = 39, BOOL = 40, INT = 41, FLOAT = 42, CHAR = 43, STRING = 44, 
+    ID = 45, MUL = 46, DIV = 47, ADD = 48, SUB = 49, LOGIC = 50
   };
 
   enum {
     RuleProgram = 0, RuleProgSegment = 1, RuleGlobal = 2, RuleTemplateArgument = 3, 
-    RuleTemplateDef = 4, RuleTemplateArgs = 5, RuleType = 6, RuleDeclaration = 7, 
-    RuleArgumentList = 8, RuleArgumentPack = 9, RuleFunctionSig = 10, RuleFunctionStub = 11, 
-    RuleFunction = 12, RuleLink = 13, RuleExport = 14, RuleExportSegment = 15, 
-    RuleStructMember = 16, RuleStructMembers = 17, RuleStructDef = 18, RuleStatement = 19, 
+    RuleTemplateDef = 4, RuleTemplateArgs = 5, RuleScopedID = 6, RuleType = 7, 
+    RuleDeclaration = 8, RuleArgumentList = 9, RuleArgumentPack = 10, RuleFunctionSig = 11, 
+    RuleFunctionStub = 12, RuleFunction = 13, RuleLink = 14, RuleExport = 15, 
+    RuleExportSegment = 16, RuleStructDef = 17, RuleStructMember = 18, RuleStatement = 19, 
     RuleExpression = 20
   };
 
@@ -54,6 +54,7 @@ public:
   class TemplateArgumentContext;
   class TemplateDefContext;
   class TemplateArgsContext;
+  class ScopedIDContext;
   class TypeContext;
   class DeclarationContext;
   class ArgumentListContext;
@@ -64,9 +65,8 @@ public:
   class LinkContext;
   class ExportContext;
   class ExportSegmentContext;
-  class StructMemberContext;
-  class StructMembersContext;
   class StructDefContext;
+  class StructMemberContext;
   class StatementContext;
   class ExpressionContext; 
 
@@ -122,9 +122,11 @@ public:
   public:
     antlr4::Token *id = nullptr;
     antlr4::Token *isPack = nullptr;
+    braneParser::TypeContext *expressionType = nullptr;
     TemplateArgumentContext(antlr4::ParserRuleContext *parent, size_t invokingState);
     virtual size_t getRuleIndex() const override;
     antlr4::tree::TerminalNode *ID();
+    TypeContext *type();
 
 
     virtual std::any accept(antlr4::tree::ParseTreeVisitor *visitor) override;
@@ -161,16 +163,32 @@ public:
 
   TemplateArgsContext* templateArgs();
 
+  class  ScopedIDContext : public antlr4::ParserRuleContext {
+  public:
+    antlr4::Token *id = nullptr;
+    braneParser::TemplateArgsContext *template_ = nullptr;
+    braneParser::ScopedIDContext *child = nullptr;
+    ScopedIDContext(antlr4::ParserRuleContext *parent, size_t invokingState);
+    virtual size_t getRuleIndex() const override;
+    antlr4::tree::TerminalNode *ID();
+    TemplateArgsContext *templateArgs();
+    ScopedIDContext *scopedID();
+
+
+    virtual std::any accept(antlr4::tree::ParseTreeVisitor *visitor) override;
+   
+  };
+
+  ScopedIDContext* scopedID();
+
   class  TypeContext : public antlr4::ParserRuleContext {
   public:
     antlr4::Token *isConst = nullptr;
     antlr4::Token *isRef = nullptr;
-    antlr4::Token *id = nullptr;
-    braneParser::TemplateArgsContext *template_ = nullptr;
+    braneParser::ScopedIDContext *name = nullptr;
     TypeContext(antlr4::ParserRuleContext *parent, size_t invokingState);
     virtual size_t getRuleIndex() const override;
-    antlr4::tree::TerminalNode *ID();
-    TemplateArgsContext *templateArgs();
+    ScopedIDContext *scopedID();
 
 
     virtual std::any accept(antlr4::tree::ParseTreeVisitor *visitor) override;
@@ -331,26 +349,16 @@ public:
 
   ExportSegmentContext* exportSegment();
 
-  class  StructMemberContext : public antlr4::ParserRuleContext {
+  class  StructDefContext : public antlr4::ParserRuleContext {
   public:
-    braneParser::DeclarationContext *var = nullptr;
-    braneParser::FunctionContext *func = nullptr;
-    StructMemberContext(antlr4::ParserRuleContext *parent, size_t invokingState);
+    braneParser::TemplateDefContext *template_ = nullptr;
+    antlr4::Token *packed = nullptr;
+    antlr4::Token *id = nullptr;
+    braneParser::StructMemberContext *memberVars = nullptr;
+    StructDefContext(antlr4::ParserRuleContext *parent, size_t invokingState);
     virtual size_t getRuleIndex() const override;
-    DeclarationContext *declaration();
-    FunctionContext *function();
-
-
-    virtual std::any accept(antlr4::tree::ParseTreeVisitor *visitor) override;
-   
-  };
-
-  StructMemberContext* structMember();
-
-  class  StructMembersContext : public antlr4::ParserRuleContext {
-  public:
-    StructMembersContext(antlr4::ParserRuleContext *parent, size_t invokingState);
-    virtual size_t getRuleIndex() const override;
+    antlr4::tree::TerminalNode *ID();
+    TemplateDefContext *templateDef();
     std::vector<StructMemberContext *> structMember();
     StructMemberContext* structMember(size_t i);
 
@@ -359,26 +367,42 @@ public:
    
   };
 
-  StructMembersContext* structMembers();
+  StructDefContext* structDef();
 
-  class  StructDefContext : public antlr4::ParserRuleContext {
+  class  StructMemberContext : public antlr4::ParserRuleContext {
   public:
-    braneParser::TemplateDefContext *template_ = nullptr;
-    antlr4::Token *packed = nullptr;
-    antlr4::Token *id = nullptr;
-    braneParser::StructMembersContext *memberVars = nullptr;
-    StructDefContext(antlr4::ParserRuleContext *parent, size_t invokingState);
+    StructMemberContext(antlr4::ParserRuleContext *parent, size_t invokingState);
+   
+    StructMemberContext() = default;
+    void copyFrom(StructMemberContext *context);
+    using antlr4::ParserRuleContext::copyFrom;
+
     virtual size_t getRuleIndex() const override;
-    antlr4::tree::TerminalNode *ID();
-    StructMembersContext *structMembers();
-    TemplateDefContext *templateDef();
 
-
-    virtual std::any accept(antlr4::tree::ParseTreeVisitor *visitor) override;
    
   };
 
-  StructDefContext* structDef();
+  class  MemberVariableContext : public StructMemberContext {
+  public:
+    MemberVariableContext(StructMemberContext *ctx);
+
+    braneParser::DeclarationContext *var = nullptr;
+    DeclarationContext *declaration();
+
+    virtual std::any accept(antlr4::tree::ParseTreeVisitor *visitor) override;
+  };
+
+  class  MemberFunctionContext : public StructMemberContext {
+  public:
+    MemberFunctionContext(StructMemberContext *ctx);
+
+    braneParser::FunctionContext *func = nullptr;
+    FunctionContext *function();
+
+    virtual std::any accept(antlr4::tree::ParseTreeVisitor *visitor) override;
+  };
+
+  StructMemberContext* structMember();
 
   class  StatementContext : public antlr4::ParserRuleContext {
   public:
@@ -431,6 +455,18 @@ public:
     braneParser::ExpressionContext *cond = nullptr;
     braneParser::StatementContext *operation = nullptr;
     ExpressionContext *expression();
+    StatementContext *statement();
+
+    virtual std::any accept(antlr4::tree::ParseTreeVisitor *visitor) override;
+  };
+
+  class  UnrollContext : public StatementContext {
+  public:
+    UnrollContext(StatementContext *ctx);
+
+    antlr4::Token *id = nullptr;
+    braneParser::StatementContext *body = nullptr;
+    antlr4::tree::TerminalNode *ID();
     StatementContext *statement();
 
     virtual std::any accept(antlr4::tree::ParseTreeVisitor *visitor) override;
@@ -615,11 +651,9 @@ public:
   public:
     FunctionCallContext(ExpressionContext *ctx);
 
-    antlr4::Token *name = nullptr;
-    braneParser::TemplateArgsContext *template_ = nullptr;
+    braneParser::ScopedIDContext *id = nullptr;
     ArgumentPackContext *argumentPack();
-    antlr4::tree::TerminalNode *ID();
-    TemplateArgsContext *templateArgs();
+    ScopedIDContext *scopedID();
 
     virtual std::any accept(antlr4::tree::ParseTreeVisitor *visitor) override;
   };

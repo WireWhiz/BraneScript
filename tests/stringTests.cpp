@@ -16,6 +16,8 @@ TEST(BraneScript, Strings)
 #endif
     std::string testString = R"(
     link "BraneScript";
+    export as "tests"
+    {
         string testConst()
         {
             return "Hello World!";
@@ -36,6 +38,7 @@ TEST(BraneScript, Strings)
         {
             return a != b;
         }
+    }
     )";
 
     Linker l;
@@ -53,33 +56,34 @@ TEST(BraneScript, Strings)
     ScriptRuntime rt;
     rt.setLinker(&l);
     Script* testScript = rt.assembleScript(ir);
+    delete ir;
     ASSERT_TRUE(testScript);
 
     std::string argA = "a";
     std::string argB = "b";
 
-    auto constStr = testScript->getFunction<std::string*>("testConst()");
+    auto constStr = testScript->getFunction<std::string*>("tests::testConst()");
     ASSERT_TRUE(constStr);
     std::string* str = constStr();
     EXPECT_STREQ(str->c_str(), "Hello World!");
     delete str;
 
-    auto returnE = testScript->getFunction<char>("returnE()");
+    auto returnE = testScript->getFunction<char>("tests::returnE()");
     ASSERT_TRUE(returnE);
     EXPECT_EQ('E', returnE());
 
-    auto concat = testScript->getFunction<std::string*, std::string*, std::string*>("concat(ref BraneScript::string,ref BraneScript::string)");
+    auto concat = testScript->getFunction<std::string*, std::string*, std::string*>("tests::concat(ref BraneScript::string,ref BraneScript::string)");
     ASSERT_TRUE(concat);
     str = concat(&argA, &argB);
     EXPECT_STREQ(str->c_str(), "ab");
     delete str;
 
-    auto strEQ = testScript->getFunction<bool, std::string*, std::string*>("strEQ(ref BraneScript::string,ref BraneScript::string)");
+    auto strEQ = testScript->getFunction<bool, std::string*, std::string*>("tests::strEQ(ref BraneScript::string,ref BraneScript::string)");
     ASSERT_TRUE(strEQ);
     EXPECT_TRUE(strEQ(&argA, &argA));
     EXPECT_FALSE(strEQ(&argA, &argB));
 
-    auto strNEQ = testScript->getFunction<bool, std::string*, std::string*>("strNEQ(ref BraneScript::string,ref BraneScript::string)");
+    auto strNEQ = testScript->getFunction<bool, std::string*, std::string*>("tests::strNEQ(ref BraneScript::string,ref BraneScript::string)");
     ASSERT_TRUE(strNEQ);
     EXPECT_FALSE(strNEQ(&argA, &argA));
     EXPECT_TRUE(strNEQ(&argA, &argB));
