@@ -62,20 +62,25 @@ namespace lsp
 
       public:
 
-        virtual std::any visitTypeName(braneParser::TypeNameContext* ctx) override
+        virtual std::any visitScopedID(braneParser::ScopedIDContext* ctx) override
         {
-            appendToken(ctx->id, TokenType::Type);
-
-            if(ctx->template_)
-                visit(ctx->template_);
             if(ctx->child)
-                visitTypeName(ctx->child);
-            return {};
+            {
+                appendToken(ctx->id, TokenType::Type);
+                if(ctx->template_)
+                    visit(ctx->template_);
+                return visitScopedID(ctx->child);
+            }
+            return ctx;
         }
 
         virtual std::any visitType(braneParser::TypeContext* ctx) override
         {
-            return visitChildren(ctx);
+            auto typeName = std::any_cast<braneParser::ScopedIDContext*>(visitScopedID(ctx->name));
+            appendToken(typeName->id, TokenType::Type);
+            if(typeName->template_)
+                visit(typeName->template_);
+            return {};
         }
 
         virtual std::any visitDeclaration(braneParser::DeclarationContext* ctx) override
@@ -121,7 +126,10 @@ namespace lsp
 
         virtual std::any visitFunctionCall(braneParser::FunctionCallContext* ctx) override
         {
-            appendToken(ctx->name, TokenType::Function);
+            auto typeName = std::any_cast<braneParser::ScopedIDContext*>(visitScopedID(ctx->id));
+            appendToken(typeName->id, TokenType::Function);
+            if(typeName->template_)
+                visit(typeName->template_);
             return visitChildren(ctx);
         }
 

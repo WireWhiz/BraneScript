@@ -975,8 +975,11 @@ namespace BraneScript
             if(ctx->sig->template_ && !_instantiatingTemplate)
             {
                 std::string id = safeGetText(ctx->sig->id);
+                std::string prefix = lastNode()->longId();
+                if(!prefix.empty())
+                    id = prefix + "::" + id;
                 auto args = std::any_cast<std::vector<TemplateArgDefContext*>>(visit(ctx->sig->template_));
-                _registeredTemplates.emplace(safeGetText(ctx->sig->id),
+                _registeredTemplates.emplace(id,
                                              new TemplateHandle(TemplateHandle::Function, ctx, lastNode(), args));
                 return (FunctionContext*)nullptr;
             }
@@ -1109,6 +1112,9 @@ namespace BraneScript
             // Register template
             if(ctx->template_ && !_instantiatingTemplate)
             {
+                std::string prefix = lastNode()->longId();
+                if(!prefix.empty())
+                    id = prefix + "::" + id;
                 auto args = std::any_cast<std::vector<TemplateArgDefContext*>>(visit(ctx->template_));
                 _registeredTemplates.emplace(id, new TemplateHandle(TemplateHandle::Struct, ctx, lastNode(), args));
                 return (StructContext*)nullptr;

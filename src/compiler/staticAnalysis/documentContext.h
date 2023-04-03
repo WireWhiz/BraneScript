@@ -382,6 +382,7 @@ namespace BraneScript
                          std::list<FunctionContext*>& overrides,
                          uint8_t searchOptions) override;
         DocumentContext* deepCopy(const std::function<DocumentContext*(DocumentContext*)>& callback) override;
+        std::string longId() const override;
     };
 
     struct ImportContext : public DocumentContext

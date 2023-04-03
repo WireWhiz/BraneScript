@@ -704,6 +704,13 @@ namespace BraneScript
         return callback(new LibrarySet{*this});
     }
 
+    std::string LibrarySet::longId() const
+    {
+        if(exports.empty())
+            return "";
+        return (*exports.begin())->longId();
+    }
+
     DocumentContext* ImportContext::deepCopy(const std::function<DocumentContext*(DocumentContext*)>& callback)
     {
         return callback(new ImportContext{*this});
