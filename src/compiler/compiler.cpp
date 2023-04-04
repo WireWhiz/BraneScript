@@ -43,7 +43,10 @@ namespace BraneScript
             std::string id = ctx->longId();
             auto def = new StructDef(id);
             for(auto& m : ctx->variables)
-                def->addMemberVar(m->identifier, _compileCtx->getType(m->type.identifier));
+            {
+                auto type = _compileCtx->getType(m->type.identifier);
+                def->addMemberVar(m->identifier, type);
+            }
             def->padMembers();
 
             return def;
@@ -128,7 +131,9 @@ namespace BraneScript
 
         AotValueReference* visitValueAccess(const LabeledValueReferenceContext* ctx)
         {
-            return new AotValueReference(getVar(ctx->identifier));
+            auto* var = getVar(ctx->identifier);
+            assert(var);
+            return new AotValueReference(var);
         }
 
         AotNode* visitExpression(const ExpressionContext* ctx)
@@ -300,11 +305,11 @@ namespace BraneScript
             pushScope();
             for(auto& arg : ctx->arguments)
             {
-                irFunc.arguments.push_back({arg.type.identifier, arg.isConst, arg.isRef});
-                auto type = _compileCtx->getType(arg.type.identifier);
+                irFunc.arguments.push_back({arg->type.identifier, arg->isConst, arg->isRef});
+                auto type = _compileCtx->getType(arg->type.identifier);
                 if(!type)
-                    throw std::runtime_error("Could not find type! " + arg.type.identifier);
-                currentScope().localValues.insert({arg.identifier.text, funcCtx.newReg(type, AotValue::Initialized)});
+                    throw std::runtime_error("Could not find type! " + arg->type.identifier);
+                currentScope().localValues.insert({arg->identifier.text, funcCtx.newReg(type, AotValue::Initialized)});
             }
 
             auto operations = std::unique_ptr<AotNode>(visitScope(ctx->body.get()));

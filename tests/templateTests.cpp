@@ -19,13 +19,6 @@ TEST(BraneScript, Templates)
         return a + b;
     }
 
-/*  Add this back in when we add in template arg inference
-    int addInt(int a, int b)
-    {
-        return add(a, b);
-    }
-*/
-
     int addIntExplicit(int a, int b)
     {
         return add<int, int>(a, b);
@@ -56,11 +49,22 @@ TEST(BraneScript, Templates)
         return output;
     }
 
-    /*template<T...>
-    int sumFlat(T... args)
+    template<type T>
+    T sumRecursive(T value)
     {
+        return value;
+    }
 
-    }*/
+    template<type T, type... Args>
+    T sumRecursive(T value, Args... args)
+    {
+        return value + sumRecursive<Args...>(args...);
+    }
+
+    int sum4(int v1, int v2, int v3, int v4)
+    {
+        return sumRecursive<int, int, int, int>(v1, v2, v3, v4);
+    }
 )";
     StaticAnalyzer analyzer;
     analyzer.load("test", testString);
@@ -76,16 +80,12 @@ TEST(BraneScript, Templates)
      * global function template instances = 2
      * template struct constructors = 4
      */
-    EXPECT_EQ(ir->localFunctions.size(), 10);
+    EXPECT_EQ(ir->localFunctions.size(), 15);
 
     ScriptRuntime rt;
     Script* testScript = rt.assembleScript(ir);
     delete ir;
     ASSERT_TRUE(testScript);
-
-    /*auto addInt = testScript->getFunction<int, int, int>("addInt");
-    ASSERT_TRUE(addInt);
-    EXPECT_EQ(addInt(5, 5), 10);*/
 
     auto addIntExplicit = testScript->getFunction<int, int, int>("addIntExplicit");
     ASSERT_TRUE(addIntExplicit);
@@ -108,4 +108,8 @@ TEST(BraneScript, Templates)
     EXPECT_EQ(testPair->first, 32);
     EXPECT_EQ(testPair->second, 42.0f);
     delete testPair;
+
+    auto sum4 = testScript->getFunction<int, int, int, int, int>("sum4");
+    ASSERT_TRUE(sum4);
+    EXPECT_EQ(sum4(1, 2, 3, 4), 10);
 }

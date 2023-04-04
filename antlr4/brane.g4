@@ -32,18 +32,23 @@ progSegment : function
 global      : type id=ID ';';
 
 
-templateArgument : 'type' id=ID isPack='...'?
-                 | expressionType=type id=ID isPack='...'
+templateDefArgument : 'type' isPack='...'? id=ID
+                 //| expressionType=type id=ID
                  ;
-templateDef      : 'template' '<' templateArgument (',' templateArgument)* '>';
-templateArgs     : '<' type (',' type)* '>';
+templateDef      : 'template' '<' templateDefArgument (',' templateDefArgument)* '>';
+templateArg      : t=type          #templateTypeArg
+                 | packID=ID '...' #packExpansionArg
+                 ;
+templateArgs     : '<' templateArg (',' templateArg)* '>';
 
 scopedID    : id=ID (template=templateArgs)? ('::' child=scopedID)?;
 
 type        : isConst='const'? isRef='ref'? name=scopedID;
 declaration : type id=ID;
-argumentList: (declaration (',' declaration)*)?;
-argumentPack: (expression (',' expression)*)?;
+argumentListItem : declaration | pack=ID '...' id=ID;
+argumentList: (argumentListItem (',' argumentListItem)*)?;
+argumentPackItem : expr=expression | packID=ID '...';
+argumentPack: (argumentPackItem (',' argumentPackItem)*)?;
 functionSig : (template=templateDef)? ((type (id=ID | ('opr' oprID=(ADD|SUB|MUL|DIV|'=='|'!='|'<'|'>'|'<='|'>='|LOGIC|'[]')))) | ('opr' castType=type));
 functionStub: sig=functionSig '(' arguments=argumentList ')' isConst='const'? 'ext' ';';
 function    : sig=functionSig '(' arguments=argumentList ')' isConst='const'? '{' statements=statement* '}';
@@ -77,8 +82,11 @@ expression  : INT                                                           #con
             | CHAR                                                          #constChar
             | STRING                                                        #constString
             | BOOL                                                          #constBool
+            | 'sizeof' '(' expr=expression ')'                              #sizeOfExpr
+            | 'sizeof' '(' t=type ')'                                       #sizeOfType
+            | 'sizeof' '...' '(' id=ID ')'                                  #sizeOfPack
             | declaration                                                   #decl
-            | id=scopedID '(' argumentPack ')'                                 #functionCall
+            | id=scopedID '(' argumentPack ')'                              #functionCall
             | base=expression '.' name=ID (template=templateArgs)? '(' argumentPack ')' #memberFunctionCall
             | ID                                                            #id
             | base=expression '[' arg=expression ']'                        #indexAccess

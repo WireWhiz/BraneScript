@@ -109,12 +109,12 @@ namespace BraneScript
 
             DocumentContext* parent = nullptr;
             antlr4::ParserRuleContext* root;
-            std::vector<std::unique_ptr<TemplateArgDefContext>> args;
+            std::vector<std::unique_ptr<TemplateDefArgumentContext>> args;
 
             TemplateHandle(Type type,
                            antlr4::ParserRuleContext* root,
                            DocumentContext* parent,
-                           const std::vector<TemplateArgDefContext*>& args)
+                           const std::vector<TemplateDefArgumentContext*>& args)
             {
                 this->type = type;
                 this->root = root;
@@ -124,9 +124,24 @@ namespace BraneScript
             }
         };
 
-        robin_hood::unordered_map<std::string, std::unique_ptr<TemplateHandle>> _registeredTemplates;
-        robin_hood::unordered_map<std::string, std::unique_ptr<TemplateArgContext>> _templateArgs;
+        using TemplateArgs = robin_hood::unordered_map<std::string, std::unique_ptr<TemplateArgContext>>;
+
+
+        robin_hood::unordered_map<std::string, std::vector<std::unique_ptr<TemplateHandle>>> _registeredTemplates;
+        std::list<TemplateArgs> _templateArgs;
         bool _instantiatingTemplate = false;
+
+        TemplateArgContext* getTemplateArg(const std::string& id)
+        {
+            for(auto i = _templateArgs.rbegin(); i != _templateArgs.rend(); i++)
+            {
+                auto arg = i->find(id);
+                if(arg == i->end())
+                    continue;
+                return arg->second.get();
+            }
+            return nullptr;
+        }
 
         std::unique_ptr<ExpressionContext> asExpr(std::any value)
         {
@@ -171,23 +186,23 @@ namespace BraneScript
                                  (ctx->getStop()->getStopIndex() - ctx->getStop()->getStartIndex()) + 1};
         };
 
-        void initDoc(DocumentContext* doc, antlr4::Token* token)
+        void initDoc(DocumentContext* doc, TextRange range)
         {
             doc->parent = lastNode();
-            doc->range = toRange(token);
+            doc->range = range;
             doc->version = _result.version;
             _documentContext.push(doc);
         }
 
-        void initDoc(DocumentContext* doc, antlr4::ParserRuleContext* ctx)
-        {
-            doc->parent = lastNode();
-            doc->range = toRange(ctx);
-            doc->version = _result.version;
-            _documentContext.push(doc);
-        }
+        void initDoc(DocumentContext* doc, antlr4::Token* token) { initDoc(doc, toRange(token)); }
 
-        void popDoc() { _documentContext.pop(); }
+        void initDoc(DocumentContext* doc, antlr4::ParserRuleContext* ctx) { initDoc(doc, toRange(ctx)); }
+
+        void popDoc(DocumentContext* doc)
+        {
+            assert(_documentContext.top() == doc);
+            _documentContext.pop();
+        }
 
         /**
          * @brief Checks node version numbers to determine if a node is still present in a document, and deletes it if
@@ -266,6 +281,27 @@ namespace BraneScript
             return str;
         }
 
+        std::string templateDefToString(braneParser::TemplateDefContext* tempDef)
+        {
+            std::vector<ValueContext> args;
+            auto argDefs = std::any_cast<std::vector<TemplateDefArgumentContext*>>(visitTemplateDef(tempDef));
+            for(auto& arg : argDefs)
+            {
+                auto* argInstance = getTemplateArg(arg->identifier);
+                assert(argInstance);
+                if(auto typeArg = dynamic_cast<TemplateTypeArgContext*>(argInstance))
+                    args.push_back(typeArg->value);
+                if(auto typePackArg = dynamic_cast<TemplateTypePackArgContext*>(argInstance))
+                {
+                    for(auto& value : typePackArg->values)
+                        args.push_back(value);
+                }
+
+                delete arg;
+            }
+            return templateArgsToString(args);
+        }
+
         std::string functionSig(const std::string& identifier, const std::vector<ValueContext> args)
         {
             std::string sig = identifier + "(";
@@ -279,12 +315,12 @@ namespace BraneScript
             return sig;
         }
 
-        std::string functionSig(const std::string& identifier, const std::vector<LabeledValueContext> args)
+        std::string functionSig(const std::string& identifier, const LabeledNodeList<LabeledValueContext>& args)
         {
             std::string sig = identifier + "(";
             for(int i = 0; i < args.size(); ++i)
             {
-                sig += args[i].signature();
+                sig += args[i]->signature();
                 if(i != args.size() - 1)
                     sig += ", ";
             }
@@ -353,9 +389,7 @@ namespace BraneScript
 
             if(ctx->template_)
             {
-                std::vector<ValueContext> args;
-                for(auto& arg : ctx->template_->type())
-                    args.push_back(std::any_cast<ValueContext>(visitType(arg)));
+                auto args = std::any_cast<std::vector<ValueContext>>(visitTemplateArgs(ctx->template_));
                 if(parent)
                     id = parent->longId() + "::" + id;
                 found = getTemplateInstance(id, args);
@@ -365,7 +399,7 @@ namespace BraneScript
             }
 
             if(!parent)
-                found = getIdentifierContext(id );
+                found = getIdentifierContext(id);
             else
                 found = parent->findIdentifier(id, IDSearchOptions_ChildrenOnly);
 
@@ -465,18 +499,18 @@ namespace BraneScript
             result.argsMatch = true;
             for(size_t i = 0; i < args.size(); ++i)
             {
-                if(f->arguments[i].type != args[i].type)
+                if(f->arguments[i]->type != args[i].type)
                 {
-                    if(!implicitCastViable(f->arguments[i], args[i]))
+                    if(!implicitCastViable(*f->arguments[i], args[i]))
                     {
                         result.argsMatch = false;
                         break;
                     }
                     result.castCount++;
-                    result.castCost += calculateCastCost(args[i], f->arguments[i]);
+                    result.castCost += calculateCastCost(args[i], *f->arguments[i]);
                 }
                 // Honor constness
-                if(args[i].isConst && f->arguments[i].isRef && !f->arguments[i].isConst)
+                if(args[i].isConst && f->arguments[i]->isRef && !f->arguments[i]->isConst)
                 {
                     result.argsMatch = false;
                     break;
@@ -489,17 +523,15 @@ namespace BraneScript
          * @return Returns a pair, with the first member being the parent context of the last element in the scoped id
          * and the second is the last child. The first member is null if there is only one element in the scoped id.
          */
-        std::pair<DocumentContext*, braneParser::ScopedIDContext*> getLastScopedID(braneParser::ScopedIDContext* idCtx, braneParser::ScopedIDContext* first = nullptr)
+        std::pair<DocumentContext*, braneParser::ScopedIDContext*>
+        getLastScopedID(braneParser::ScopedIDContext* idCtx, braneParser::ScopedIDContext* first = nullptr)
         {
             if(!first)
                 first = idCtx;
             if(idCtx->child)
                 return getLastScopedID(idCtx->child, first);
 
-            std::pair<DocumentContext*, braneParser::ScopedIDContext*> output = {
-                nullptr,
-                idCtx
-            };
+            std::pair<DocumentContext*, braneParser::ScopedIDContext*> output = {nullptr, idCtx};
 
             if(first != idCtx)
             {
@@ -526,8 +558,7 @@ namespace BraneScript
             return resolveFunctionCall(name, context, error, functionID.first, functionID.second->template_, autoCast);
         }
 
-        bool resolveFunctionCall(
-                                 const std::string& name,
+        bool resolveFunctionCall(const std::string& name,
                                  FunctionCallContext* context,
                                  std::string& error,
                                  DocumentContext* scope = nullptr,
@@ -544,7 +575,8 @@ namespace BraneScript
                     longID = scope->longId() + "::" + name;
                 auto tempArgs = std::any_cast<std::vector<ValueContext>>(visitTemplateArgs(tempArgsCtx));
 
-                auto tempFunction = dynamic_cast<FunctionContext*>(getTemplateInstance(longID, tempArgs, TemplateHandle::Function));
+                auto tempFunction =
+                    dynamic_cast<FunctionContext*>(getTemplateInstance(longID, tempArgs, TemplateHandle::Function));
                 if(tempFunction)
                     overrides.push_back(tempFunction);
             }
@@ -566,7 +598,7 @@ namespace BraneScript
                     }
                 }
 
-                //this is where automatically finding templates without explicit arguments would go
+                // this is where automatically finding templates without explicit arguments would go
             }
 
             /* We want to find the best match with the lowest amount of implicit casts. So we store the cast count for
@@ -597,7 +629,8 @@ namespace BraneScript
 
             if(!bestMatch)
             {
-                error += "Could not find override of function \"" + (scope ? scope->longId() + "::" + name : name) + "\" with arguments: ";
+                error += "Could not find override of function \"" + (scope ? scope->longId() + "::" + name : name) +
+                         "\" with arguments: ";
                 for(auto& arg : args)
                     error += arg.signature() + ", ";
                 if(!overrides.empty())
@@ -617,7 +650,7 @@ namespace BraneScript
             {
                 for(size_t i = 0; i < args.size(); ++i)
                 {
-                    if(bestMatch->arguments[i].type == args[i].type)
+                    if(bestMatch->arguments[i]->type == args[i].type)
                         continue;
                     auto* castCtx = new FunctionCallContext{};
                     castCtx->arguments.push_back(std::unique_ptr<ExpressionContext>(context->arguments[i].release()));
@@ -625,7 +658,7 @@ namespace BraneScript
 
                     // Find the cast operator, should never return false ideally, but I can see configuration bugs
                     // triggering this in the future.
-                    if(!resolveCast(castCtx, bestMatch->arguments[i].type, error))
+                    if(!resolveCast(castCtx, bestMatch->arguments[i]->type, error))
                         return false;
                 }
             }
@@ -673,7 +706,7 @@ namespace BraneScript
             lib->identifier.range = toRange(ctx->libID);
             initDoc(lib, ctx);
             visitChildren(ctx);
-            popDoc();
+            popDoc(lib);
             pruneNodes(lib->globals);
             pruneNodes(lib->structs);
             pruneNodes(lib->functions);
@@ -703,31 +736,62 @@ namespace BraneScript
             globVar->isRef = value.isRef;
             globVar->isLValue = true;
             globals.push_back(globVar);
-            popDoc();
+            popDoc(globVar);
             return {};
         }
 
-        std::any visitTemplateArgument(braneParser::TemplateArgumentContext* ctx) override
+        std::any visitTemplateDefArgument(braneParser::TemplateDefArgumentContext* ctx) override
         {
-            auto arg = new TemplateArgDefContext{};
-            arg->type = ctx->isPack ? TemplateArgDefContext::ValueTypePack : TemplateArgDefContext::ValueType;
+            auto arg = new TemplateDefArgumentContext{};
+            arg->type = ctx->isPack ? TemplateDefArgumentContext::ValueTypePack : TemplateDefArgumentContext::ValueType;
             arg->identifier = ctx->id->getText();
             return arg;
         }
 
         std::any visitTemplateDef(braneParser::TemplateDefContext* ctx) override
         {
-            std::vector<TemplateArgDefContext*> args;
-            for(auto arg : ctx->templateArgument())
-                args.push_back(std::any_cast<TemplateArgDefContext*>(visitTemplateArgument(arg)));
+            std::vector<TemplateDefArgumentContext*> args;
+            auto argsCtx = ctx->templateDefArgument();
+            for(auto arg : argsCtx)
+            {
+                auto newArg = std::any_cast<TemplateDefArgumentContext*>(visitTemplateDefArgument(arg));
+                args.push_back(newArg);
+                if(arg->isPack && args.size() != argsCtx.size())
+                    recordError(arg->isPack, "Only the last template argument may be a pack!");
+            }
             return std::move(args);
         }
 
         std::any visitTemplateArgs(braneParser::TemplateArgsContext* ctx) override
         {
             std::vector<ValueContext> args;
-            for(auto arg : ctx->type())
-                args.push_back(std::any_cast<ValueContext>(visitType(arg)));
+            for(auto* arg : ctx->templateArg())
+            {
+                if(auto* typeArg = dynamic_cast<braneParser::TemplateTypeArgContext*>(arg))
+                {
+                    args.push_back(std::any_cast<ValueContext>(visit(typeArg)));
+                    continue;
+                }
+                if(auto* packArg = dynamic_cast<braneParser::PackExpansionArgContext*>(arg))
+                {
+                    std::string packID = safeGetText(packArg->packID);
+                    auto* argInstance = getTemplateArg(packID);
+                    if(!argInstance)
+                    {
+                        recordError(arg, packID + " does not refer to a template argument!");
+                        continue;
+                    }
+                    auto* pack = dynamic_cast<TemplateTypePackArgContext*>(argInstance);
+                    if(!pack)
+                    {
+                        recordError(arg, packID + " is not a pack argument!");
+                        continue;
+                    }
+                    for(auto& value : pack->values)
+                        args.push_back(value);
+                    break;
+                }
+            }
             return std::move(args);
         }
 
@@ -746,15 +810,12 @@ namespace BraneScript
 
             if(output.type.storageType == ValueType::Void && output.type.identifier != "void")
             {
-                if(_instantiatingTemplate && _templateArgs.contains(output.type.identifier))
+                auto* arg = getTemplateArg(output.type.identifier);
+                if(_instantiatingTemplate && arg)
                 {
-                    if(auto* tempType =
-                           dynamic_cast<TemplateTypeArgContext*>(_templateArgs.at(output.type.identifier).get()))
-                    {
+                    if(auto* tempType = dynamic_cast<TemplateTypeArgContext*>(arg))
                         output = tempType->value;
-                    }
-                    else if(auto* tempTypePack = dynamic_cast<TemplateTypePackArgContext*>(
-                                _templateArgs.at(output.type.identifier).get()))
+                    else if(auto* tempTypePack = dynamic_cast<TemplateTypePackArgContext*>(arg))
                         recordError(ctx->name, "Cannot use an argument pack as a type!");
                 }
                 else
@@ -792,66 +853,132 @@ namespace BraneScript
                 }
             }
 
-            popDoc();
+            popDoc(&valueContext);
             return valueContext;
         }
 
         std::any visitArgumentList(braneParser::ArgumentListContext* ctx) override
         {
-            std::vector<LabeledValueContext> args;
-            for(auto& arg : ctx->declaration())
-                args.push_back(std::any_cast<LabeledValueContext>(visit(arg)));
+            assert(false);
+            return {};
+        }
+
+        LabeledNodeList<LabeledValueContext> constructArgumentList(braneParser::ArgumentListContext* ctx, ArgPackInstanceContext** argPackInstance = nullptr)
+        {
+            LabeledNodeList<LabeledValueContext> args;
+            for(auto& item : ctx->argumentListItem())
+            {
+                if(auto* declaration = item->declaration())
+                    args.emplace_back(new LabeledValueContext{std::any_cast<LabeledValueContext>(visit(declaration))});
+                else
+                {
+                    if(!_instantiatingTemplate)
+                    {
+                        recordError(item, "argument packs may only be used in templates!");
+                        continue;
+                    }
+                    std::string packID = safeGetText(item->pack);
+                    auto* argInstance = getTemplateArg(packID);
+                    if(!argInstance)
+                    {
+                        recordError(item->id, packID + " is not a template argument!");
+                        continue;
+                    }
+                    auto* pack = dynamic_cast<TemplateTypePackArgContext*>(argInstance);
+                    if(!pack)
+                    {
+                        recordError(item->id, packID + " is not an argument pack!");
+                        continue;
+                    }
+
+                    std::string prefix = safeGetText(item->id);
+                    size_t labelIndex = 0;
+                    if(argPackInstance)
+                    {
+                        if(*argPackInstance)
+                        {
+                            recordError(item, "Only one argument pack is in an argument list is allowed!");
+                            continue;
+                        }
+                        *argPackInstance =  new ArgPackInstanceContext{};
+                        (*argPackInstance)->identifier = prefix;
+                    }
+                    for(auto& value : pack->values)
+                    {
+                        auto* valueInstance = new LabeledValueContext{prefix + " " + std::to_string(labelIndex++), value};
+                        if(argPackInstance)
+                            (*argPackInstance)->values.emplace_back(valueInstance);
+                        args.emplace_back(valueInstance);
+                    }
+                }
+            }
             return std::move(args);
         }
 
         bool populateTemplateArgs(TemplateHandle* temp, const std::vector<ValueContext>& args)
         {
+            if(args.size() < temp->args.size())
+                return false;
             size_t arg = 0;
+            TemplateArgs argsToPush;
             for(size_t argDef = 0; argDef < temp->args.size(); ++argDef)
             {
                 if(arg == args.size())
                     return false;
-                if(temp->args[argDef]->type == TemplateArgDefContext::ValueType)
+
+                std::string identifier = temp->args[argDef]->identifier;
+                if(temp->args[argDef]->type == TemplateDefArgumentContext::ValueType)
+                    argsToPush.emplace(identifier, new TemplateTypeArgContext{identifier, args[arg++]});
+                else if(temp->args[argDef]->type == TemplateDefArgumentContext::ValueTypePack)
                 {
-                    std::string identifier = temp->args[argDef]->identifier;
-                    _templateArgs.emplace(identifier, new TemplateTypeArgContext{identifier, args[arg++]});
-                }
-                else
-                {
-                    assert(false); // TODO argument packs
+                    if(argDef != temp->args.size() - 1)
+                        return false;
+                    auto pack = new TemplateTypePackArgContext{};
+                    pack->identifier = identifier;
+                    while(arg != args.size())
+                        pack->values.push_back(args[arg++]);
+                    argsToPush.emplace(std::move(identifier), pack);
                 }
             }
-            return arg == args.size();
+            if(arg != args.size())
+                return false;
+            _templateArgs.push_back(std::move(argsToPush));
+            return true;
         }
 
-        DocumentContext* getTemplateInstance(const std::string& identifier, const std::vector<ValueContext>& args, TemplateHandle::Type expectedType = TemplateHandle::Any)
+        DocumentContext* getTemplateInstance(const std::string& identifier,
+                                             const std::vector<ValueContext>& args,
+                                             TemplateHandle::Type expectedType = TemplateHandle::Any)
         {
             if(!_registeredTemplates.contains(identifier))
                 return nullptr;
-            auto& temp = _registeredTemplates.at(identifier);
-            if(expectedType != TemplateHandle::Any && temp->type != expectedType)
-                return nullptr;
-            _instantiatingTemplate = true;
 
-            DocumentContext* generated = nullptr;
-            if(populateTemplateArgs(temp.get(), args))
+            auto& templateInstances = _registeredTemplates.at(identifier);
+            for(auto& temp : templateInstances)
             {
+                if(expectedType != TemplateHandle::Any && temp->type != expectedType)
+                    continue;
+                if(!populateTemplateArgs(temp.get(), args))
+                    continue;
+
+                _instantiatingTemplate = true;
+                DocumentContext* generated = nullptr;
+
                 _documentContext.push(temp->parent);
                 if(auto* structDef = dynamic_cast<braneParser::StructDefContext*>(temp->root))
                     generated = std::any_cast<StructContext*>(visitStructDef(structDef));
                 if(auto* functionDef = dynamic_cast<braneParser::FunctionContext*>(temp->root))
                     generated = std::any_cast<FunctionContext*>(visitFunction(functionDef));
                 _documentContext.pop();
+
+                _templateArgs.pop_back();
+                _instantiatingTemplate = !_templateArgs.empty();
+                return generated;
             }
-
-            _templateArgs.clear(); // TODO only remove the ones we added to support nested templates
-
-            if(_templateArgs.empty())
-                _instantiatingTemplate = false;
-            return generated;
+            return nullptr;
         }
 
-        FunctionContext* getFunctionNode(const std::string& identifier, const std::vector<LabeledValueContext>& args)
+        FunctionContext* getFunctionNode(const std::string& identifier, const LabeledNodeList<LabeledValueContext>& args)
         {
             LabeledNodeList<FunctionContext>* functions = nullptr;
             if(auto* s = getLast<StructContext>())
@@ -872,7 +999,7 @@ namespace BraneScript
                 bool argumentsMatch = true;
                 for(size_t a = 0; a < args.size(); ++a)
                 {
-                    if(f->arguments[a] != args[a])
+                    if(*f->arguments[a] != *args[a])
                     {
                         argumentsMatch = false;
                         break;
@@ -912,18 +1039,7 @@ namespace BraneScript
 
             // Modify id if we are instantiating a template
             if(_instantiatingTemplate && ctx->template_)
-            {
-                std::vector<ValueContext> args;
-                for(auto& arg : ctx->template_->templateArgument())
-                {
-                    std::string argId = safeGetText(arg->id);
-                    assert(!arg->isPack);
-                    auto argInstance = dynamic_cast<TemplateTypeArgContext*>(_templateArgs.at(argId).get());
-                    assert(argInstance);
-                    args.push_back(argInstance->value);
-                }
-                o.id += templateArgsToString(args);
-            }
+                o.id += templateDefToString(ctx->template_);
 
             return o;
         }
@@ -935,19 +1051,19 @@ namespace BraneScript
             if(!sigAny.has_value())
                 return (FunctionContext*)nullptr;
             FunctionSig sig = std::move(std::any_cast<FunctionSig>(sigAny));
-            auto arguments = std::move(std::any_cast<std::vector<LabeledValueContext>>(visit(ctx->arguments)));
+            auto arguments = constructArgumentList(ctx->arguments);
 
             bool isMember = lastNode()->is<StructContext>();
 
             if(isMember)
             {
-                LabeledValueContext thisRef;
-                thisRef.type = TypeContext{lastNode()->as<StructContext>()->longId(), ValueType::Struct};
-                thisRef.identifier.text = "this";
-                thisRef.isLValue = true;
-                thisRef.isRef = true;
-                thisRef.isConst = ctx->isConst;
-                arguments.insert(arguments.begin(), thisRef);
+                auto* thisRef = new LabeledValueContext{};
+                thisRef->type = TypeContext{lastNode()->as<StructContext>()->longId(), ValueType::Struct};
+                thisRef->identifier.text = "this";
+                thisRef->isLValue = true;
+                thisRef->isRef = true;
+                thisRef->isConst = ctx->isConst;
+                arguments.emplace(arguments.begin(), thisRef);
             }
 
             FunctionContext* func = getFunctionNode(sig.id, arguments);
@@ -956,15 +1072,15 @@ namespace BraneScript
             func->arguments = std::move(arguments);
             for(auto& a : func->arguments)
             {
-                a.parent = func;
-                a.isLValue = true;
+                a->parent = func;
+                a->isLValue = true;
             }
 
             if(func->version == _result.version)
                 recordError(ctx->sig->id, "Redefinition of already existing function!");
 
             initDoc(func, ctx);
-            popDoc();
+            popDoc(func);
             return (FunctionContext*)func;
         }
 
@@ -978,30 +1094,32 @@ namespace BraneScript
                 std::string prefix = lastNode()->longId();
                 if(!prefix.empty())
                     id = prefix + "::" + id;
-                auto args = std::any_cast<std::vector<TemplateArgDefContext*>>(visit(ctx->sig->template_));
-                _registeredTemplates.emplace(id,
-                                             new TemplateHandle(TemplateHandle::Function, ctx, lastNode(), args));
+                auto args = std::any_cast<std::vector<TemplateDefArgumentContext*>>(visit(ctx->sig->template_));
+                _registeredTemplates[id].emplace_back(
+                    new TemplateHandle(TemplateHandle::Function, ctx, lastNode(), args));
                 return (FunctionContext*)nullptr;
             }
 
-            auto sigAny = visitFunctionSig(ctx->functionSig());
+            auto sigAny = visitFunctionSig(ctx->sig);
             if(!sigAny.has_value())
                 return (FunctionContext*)nullptr;
 
             FunctionSig sig = std::move(std::any_cast<FunctionSig>(sigAny));
 
-            auto arguments = std::move(std::any_cast<std::vector<LabeledValueContext>>(visit(ctx->arguments)));
+            ArgPackInstanceContext* argPackInstanceContext = nullptr;
+            auto arguments = std::move(constructArgumentList(ctx->arguments, &argPackInstanceContext));
+
 
             bool isMember = lastNode()->is<StructContext>();
             if(isMember)
             {
-                LabeledValueContext thisRef;
-                thisRef.type = TypeContext{lastNode()->as<StructContext>()->longId(), ValueType::Struct};
-                thisRef.identifier.text = "this";
-                thisRef.isLValue = true;
-                thisRef.isRef = true;
-                thisRef.isConst = ctx->isConst;
-                arguments.insert(arguments.begin(), thisRef);
+                auto* thisRef = new LabeledValueContext{};
+                thisRef->type = TypeContext{lastNode()->as<StructContext>()->longId(), ValueType::Struct};
+                thisRef->identifier.text = "this";
+                thisRef->isLValue = true;
+                thisRef->isRef = true;
+                thisRef->isConst = ctx->isConst;
+                arguments.emplace(arguments.begin(), thisRef);
             }
 
             FunctionContext* func = getFunctionNode(sig.id, arguments);
@@ -1011,14 +1129,20 @@ namespace BraneScript
             func->identifier.range = toRange(ctx->sig->id);
             func->returnType = sig.returnType;
             func->arguments = std::move(arguments);
+            if(argPackInstanceContext)
+            {
+                func->argPackInstances.insert({argPackInstanceContext->identifier, std::move(*argPackInstanceContext)});
+                delete argPackInstanceContext;
+            }
+
             for(size_t i = 0; i < func->arguments.size(); i++)
             {
                 auto& a = func->arguments[i];
-                a.parent = func;
-                a.isLValue = true;
-                if(a.type.storageType == ValueType::Struct && !a.isRef)
+                a->parent = func;
+                a->isLValue = true;
+                if(a->type.storageType == ValueType::Struct && !a->isRef)
                     recordError(
-                        ctx->arguments->declaration()[i]->type(),
+                        a->identifier.range,
                         R"(Structs may only be passed by reference, consider adding the "ref" and "const" descriptors instead)");
             }
 
@@ -1045,9 +1169,9 @@ namespace BraneScript
                     if(statement)
                         func->body->statements.push_back(std::move(statement));
                 }
-                popDoc();
+                popDoc(func->body.get());
             }
-            popDoc();
+            popDoc(func);
 
             if(!_functionHasReturn && func->returnType.type.storageType != ValueType::Void)
                 recordError(ctx->sig->id, "Function never returns " + func->returnType.type.identifier);
@@ -1071,7 +1195,7 @@ namespace BraneScript
             if(i.library.size() >= 2)
                 i.library = i.library.substr(1, i.library.size() - 2);
             initDoc(&i, ctx);
-            popDoc();
+            popDoc(&i);
             if(!_analyzer.getLibrary(i.library))
                 recordError(ctx->library, "Library exported with identifier \"" + i.library + "\" not found!");
             if(!i.library.empty())
@@ -1088,7 +1212,7 @@ namespace BraneScript
             var->isLValue = true;
             initDoc(var, ctx);
             // TODO default value
-            popDoc();
+            popDoc(var);
             return {};
         }
 
@@ -1115,25 +1239,15 @@ namespace BraneScript
                 std::string prefix = lastNode()->longId();
                 if(!prefix.empty())
                     id = prefix + "::" + id;
-                auto args = std::any_cast<std::vector<TemplateArgDefContext*>>(visit(ctx->template_));
-                _registeredTemplates.emplace(id, new TemplateHandle(TemplateHandle::Struct, ctx, lastNode(), args));
+                auto args = std::any_cast<std::vector<TemplateDefArgumentContext*>>(visit(ctx->template_));
+                _registeredTemplates[id].emplace_back(
+                    new TemplateHandle(TemplateHandle::Struct, ctx, lastNode(), args));
                 return (StructContext*)nullptr;
             }
 
             // Modify id if we are instantiating a template
             if(ctx->template_)
-            {
-                std::vector<ValueContext> args;
-                for(auto& arg : ctx->template_->templateArgument())
-                {
-                    std::string argId = safeGetText(arg->id);
-                    assert(!arg->isPack);
-                    auto argInstance = dynamic_cast<TemplateTypeArgContext*>(_templateArgs.at(argId).get());
-                    assert(argInstance);
-                    args.push_back(argInstance->value);
-                }
-                id += templateArgsToString(args);
-            }
+                id += templateDefToString(ctx->template_);
 
             auto structCtx = getNode(*structs, id);
             if(structCtx->version == _result.version)
@@ -1175,10 +1289,11 @@ namespace BraneScript
                 thisRef.isRef = true;
                 thisRef.type = {structCtx->longId(), ValueType::Struct};
 
-                std::vector<LabeledValueContext> args = {thisRef};
+                LabeledNodeList<LabeledValueContext> args;
+                args.emplace_back(new LabeledValueContext{thisRef});
                 auto func = getFunctionNode("_construct", args);
                 initDoc(func, ctx->id);
-                popDoc();
+                popDoc(func);
                 func->arguments = std::move(args);
                 func->body = std::make_unique<ScopeContext>();
 
@@ -1187,7 +1302,7 @@ namespace BraneScript
                 {
                     if(var->type.storageType == ValueType::Struct)
                     {
-                        auto memberBase = new LabeledValueReferenceContext(func->arguments[0]);
+                        auto memberBase = new LabeledValueReferenceContext(*func->arguments[0]);
 
                         auto memberAccess = new MemberAccessContext{};
                         memberAccess->member = varIndex;
@@ -1225,17 +1340,19 @@ namespace BraneScript
                 otherRef.isConst = true;
                 otherRef.type = {structCtx->longId(), ValueType::Struct};
 
-                std::vector<LabeledValueContext> args = {thisRef, otherRef};
+                LabeledNodeList<LabeledValueContext> args;
+                args.emplace_back(new LabeledValueContext{thisRef});
+                args.emplace_back(new LabeledValueContext{otherRef});
                 auto func = getFunctionNode("_copy", args);
                 initDoc(func, ctx->id);
-                popDoc();
+                popDoc(func);
                 func->arguments = std::move(args);
                 func->body = std::make_unique<ScopeContext>();
 
                 size_t varIndex = 0;
                 for(auto& var : structCtx->variables)
                 {
-                    auto memberBase = new LabeledValueReferenceContext{func->arguments[0]};
+                    auto memberBase = new LabeledValueReferenceContext{*func->arguments[0]};
 
                     auto memberAccess = new MemberAccessContext{};
                     memberAccess->member = varIndex;
@@ -1243,7 +1360,7 @@ namespace BraneScript
                     memberAccess->returnType.isRef = true;
                     memberAccess->baseExpression.reset(memberBase);
 
-                    auto otherBase = new LabeledValueReferenceContext{func->arguments[1]};
+                    auto otherBase = new LabeledValueReferenceContext{*func->arguments[1]};
 
                     auto otherAccess = new MemberAccessContext{};
                     otherAccess->member = varIndex;
@@ -1290,17 +1407,19 @@ namespace BraneScript
                 otherRef.isRef = true;
                 otherRef.type = {structCtx->longId(), ValueType::Struct};
 
-                std::vector<LabeledValueContext> args = {thisRef, otherRef};
-                auto func = getFunctionNode("_move", {thisRef, otherRef});
+                LabeledNodeList<LabeledValueContext> args;
+                args.emplace_back(new LabeledValueContext{thisRef});
+                args.emplace_back(new LabeledValueContext{otherRef});
+                auto func = getFunctionNode("_move", args);
                 initDoc(func, ctx->id);
-                popDoc();
+                popDoc(func);
                 func->arguments = std::move(args);
                 func->body = std::make_unique<ScopeContext>();
 
                 size_t varIndex = 0;
                 for(auto& var : structCtx->variables)
                 {
-                    auto memberBase = new LabeledValueReferenceContext{func->arguments[0]};
+                    auto memberBase = new LabeledValueReferenceContext{*func->arguments[0]};
 
                     auto memberAccess = new MemberAccessContext{};
                     memberAccess->returnType = *var;
@@ -1308,7 +1427,7 @@ namespace BraneScript
                     memberAccess->member = varIndex;
                     memberAccess->baseExpression.reset(memberBase);
 
-                    auto otherBase = new LabeledValueReferenceContext{func->arguments[1]};
+                    auto otherBase = new LabeledValueReferenceContext{*func->arguments[1]};
 
                     auto otherAccess = new MemberAccessContext{};
                     otherAccess->member = varIndex;
@@ -1349,10 +1468,11 @@ namespace BraneScript
                 thisRef.isRef = true;
                 thisRef.type = {structCtx->longId(), ValueType::Struct};
 
-                std::vector<LabeledValueContext> args = {thisRef};
+                LabeledNodeList<LabeledValueContext> args;
+                args.emplace_back(new LabeledValueContext{thisRef});
                 auto func = getFunctionNode("_destruct", args);
                 initDoc(func, ctx->id);
-                popDoc();
+                popDoc(func);
                 func->arguments = std::move(args);
                 func->body = std::make_unique<ScopeContext>();
 
@@ -1361,7 +1481,7 @@ namespace BraneScript
                 {
                     if(var->type.storageType == ValueType::Struct)
                     {
-                        auto memberBase = new LabeledValueReferenceContext{func->arguments[0]};
+                        auto memberBase = new LabeledValueReferenceContext{*func->arguments[0]};
 
                         auto memberAccess = new MemberAccessContext{};
                         memberAccess->member = varIndex;
@@ -1385,7 +1505,7 @@ namespace BraneScript
                 structCtx->destructor = func;
             }
             structCtx->packed = ctx->packed;
-            popDoc();
+            popDoc(structCtx);
             pruneNodes(structCtx->variables);
             pruneNodes(structCtx->functions);
 
@@ -1402,7 +1522,7 @@ namespace BraneScript
                 if(stmt)
                     scope->statements.push_back(std::move(stmt));
             }
-            popDoc();
+            popDoc(scope);
             RETURN_STMT(scope);
         }
 
@@ -1412,7 +1532,7 @@ namespace BraneScript
             initDoc(retCtx, ctx);
             if(ctx->expression())
                 retCtx->value = asExpr(visit(ctx->expression()));
-            popDoc();
+            popDoc(retCtx);
 
             auto& functionType = lastNode()->getParent<FunctionContext>()->returnType.type;
             if(retCtx->value && retCtx->value->returnType.type != functionType)
@@ -1451,7 +1571,7 @@ namespace BraneScript
             ifCtx->body = asStmt(visit(ctx->operation));
             if(ctx->elseOp)
                 ifCtx->elseBody = asStmt(visit(ctx->elseOp));
-            popDoc();
+            popDoc(ifCtx);
             RETURN_STMT(ifCtx);
         }
 
@@ -1463,7 +1583,7 @@ namespace BraneScript
             initDoc(whileCtx, ctx);
             whileCtx->condition = asExpr(visit(ctx->cond));
             whileCtx->body = asStmt(visit(ctx->operation));
-            popDoc();
+            popDoc(whileCtx);
             RETURN_STMT(whileCtx);
         }
 
@@ -1490,7 +1610,7 @@ namespace BraneScript
             decl->isLValue = true;
 
             scope->localVariables.push_back(std::move(decl));
-            popDoc();
+            popDoc(result);
             auto value = (--scope->localVariables.end())->get();
             result->identifier = value->identifier;
             result->returnType = *value;
@@ -1520,7 +1640,7 @@ namespace BraneScript
                 if(!resolveCast(castCtx, assignmentCtx->lValue->returnType.type, error))
                     recordError(ctx->rValue, error);
             }
-            popDoc();
+            popDoc(assignmentCtx);
             RETURN_STMT(assignmentCtx);
         }
 
@@ -1530,7 +1650,7 @@ namespace BraneScript
             auto constCtx = new ConstBoolContext{};
             initDoc(constCtx, ctx);
             constCtx->value = (ctx->getText() == "true");
-            popDoc();
+            popDoc(constCtx);
             RETURN_EXPR(constCtx);
         }
 
@@ -1540,7 +1660,7 @@ namespace BraneScript
             auto constCtx = new ConstIntContext{};
             initDoc(constCtx, ctx);
             constCtx->value = std::stoi(ctx->getText());
-            popDoc();
+            popDoc(constCtx);
             RETURN_EXPR(constCtx);
         }
 
@@ -1550,7 +1670,7 @@ namespace BraneScript
             auto constCtx = new ConstFloatContext{};
             initDoc(constCtx, ctx);
             constCtx->value = std::stof(ctx->getText());
-            popDoc();
+            popDoc(constCtx);
             RETURN_EXPR(constCtx);
         }
 
@@ -1560,7 +1680,7 @@ namespace BraneScript
             auto constCtx = new ConstCharContext{};
             initDoc(constCtx, ctx);
             constCtx->value = ctx->getText()[1];
-            popDoc();
+            popDoc(constCtx);
             RETURN_EXPR(constCtx);
         }
 
@@ -1569,14 +1689,67 @@ namespace BraneScript
             EXPR_ASSERT_EXISTS(ctx->STRING(), "constant missing");
             auto constCtx = new ConstStringContext{};
             initDoc(constCtx, ctx);
-            constCtx->returnType.type.structDef = dynamic_cast<StructContext*>(getIdentifierContext("BraneScript")->findIdentifier("string"));
+            constCtx->returnType.type.structDef =
+                dynamic_cast<StructContext*>(getIdentifierContext("BraneScript")->findIdentifier("string"));
             if(!constCtx->returnType.type.structDef)
                 recordError(ctx, "To use the string type, the BraneScript library must be imported.");
             constCtx->value = ctx->getText();
             constCtx->value = {constCtx->value.data() + 1, constCtx->value.size() - 2};
-            popDoc();
+            popDoc(constCtx);
             RETURN_EXPR(constCtx);
         }
+
+        std::any visitSizeOfType(braneParser::SizeOfTypeContext* ctx) override
+        {
+            EXPR_ASSERT_EXISTS(ctx->t, "type expected");
+            auto constCtx = new ConstIntContext{};
+            initDoc(constCtx, ctx);
+            auto value = std::any_cast<ValueContext>(visitType(ctx->t));
+            constCtx->value = value.type.size();
+            popDoc(constCtx);
+            RETURN_EXPR(constCtx);
+        };
+
+        std::any visitSizeOfExpr(braneParser::SizeOfExprContext* ctx) override
+        {
+            EXPR_ASSERT_EXISTS(ctx->expr, "expression missing");
+            auto constCtx = new ConstIntContext{};
+            initDoc(constCtx, ctx);
+            std::unique_ptr<ExpressionContext> expr = asExpr(visit(ctx->expr));
+            constCtx->value = expr->returnType.type.size();
+            popDoc(constCtx);
+            RETURN_EXPR(constCtx);
+        };
+
+        std::any visitSizeOfPack(braneParser::SizeOfPackContext* ctx) override
+        {
+            EXPR_ASSERT_EXISTS(ctx->id, "expression missing");
+            auto constCtx = new ConstIntContext{};
+            initDoc(constCtx, ctx);
+            constCtx->value = 1;
+            popDoc(constCtx);
+            if(!_instantiatingTemplate)
+            {
+                recordError(ctx, "sizeof... can only be used inside templates");
+                RETURN_EXPR(constCtx);
+            }
+            std::string id = safeGetText(ctx->id);
+            auto* argInstance = getTemplateArg(id);
+            if(argInstance)
+            {
+                recordError(ctx, id + " is not a template parameter!");
+                RETURN_EXPR(constCtx);
+            }
+            auto* pack = dynamic_cast<TemplateTypePackArgContext*>(argInstance);
+            if(!pack)
+            {
+                recordError(ctx, id + " is not a type pack!");
+                RETURN_EXPR(constCtx);
+            }
+            constCtx->value = pack->values.size();
+            popDoc(constCtx);
+            RETURN_EXPR(constCtx);
+        };
 
         std::any visitParen(braneParser::ParenContext* ctx) override
         {
@@ -1592,7 +1765,7 @@ namespace BraneScript
             initDoc(callCtx, ctx);
             auto returnType = std::any_cast<ValueContext>(visit(ctx->type()));
             callCtx->arguments.push_back(asExpr(visit(ctx->expression())));
-            popDoc();
+            popDoc(callCtx);
             std::string error;
             if(!resolveCast(callCtx, returnType.type, error))
                 recordError(ctx, error);
@@ -1608,7 +1781,7 @@ namespace BraneScript
             initDoc(callCtx, ctx);
             callCtx->arguments.push_back(asExpr(visit(ctx->left)));
             callCtx->arguments.push_back(asExpr(visit(ctx->right)));
-            popDoc();
+            popDoc(callCtx);
             std::string error;
             if(!resolveFunctionCall("opr " + ctx->opr->getText(), callCtx, error))
                 recordError(ctx->opr, error);
@@ -1624,7 +1797,7 @@ namespace BraneScript
             initDoc(callCtx, ctx);
             callCtx->arguments.push_back(asExpr(visit(ctx->left)));
             callCtx->arguments.push_back(asExpr(visit(ctx->right)));
-            popDoc();
+            popDoc(callCtx);
             std::string error;
             if(!resolveFunctionCall("opr " + ctx->opr->getText(), callCtx, error))
                 recordError(ctx->opr, error);
@@ -1640,7 +1813,7 @@ namespace BraneScript
             initDoc(callCtx, ctx);
             callCtx->arguments.push_back(asExpr(visit(ctx->left)));
             callCtx->arguments.push_back(asExpr(visit(ctx->right)));
-            popDoc();
+            popDoc(callCtx);
             std::string error;
             if(!resolveFunctionCall("opr " + ctx->opr->getText(), callCtx, error))
                 recordError(ctx->opr, error);
@@ -1656,7 +1829,7 @@ namespace BraneScript
             initDoc(callCtx, ctx);
             callCtx->arguments.push_back(asExpr(visit(ctx->left)));
             callCtx->arguments.push_back(asExpr(visit(ctx->right)));
-            popDoc();
+            popDoc(callCtx);
             std::string error;
             if(!resolveFunctionCall("opr " + ctx->opr->getText(), callCtx, error))
                 recordError(ctx->opr, error);
@@ -1671,7 +1844,7 @@ namespace BraneScript
             initDoc(callCtx, ctx);
             callCtx->arguments.push_back(asExpr(visit(ctx->base)));
             callCtx->arguments.push_back(asExpr(visit(ctx->arg)));
-            popDoc();
+            popDoc(callCtx);
             std::string error;
             if(!resolveFunctionCall("opr []", callCtx, error))
                 recordError(ctx, error);
@@ -1717,14 +1890,14 @@ namespace BraneScript
                 assert(memberAccess->member < parent->variables.size());
                 memberAccess->returnType = *parent->variables[memberAccess->member];
 
-                popDoc();
-                popDoc();
+                popDoc(valueAccess);
+                popDoc(memberAccess);
                 RETURN_EXPR(memberAccess);
             }
 
             auto valueAccess = new LabeledValueReferenceContext{*node->as<LabeledValueContext>()};
             initDoc(valueAccess, ctx);
-            popDoc();
+            popDoc(valueAccess);
             RETURN_EXPR(valueAccess);
         }
 
@@ -1765,8 +1938,39 @@ namespace BraneScript
                     }
                 }
             }
-            popDoc();
+            popDoc(accessCtx);
             RETURN_EXPR(accessCtx);
+        }
+
+        std::vector<std::unique_ptr<ExpressionContext>> populateFunctionArgs(braneParser::ArgumentPackContext* ctx)
+        {
+            std::vector<std::unique_ptr<ExpressionContext>> args;
+            for(auto& item : ctx->argumentPackItem())
+            {
+                if(item->expr)
+                {
+                    args.push_back(asExpr(visit(item->expr)));
+                    continue;
+                }
+
+                if(!_instantiatingTemplate)
+                {
+                    recordError(item, "argument packs may only be used in templates!");
+                    continue;
+                }
+
+                std::string packID = safeGetText(item->packID);
+                auto* argPack = dynamic_cast<ArgPackInstanceContext*>(lastNode()->findIdentifier(packID));
+                if(!argPack)
+                {
+                    recordError(item->packID, packID + " is not an argument pack!");
+                    continue;
+                }
+
+                for(auto& value : argPack->values)
+                    args.emplace_back(new LabeledValueReferenceContext{*value});
+            }
+            return args;
         }
 
         std::any visitMemberFunctionCall(braneParser::MemberFunctionCallContext* ctx) override
@@ -1775,12 +1979,15 @@ namespace BraneScript
             EXPR_ASSERT_EXISTS(ctx->name, "expected member function call");
             auto callCtx = new FunctionCallContext{};
             initDoc(callCtx, ctx);
-            callCtx->arguments.push_back(asExpr(visit(ctx->base)));
-            for(auto* a : ctx->argumentPack()->expression())
-                callCtx->arguments.push_back(asExpr(visit(a)));
-            popDoc();
+            callCtx->arguments = populateFunctionArgs(ctx->argumentPack());
+            callCtx->arguments.insert(callCtx->arguments.begin(), asExpr(visit(ctx->base)));
+            popDoc(callCtx);
             std::string error;
-            if(!resolveFunctionCall(ctx->name->getText(), callCtx, error, callCtx->arguments[0]->returnType.type.structDef, ctx->template_))
+            if(!resolveFunctionCall(ctx->name->getText(),
+                                    callCtx,
+                                    error,
+                                    callCtx->arguments[0]->returnType.type.structDef,
+                                    ctx->template_))
                 recordError(ctx, error);
             else
             {
@@ -1795,21 +2002,21 @@ namespace BraneScript
             EXPR_ASSERT_EXISTS(ctx->id, "expected function identifier");
             auto callCtx = new FunctionCallContext{};
             initDoc(callCtx, ctx);
-            for(auto* a : ctx->argumentPack()->expression())
-                callCtx->arguments.push_back(asExpr(visit(a)));
+            callCtx->arguments = populateFunctionArgs(ctx->argumentPack());
 
             std::string error;
             if(resolveFunctionCall(ctx->id, callCtx, error))
             {
                 if(isLocal(callCtx->function))
                     callTree.addDependency(lastNode()->getParent<FunctionContext>(), callCtx->function);
-                popDoc();
+                popDoc(callCtx);
                 RETURN_EXPR(callCtx);
             }
 
             if(ctx->id->child || !lastNode()->getParent<StructContext>())
             {
                 recordError(ctx->id, error);
+                popDoc(callCtx);
                 RETURN_EXPR(callCtx);
             }
             // If a non-member function was not found and this scope is in a member function, try to implicitly
@@ -1819,17 +2026,17 @@ namespace BraneScript
             auto valueAccess = new LabeledValueReferenceContext{*thisRef};
             initDoc(valueAccess, ctx);
 
-            callCtx->arguments.insert(callCtx->arguments.begin(), std::unique_ptr<ExpressionContext>(valueAccess));
-            if(!resolveFunctionCall(ctx->id->id->getText(), callCtx, error, valueAccess->returnType.type.structDef, ctx->id->template_))
+            callCtx->arguments.emplace(callCtx->arguments.begin(), valueAccess);
+            if(!resolveFunctionCall(
+                   ctx->id->id->getText(), callCtx, error, valueAccess->returnType.type.structDef, ctx->id->template_))
                 recordError(ctx->id, error);
             {
                 if(isLocal(callCtx->function))
                     callTree.addDependency(lastNode()->getParent<FunctionContext>(), callCtx->function);
             }
 
-
-            popDoc();
-            popDoc();
+            popDoc(valueAccess);
+            popDoc(callCtx);
             RETURN_EXPR(callCtx);
         }
 
@@ -1839,12 +2046,12 @@ namespace BraneScript
             if(globals.empty())
                 return {};
 
-            std::vector<LabeledValueContext> args = {};
+            LabeledNodeList<LabeledValueContext> args = {};
             // Make constructor
             {
                 auto func = getFunctionNode("_construct", args);
                 initDoc(func, ctx->start);
-                popDoc();
+                popDoc(func);
                 func->body = std::make_unique<ScopeContext>();
 
                 size_t varIndex = 0;
@@ -1871,7 +2078,7 @@ namespace BraneScript
             {
                 auto func = getFunctionNode("_destruct", args);
                 initDoc(func, ctx->start);
-                popDoc();
+                popDoc(func);
                 func->body = std::make_unique<ScopeContext>();
 
                 size_t varIndex = 0;

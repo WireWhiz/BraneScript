@@ -76,7 +76,7 @@ namespace BraneScript
     template<typename T>
     using LabeledNodeList = std::vector<std::unique_ptr<T>>;
 
-    struct TemplateArgDefContext
+    struct TemplateDefArgumentContext
     {
         std::string identifier;
         enum ArgType {
@@ -99,10 +99,10 @@ namespace BraneScript
 
     struct TemplateTypePackArgContext : public TemplateArgContext
     {
-        std::vector<ValueContext> value;
+        std::vector<ValueContext> values;
     };
 
-    using TemplateArgDefs = robin_hood::unordered_map<std::string, TemplateArgDefContext>;
+    using TemplateArgDefs = robin_hood::unordered_map<std::string, TemplateDefArgumentContext>;
     using TemplateArgs = robin_hood::unordered_map<std::string, std::unique_ptr<TemplateArgContext>>;
 
     // Not yet implemented
@@ -120,12 +120,11 @@ namespace BraneScript
         DocumentContext* parent = nullptr;
         uint16_t version = 0;
 
+        virtual ~DocumentContext() = default;
         virtual DocumentContext* getNodeAtChar(TextPos pos);
         virtual DocumentContext* findIdentifier(const std::string& identifier, uint8_t searchOptions = 0);
-        virtual void
-        getFunction(const std::string& identifier, std::list<FunctionContext*>& overrides, uint8_t searchOptions = 0);
+        virtual void  getFunction(const std::string& identifier, std::list<FunctionContext*>& overrides, uint8_t searchOptions = 0);
         virtual std::string longId() const;
-        virtual ~DocumentContext() = default;
 
         template<typename T>
         T* as()
@@ -168,6 +167,16 @@ namespace BraneScript
         std::string signature() const override;
         std::string longId() const override;
         DocumentContext* deepCopy(const std::function<DocumentContext*(DocumentContext*)>& callback) override;
+        LabeledValueContext() = default;
+        LabeledValueContext(std::string identifier, ValueContext value);
+    };
+
+
+    struct ArgPackInstanceContext : public DocumentContext
+    {
+        std::string identifier;
+        std::vector<LabeledValueContext*> values;
+        virtual DocumentContext* deepCopy(const std::function<DocumentContext*(DocumentContext*)>& callback);
     };
 
     struct ErrorContext
@@ -323,7 +332,9 @@ namespace BraneScript
         // Type identifier
         ValueContext returnType;
         // Arguments
-        std::vector<LabeledValueContext> arguments;
+        LabeledNodeList<LabeledValueContext> arguments;
+        // Template arg pack instances
+        robin_hood::unordered_map<std::string, ArgPackInstanceContext> argPackInstances;
         // Does not change state (globals/parent struct members)
         bool isConst = false;
         // Can be evaluated at compile time

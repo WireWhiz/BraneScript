@@ -25,9 +25,13 @@ public:
 
     virtual std::any visitGlobal(braneParser::GlobalContext *context) = 0;
 
-    virtual std::any visitTemplateArgument(braneParser::TemplateArgumentContext *context) = 0;
+    virtual std::any visitTemplateDefArgument(braneParser::TemplateDefArgumentContext *context) = 0;
 
     virtual std::any visitTemplateDef(braneParser::TemplateDefContext *context) = 0;
+
+    virtual std::any visitTemplateTypeArg(braneParser::TemplateTypeArgContext *context) = 0;
+
+    virtual std::any visitPackExpansionArg(braneParser::PackExpansionArgContext *context) = 0;
 
     virtual std::any visitTemplateArgs(braneParser::TemplateArgsContext *context) = 0;
 
@@ -37,7 +41,11 @@ public:
 
     virtual std::any visitDeclaration(braneParser::DeclarationContext *context) = 0;
 
+    virtual std::any visitArgumentListItem(braneParser::ArgumentListItemContext *context) = 0;
+
     virtual std::any visitArgumentList(braneParser::ArgumentListContext *context) = 0;
+
+    virtual std::any visitArgumentPackItem(braneParser::ArgumentPackItemContext *context) = 0;
 
     virtual std::any visitArgumentPack(braneParser::ArgumentPackContext *context) = 0;
 
@@ -85,6 +93,8 @@ public:
 
     virtual std::any visitConstBool(braneParser::ConstBoolContext *context) = 0;
 
+    virtual std::any visitSizeOfExpr(braneParser::SizeOfExprContext *context) = 0;
+
     virtual std::any visitMuldiv(braneParser::MuldivContext *context) = 0;
 
     virtual std::any visitIndexAccess(braneParser::IndexAccessContext *context) = 0;
@@ -97,9 +107,13 @@ public:
 
     virtual std::any visitMemberFunctionCall(braneParser::MemberFunctionCallContext *context) = 0;
 
+    virtual std::any visitSizeOfPack(braneParser::SizeOfPackContext *context) = 0;
+
     virtual std::any visitFunctionCall(braneParser::FunctionCallContext *context) = 0;
 
     virtual std::any visitConstFloat(braneParser::ConstFloatContext *context) = 0;
+
+    virtual std::any visitSizeOfType(braneParser::SizeOfTypeContext *context) = 0;
 
     virtual std::any visitId(braneParser::IdContext *context) = 0;
 

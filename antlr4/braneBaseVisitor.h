@@ -27,11 +27,19 @@ public:
     return visitChildren(ctx);
   }
 
-  virtual std::any visitTemplateArgument(braneParser::TemplateArgumentContext *ctx) override {
+  virtual std::any visitTemplateDefArgument(braneParser::TemplateDefArgumentContext *ctx) override {
     return visitChildren(ctx);
   }
 
   virtual std::any visitTemplateDef(braneParser::TemplateDefContext *ctx) override {
+    return visitChildren(ctx);
+  }
+
+  virtual std::any visitTemplateTypeArg(braneParser::TemplateTypeArgContext *ctx) override {
+    return visitChildren(ctx);
+  }
+
+  virtual std::any visitPackExpansionArg(braneParser::PackExpansionArgContext *ctx) override {
     return visitChildren(ctx);
   }
 
@@ -51,7 +59,15 @@ public:
     return visitChildren(ctx);
   }
 
+  virtual std::any visitArgumentListItem(braneParser::ArgumentListItemContext *ctx) override {
+    return visitChildren(ctx);
+  }
+
   virtual std::any visitArgumentList(braneParser::ArgumentListContext *ctx) override {
+    return visitChildren(ctx);
+  }
+
+  virtual std::any visitArgumentPackItem(braneParser::ArgumentPackItemContext *ctx) override {
     return visitChildren(ctx);
   }
 
@@ -147,6 +163,10 @@ public:
     return visitChildren(ctx);
   }
 
+  virtual std::any visitSizeOfExpr(braneParser::SizeOfExprContext *ctx) override {
+    return visitChildren(ctx);
+  }
+
   virtual std::any visitMuldiv(braneParser::MuldivContext *ctx) override {
     return visitChildren(ctx);
   }
@@ -171,11 +191,19 @@ public:
     return visitChildren(ctx);
   }
 
+  virtual std::any visitSizeOfPack(braneParser::SizeOfPackContext *ctx) override {
+    return visitChildren(ctx);
+  }
+
   virtual std::any visitFunctionCall(braneParser::FunctionCallContext *ctx) override {
     return visitChildren(ctx);
   }
 
   virtual std::any visitConstFloat(braneParser::ConstFloatContext *ctx) override {
+    return visitChildren(ctx);
+  }
+
+  virtual std::any visitSizeOfType(braneParser::SizeOfTypeContext *ctx) override {
     return visitChildren(ctx);
   }
 

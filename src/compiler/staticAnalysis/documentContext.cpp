@@ -154,6 +154,11 @@ namespace BraneScript
         return callback(new LabeledValueContext(*this));
     }
 
+    LabeledValueContext::LabeledValueContext(std::string identifier, ValueContext value) : ValueContext(value)
+    {
+        this->identifier.text = std::move(identifier);
+    }
+
     DocumentContext* StatementErrorContext::deepCopy(const std::function<DocumentContext*(DocumentContext*)>& callback)
     {
         return callback(new StatementErrorContext{*this});
@@ -361,9 +366,12 @@ namespace BraneScript
     {
         for(auto& arg : arguments)
         {
-            if(arg.identifier.text == identifier)
-                return &arg;
+            if(arg->identifier.text == identifier)
+                return arg.get();
         }
+        auto argPack = argPackInstances.find(identifier);
+        if(argPack != argPackInstances.end())
+            return &argPack->second;
         return DocumentContext::findIdentifier(identifier, searchOptions);
     }
 
@@ -383,11 +391,11 @@ namespace BraneScript
         for(auto itr = arguments.begin();itr != arguments.end();)
         {
             auto& arg = *itr;
-            if(arg.isConst)
+            if(arg->isConst)
                 sig += "const ";
-            if(arg.isRef)
+            if(arg->isRef)
                 sig += "ref ";
-            sig += arg.type.identifier;
+            sig += arg->type.identifier;
             if(++itr != arguments.end())
                 sig += ",";
             else
@@ -405,8 +413,8 @@ namespace BraneScript
         copy->returnType = returnType;
         for(auto& arg : arguments)
         {
-            auto* newArg = assertCast<LabeledValueContext>(arg.deepCopy(callback));
-            copy->arguments.emplace_back(*newArg);
+            auto* newArg = assertCast<LabeledValueContext>(arg->deepCopy(callback));
+            copy->arguments.emplace_back(newArg);
             delete newArg;
         }
 
@@ -718,5 +726,10 @@ namespace BraneScript
 
     TemplateTypeArgContext::TemplateTypeArgContext(std::string id, ValueContext value) : value(std::move(value)) {
         identifier = std::move(id);
+    }
+
+    DocumentContext* ArgPackInstanceContext::deepCopy(const std::function<DocumentContext*(DocumentContext*)>& callback)
+    {
+        return new ArgPackInstanceContext{*this};
     }
 } // namespace BraneScript
