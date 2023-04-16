@@ -75,7 +75,7 @@ namespace BraneScript
         virtual ~AotNode() = default;
         AotNode(const AotNode&) = default;
 
-        virtual AotNode* optimize() = 0;
+        virtual AotNode* optimize(FunctionCompilerCtx& ctx) = 0;
 
         virtual AotValue* generateBytecode(FunctionCompilerCtx& ctx) const = 0;
 
@@ -103,7 +103,7 @@ namespace BraneScript
 
         AotUnaryArgNode(AotNode* arg, const TypeDef* resType);
 
-        AotNode* optimize() override;
+        AotNode* optimize(FunctionCompilerCtx& ctx) override;
     };
 
     class AotBinaryArgNode : public AotNode
@@ -114,7 +114,7 @@ namespace BraneScript
 
         AotBinaryArgNode(AotNode* argA, AotNode* argB, const TypeDef* resType);
 
-        AotNode* optimize() override;
+        AotNode* optimize(FunctionCompilerCtx& ctx) override;
     };
 
 }

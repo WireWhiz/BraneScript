@@ -221,7 +221,7 @@ TEST(BraneScript, Objects)
 
     ScriptRuntime rt;
     rt.setLinker(&linker);
-    Script* testScript = rt.assembleScript(ir);
+    Script* testScript = rt.loadScript(ir);
     delete ir;
     ASSERT_TRUE(testScript);
 
@@ -244,17 +244,16 @@ TEST(BraneScript, Objects)
     EXPECT_FALSE(copyConstructorCalled);
     EXPECT_FALSE(destructorCalled);
 
-    auto createStruct = testScript->getFunction<TestStruct1*>("tests::createStruct()");
+    TestStruct1 createdStruct{};
+    auto createStruct = testScript->getFunction<void, TestStruct1*>("tests::createStruct(ref BraneScript::TestStruct1)");
     ASSERT_TRUE(createStruct);
-    TestStruct1* createdStruct = createStruct();
-    ASSERT_TRUE(createdStruct);
-    EXPECT_EQ(createdStruct->a, 6.9f);
-    EXPECT_EQ(createdStruct->b, 420);
-    EXPECT_EQ(createdStruct->c, false);
-    delete createdStruct;
+    createStruct(&createdStruct);
+    EXPECT_EQ(createdStruct.a, 6.9f);
+    EXPECT_EQ(createdStruct.b, 420);
+    EXPECT_EQ(createdStruct.c, false);
 
     EXPECT_TRUE(constructorCalled);
-    //EXPECT_TRUE(moveConstructorCalled);
+    EXPECT_TRUE(moveConstructorCalled);
     EXPECT_TRUE(copyConstructorCalled);
     EXPECT_TRUE(destructorCalled);
     destructorCalled = false;
@@ -265,39 +264,39 @@ TEST(BraneScript, Objects)
 
     EXPECT_TRUE(destructorCalled);
 
-    auto testScriptStruct = testScript->getFunction<TestStruct2*>("tests::testScriptStruct()");
+
+    TestStruct2 ts2{};
+    auto testScriptStruct = testScript->getFunction<void, TestStruct2*>("tests::testScriptStruct(ref tests::TestStruct2)");
     ASSERT_TRUE(testScriptStruct);
-    TestStruct2* ts2 = testScriptStruct();
-    ASSERT_TRUE(ts2);
-    EXPECT_EQ(ts2->a, 5);
-    EXPECT_EQ(ts2->b, true);
-    EXPECT_EQ(ts2->c, 3.2f);
+    testScriptStruct(&ts2);
+    EXPECT_EQ(ts2.a, 5);
+    EXPECT_EQ(ts2.b, true);
+    EXPECT_EQ(ts2.c, 3.2f);
 
     auto modStruct = testScript->getFunction<void, TestStruct2*>("tests::modStruct(ref tests::TestStruct2)");
     ASSERT_TRUE(modStruct);
-    modStruct(ts2);
-    EXPECT_EQ(ts2->a, 5);
-    EXPECT_EQ(ts2->b, true);
-    EXPECT_EQ(ts2->c, 4.2f);
+    modStruct(&ts2);
+    EXPECT_EQ(ts2.a, 5);
+    EXPECT_EQ(ts2.b, true);
+    EXPECT_EQ(ts2.c, 4.2f);
 
     auto testMemberFunc = testScript->getFunction<float, TestStruct2*>("tests::testMemberFunc(ref tests::TestStruct2)");
     ASSERT_TRUE(testMemberFunc);
-    EXPECT_EQ(testMemberFunc(ts2), 5 + 4.2f);
-    EXPECT_EQ(ts2->a, 5);
-    EXPECT_EQ(ts2->b, true);
-    EXPECT_EQ(ts2->c, 4.2f);
-    delete ts2;
+    EXPECT_EQ(testMemberFunc(&ts2), 5 + 4.2f);
+    EXPECT_EQ(ts2.a, 5);
+    EXPECT_EQ(ts2.b, true);
+    EXPECT_EQ(ts2.c, 4.2f);
 
-    auto nestedTest = testScript->getFunction<NestedStructBase*>("tests::nestedTest()");
+    NestedStructBase nestedStruct{};
+    auto nestedTest = testScript->getFunction<void, NestedStructBase*>("tests::nestedTest(ref tests::NestedStructBase)");
     ASSERT_TRUE(nestedTest);
-    auto nestedStruct = nestedTest();
+    nestedTest(&nestedStruct);
     // We don't test a and c as they are not initialized
-    EXPECT_EQ(nestedStruct->b.x, 1.0f);
-    EXPECT_EQ(nestedStruct->b.y, 4.0f);
-    EXPECT_EQ(nestedStruct->b.z, 3.0f);
-    delete nestedStruct;
+    EXPECT_EQ(nestedStruct.b.x, 1.0f);
+    EXPECT_EQ(nestedStruct.b.y, 4.0f);
+    EXPECT_EQ(nestedStruct.b.z, 3.0f);
 
 #ifndef NDEBUG
-    EXPECT_EQ(scriptMallocDiff, 3);
+    EXPECT_EQ(scriptMallocDiff, 0);
 #endif
 }

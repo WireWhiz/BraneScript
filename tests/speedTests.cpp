@@ -65,7 +65,7 @@ TEST(BraneScript, Speed)
     ASSERT_TRUE(ir);
 
     ScriptRuntime rt;
-    Script* testScript = rt.assembleScript(ir);
+    Script* testScript = rt.loadScript(ir);
     delete ir;
     ASSERT_TRUE(testScript);
 

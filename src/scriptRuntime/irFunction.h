@@ -24,6 +24,7 @@ namespace BraneScript
         std::vector<uint8_t> code;
         uint16_t maxRegs = 0;
         uint16_t maxMemLocations = 0;
+        bool isExported = false;
 
         template<typename T>
         T readCode(size_t& index)

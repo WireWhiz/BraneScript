@@ -49,7 +49,7 @@ argumentListItem : declaration | pack=ID '...' id=ID;
 argumentList: (argumentListItem (',' argumentListItem)*)?;
 argumentPackItem : expr=expression | packID=ID '...';
 argumentPack: (argumentPackItem (',' argumentPackItem)*)?;
-functionSig : (template=templateDef)? ((type (id=ID | ('opr' oprID=(ADD|SUB|MUL|DIV|'=='|'!='|'<'|'>'|'<='|'>='|LOGIC|'[]')))) | ('opr' castType=type));
+functionSig : (template=templateDef)? isConstexpr='constexpr'? ((type (id=ID | ('opr' oprID=(ADD|SUB|MUL|DIV|'=='|'!='|'<'|'>'|'<='|'>='|LOGIC|'[]')))) | ('opr' castType=type));
 functionStub: sig=functionSig '(' arguments=argumentList ')' isConst='const'? 'ext' ';';
 function    : sig=functionSig '(' arguments=argumentList ')' isConst='const'? '{' statements=statement* '}';
 

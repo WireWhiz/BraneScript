@@ -15,15 +15,16 @@ namespace BraneScript
       public:
         explicit AotCastNode(AotNode* arg, const TypeDef* castType);
 
-        AotNode* optimize() override;
+        AotNode* optimize(FunctionCompilerCtx& ctx) override;
 
         AotValue* generateBytecode(FunctionCompilerCtx& ctx) const override;
     };
 
     class AotAssignNode : public AotBinaryArgNode
     {
+        bool _forceMove;
       public:
-        AotAssignNode(AotNode* lvalue, AotNode* rvalue);
+        AotAssignNode(AotNode* lvalue, AotNode* rvalue, bool forceMove = false);
 
         AotValue* generateBytecode(FunctionCompilerCtx& ctx) const override;
     };
@@ -33,7 +34,7 @@ namespace BraneScript
       public:
         AotAddNode(AotNode* argA, AotNode* argB);
 
-        AotNode* optimize() override;
+        AotNode* optimize(FunctionCompilerCtx& ctx) override;
 
         AotValue* generateBytecode(FunctionCompilerCtx& ctx) const override;
     };
@@ -43,7 +44,7 @@ namespace BraneScript
       public:
         AotSubNode(AotNode* argA, AotNode* argB);
 
-        AotNode* optimize() override;
+        AotNode* optimize(FunctionCompilerCtx& ctx) override;
 
         AotValue* generateBytecode(FunctionCompilerCtx& ctx) const override;
     };
@@ -53,7 +54,7 @@ namespace BraneScript
       public:
         AotMulNode(AotNode* a, AotNode* b);
 
-        AotNode* optimize() override;
+        AotNode* optimize(FunctionCompilerCtx& ctx) override;
 
         AotValue* generateBytecode(FunctionCompilerCtx& ctx) const override;
     };
@@ -63,7 +64,7 @@ namespace BraneScript
       public:
         AotDivNode(AotNode* argA, AotNode* argB);
 
-        AotNode* optimize() override;
+        AotNode* optimize(FunctionCompilerCtx& ctx) override;
 
         AotValue* generateBytecode(FunctionCompilerCtx& ctx) const override;
     };

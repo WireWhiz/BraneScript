@@ -12,9 +12,9 @@ namespace BraneScript
 {
     AotCastNode::AotCastNode(AotNode* arg, const TypeDef* castType) : AotUnaryArgNode(arg, castType) {}
 
-    AotNode* AotCastNode::optimize()
+    AotNode* AotCastNode::optimize(FunctionCompilerCtx& ctx)
     {
-        AotUnaryArgNode::optimize();
+        AotUnaryArgNode::optimize(ctx);
         assert(arg);
         if(arg->is<AotConstNode>())
         {
@@ -221,7 +221,8 @@ namespace BraneScript
         return castValue;
     }
 
-    AotAssignNode::AotAssignNode(AotNode* lvalue, AotNode* rvalue) : AotBinaryArgNode(lvalue, rvalue, lvalue->resType())
+    AotAssignNode::AotAssignNode(AotNode* lvalue, AotNode* rvalue, bool forceMove)
+        : _forceMove(forceMove), AotBinaryArgNode(lvalue, rvalue, lvalue->resType())
     {
         assert(argA->resType());
         assert(argB->resType());
@@ -242,7 +243,7 @@ namespace BraneScript
         if(lValue->isStruct() && rValue->isStruct())
         {
             auto s = static_cast<const StructDef*>(lValue->type);
-            bool shouldMove = rValue->isTemp();
+            bool shouldMove = rValue->isTemp() || _forceMove;
             int16_t cIndex;
             if(shouldMove)
                 cIndex = ctx.script.linkMoveConstructor(s);
@@ -250,6 +251,8 @@ namespace BraneScript
                 cIndex = ctx.script.linkCopyConstructor(s);
 
             // Call constructor
+            lValue = ctx.castReg(lValue);
+            rValue = ctx.castReg(rValue);
             ctx.appendCode(Operand::CALL, cIndex);
             ctx.appendCode(ctx.serialize(lValue));
             ctx.appendCode(ctx.serialize(rValue));
@@ -260,6 +263,7 @@ namespace BraneScript
         if(rValue->isStruct() && rValue->isTemp() && rValue->isHeapRef() && !(rValue->flags & AotValue::Const))
         {
             auto s = static_cast<const StructDef*>(rValue->type);
+            rValue = ctx.castReg(rValue);
             ctx.appendCode(Operand::CALL, ctx.script.linkDestructor(s));
             ctx.appendCode(ctx.serialize(rValue));
             ctx.appendCode(Operand::FREE, ctx.serialize((rValue)));
@@ -275,9 +279,9 @@ namespace BraneScript
         assert(a->resType() == b->resType());
     }
 
-    AotNode* AotAddNode::optimize()
+    AotNode* AotAddNode::optimize(FunctionCompilerCtx& ctx)
     {
-        AotBinaryArgNode::optimize();
+        AotBinaryArgNode::optimize(ctx);
         if(argA->is<AotConstNode>() && argB->is<AotConstNode>())
         {
             auto* aNode = argA->as<AotConstNode>();
@@ -327,9 +331,9 @@ namespace BraneScript
         assert(a->resType() == b->resType());
     }
 
-    AotNode* AotSubNode::optimize()
+    AotNode* AotSubNode::optimize(FunctionCompilerCtx& ctx)
     {
-        AotBinaryArgNode::optimize();
+        AotBinaryArgNode::optimize(ctx);
         if(argA->is<AotConstNode>() && argB->is<AotConstNode>())
         {
             auto* aNode = argA->as<AotConstNode>();
@@ -374,9 +378,9 @@ namespace BraneScript
         assert(a->resType() == b->resType());
     }
 
-    AotNode* AotMulNode::optimize()
+    AotNode* AotMulNode::optimize(FunctionCompilerCtx& ctx)
     {
-        AotBinaryArgNode::optimize();
+        AotBinaryArgNode::optimize(ctx);
         if(argA->is<AotConstNode>() && argB->is<AotConstNode>())
         {
             auto* aNode = argA->as<AotConstNode>();
@@ -425,9 +429,9 @@ namespace BraneScript
         assert(a->resType() == b->resType());
     }
 
-    AotNode* AotDivNode::optimize()
+    AotNode* AotDivNode::optimize(FunctionCompilerCtx& ctx)
     {
-        AotBinaryArgNode::optimize();
+        AotBinaryArgNode::optimize(ctx);
         if(argA->is<AotConstNode>() && argB->is<AotConstNode>())
         {
             auto* aNode = argA->as<AotConstNode>();

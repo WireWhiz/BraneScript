@@ -102,7 +102,7 @@ TEST(BraneScript, Operators)
     Linker linker;
     ScriptRuntime rt;
     rt.setLinker(&linker);
-    Script* testScript = rt.assembleScript(ir);
+    Script* testScript = rt.loadScript(ir);
     delete ir;
     ASSERT_TRUE(testScript);
 

@@ -83,7 +83,7 @@ TEST(BraneScript, Templates)
     EXPECT_EQ(ir->localFunctions.size(), 15);
 
     ScriptRuntime rt;
-    Script* testScript = rt.assembleScript(ir);
+    Script* testScript = rt.loadScript(ir);
     delete ir;
     ASSERT_TRUE(testScript);
 
@@ -101,13 +101,12 @@ TEST(BraneScript, Templates)
     EXPECT_EQ(addFloatExplicit(2.0f, 4.0f), 6.0f);
 
     using TestPair = std::pair<int, float>;
-    auto generatePair = testScript->getFunction<TestPair*, int, float>("generatePair");
+    TestPair testPair{};
+    auto generatePair = testScript->getFunction<void, TestPair*, int, float>("generatePair(ref TestPair<int,float>,int,float)");
     ASSERT_TRUE(generatePair);
-    TestPair*  testPair = generatePair(32, 42.0f);
-    ASSERT_TRUE(testPair);
-    EXPECT_EQ(testPair->first, 32);
-    EXPECT_EQ(testPair->second, 42.0f);
-    delete testPair;
+    generatePair(&testPair, 32, 42.0f);
+    EXPECT_EQ(testPair.first, 32);
+    EXPECT_EQ(testPair.second, 42.0f);
 
     auto sum4 = testScript->getFunction<int, int, int, int, int>("sum4");
     ASSERT_TRUE(sum4);

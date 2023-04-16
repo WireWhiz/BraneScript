@@ -71,7 +71,7 @@ TEST(BraneScript, FlowStatements)
     auto* ir = compiler.compile(analyzer.getCtx("test")->scriptContext.get());
 
     ScriptRuntime rt;
-    Script* testScript = rt.assembleScript(ir);
+    Script* testScript = rt.loadScript(ir);
     delete ir;
     ASSERT_TRUE(testScript);
 

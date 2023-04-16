@@ -21,14 +21,14 @@ namespace BraneScript
         linker.addFunction("BraneScript::string::_destruct(ref BraneScript::string)", "void", 1, (void*)(FunctionHandle<void, std::string*>)[](std::string* data){
             data->~basic_string();
         });
-        linker.addFunction("BraneScript::opr ==(const ref BraneScript::string,const ref BraneScript::string)", "BraneScript::string", 2, (void*)(FunctionHandle<bool, const std::string*, const std::string*>)[](const std::string* a, const std::string* b){
+        linker.addFunction("BraneScript::opr ==(const ref BraneScript::string,const ref BraneScript::string)", "bool", 2, (void*)(FunctionHandle<bool, const std::string*, const std::string*>)[](const std::string* a, const std::string* b){
             return *a == *b;
         });
-        linker.addFunction("BraneScript::opr !=(const ref BraneScript::string,const ref BraneScript::string)", "BraneScript::string", 2, (void*)(FunctionHandle<bool, const std::string*, const std::string*>)[](const std::string* a, const std::string* b){
+        linker.addFunction("BraneScript::opr !=(const ref BraneScript::string,const ref BraneScript::string)", "bool", 2, (void*)(FunctionHandle<bool, const std::string*, const std::string*>)[](const std::string* a, const std::string* b){
             return *a != *b;
         });
-        linker.addFunction("BraneScript::opr +(const ref BraneScript::string,const ref BraneScript::string)", "BraneScript::string", 2, (void*)(FunctionHandle<std::string*, const std::string*, const std::string*>)[](const std::string* a, const std::string* b){
-            return new std::string(*a + *b);
+        linker.addFunction("BraneScript::opr +(ref BraneScript::string,const ref BraneScript::string,const ref BraneScript::string)", "void", 3, (void*)(FunctionHandle<void, std::string*, const std::string*, const std::string*>)[](std::string* retRef, const std::string* a, const std::string* b){
+            *retRef = *a + *b;
         });
         linker.addFunction("BraneScript::opr [](const ref BraneScript::string,int)", "char", 2, (void*)(FunctionHandle<char, const std::string*, uint32_t>)[](const std::string* str, uint32_t index){
             return (*str)[index];

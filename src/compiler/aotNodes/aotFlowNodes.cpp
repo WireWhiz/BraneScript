@@ -14,14 +14,19 @@ namespace BraneScript
 {
     AotNodeList::AotNodeList() : AotNode(nullptr) {}
 
-    void AotNodeList::appendStatement(AotNode* stmt) { operations.push_back(std::unique_ptr<AotNode>(stmt)); }
+    void AotNodeList::appendStatement(AotNode* stmt)
+    {
+        if(auto* resType = stmt->resType())
+            _resType = resType;
+        operations.push_back(std::unique_ptr<AotNode>(stmt));
+    }
 
-    AotNode* AotNodeList::optimize()
+    AotNode* AotNodeList::optimize(FunctionCompilerCtx& ctx)
     {
         for(auto itr = operations.begin(); itr != operations.end();)
         {
             auto& op = *itr;
-            AotNode* result = op->optimize();
+            AotNode* result = op->optimize(ctx);
             if(result == nullptr)
             {
                 itr = operations.erase(itr);
@@ -36,14 +41,18 @@ namespace BraneScript
 
     AotValue* AotNodeList::generateBytecode(FunctionCompilerCtx& ctx) const
     {
+        AotValue* resValue = nullptr;
         for(auto& op : operations)
-            op->generateBytecode(ctx);
-        return nullptr;
+        {
+            if(auto* hasRet = op->generateBytecode(ctx))
+                resValue = hasRet;
+        }
+        return resValue;
     }
 
     AotReturnNode::AotReturnNode() : AotNode(nullptr) {}
 
-    AotNode* AotReturnNode::optimize() { return this; }
+    AotNode* AotReturnNode::optimize(FunctionCompilerCtx& ctx) { return this; }
 
     AotValue* AotReturnNode::generateBytecode(FunctionCompilerCtx& ctx) const
     {
@@ -51,60 +60,26 @@ namespace BraneScript
         return {};
     }
 
-    AotReturnValueNode::AotReturnValueNode(AotNode* arg) : AotUnaryArgNode(arg, arg->resType()) {}
+    AotReturnValueNode::AotReturnValueNode(AotNode* arg) : AotUnaryArgNode(arg, arg->resType()) {
+        assert(arg);
+        assert(arg->resType()->type() != ValueType::Struct);
+    }
 
     AotValue* AotReturnValueNode::generateBytecode(FunctionCompilerCtx& ctx) const
     {
         auto value = ctx.castReg(arg->generateBytecode(ctx));
 
-        if(value->isRef() && value->isStruct())
-        {
-            if(!(value->flags & AotValue::Const) && value->isHeapRef() && value->isTemp())
-            {
-                ctx.appendCode(RETV, ctx.serialize(value));
-                ctx.releaseValue(value);
-                return nullptr;
-            }
-            auto* sDef = static_cast<const StructDef*>(value->type);
-            auto ptr = ctx.newReg(value->type, AotValue::Temp);
-            int16_t cIndex = ctx.script.linkConstructor(sDef);
-            // Allocate memory to return
-            ctx.appendCode(Operand::MALLOC, ctx.serialize(ptr), (uint16_t)sDef->size());
-
-            // Call constructor
-            ctx.appendCode(Operand::CALL, cIndex);
-            ctx.appendCode(ctx.serialize(ptr));
-
-            if(value->isStackRef())
-            {
-                // Call move constructor
-                ctx.appendCode(Operand::CALL, ctx.script.linkMoveConstructor(sDef));
-                ctx.appendCode(ctx.serialize(ptr));
-                ctx.appendCode(ctx.serialize(value));
-            }
-            else
-            {
-                // Call copy constructor
-                ctx.appendCode(Operand::CALL, ctx.script.linkCopyConstructor(sDef));
-                ctx.appendCode(ctx.serialize(ptr));
-                ctx.appendCode(ctx.serialize(value));
-            }
-
-            if(value->isTemp())
-                ctx.releaseValue(value);
-            value = ptr;
-        }
+        assert(!value->isStruct());
 
         ctx.appendCode(RETV, ctx.serialize(value));
         if(value->isTemp())
             ctx.releaseValue(value);
-
         return nullptr;
     }
 
     AotJump::AotJump(uint16_t target) : AotNode(nullptr) { _target = target; }
 
-    AotNode* AotJump::optimize() { return this; }
+    AotNode* AotJump::optimize(FunctionCompilerCtx& ctx) { return this; }
 
     AotValue* AotJump::generateBytecode(FunctionCompilerCtx& ctx) const
     {
@@ -117,7 +92,7 @@ namespace BraneScript
         _target = target;
     }
 
-    AotNode* AotJumpFalse::optimize() { return this; }
+    AotNode* AotJumpFalse::optimize(FunctionCompilerCtx& ctx) { return this; }
 
     AotValue* AotJumpFalse::generateBytecode(FunctionCompilerCtx& ctx) const
     {
@@ -167,15 +142,32 @@ namespace BraneScript
             _arguments.push_back(std::unique_ptr<AotNode>(node));
     }
 
-    AotNode* AotFunctionCall::optimize()
+    AotNode* AotFunctionCall::optimize(FunctionCompilerCtx& ctx)
     {
+        bool constexprArgs = true;
         for(auto& arg : _arguments)
         {
-            auto* result = arg->optimize();
+            auto* result = arg->optimize(ctx);
             if(arg.get() != result)
                 arg = std::unique_ptr<AotNode>(result);
+            if(!result->is<AotConstNode>())
+                constexprArgs = false;
         }
-        return this;
+
+        if(!constexprArgs)
+            return this;
+
+        if(!ctx.script.compiler->isFunctionConstexpr(_signature))
+            return this;
+        std::vector<AotConstNode*> constArgs;
+        for(auto& arg : _arguments)
+        {
+            auto* constNode = dynamic_cast<AotConstNode*>(arg.get());
+            assert(constNode);
+            constArgs.push_back(constNode);
+        }
+
+        return ctx.script.compiler->evaluateConstexprFunction(_signature, _resType, constArgs, ctx.script);
     }
 
     AotValue* AotFunctionCall::generateBytecode(FunctionCompilerCtx& ctx) const
@@ -187,13 +179,18 @@ namespace BraneScript
             args.push_back(ctx.castReg(arg->generateBytecode(ctx)));
         if(_resType)
         {
-            returnValue = ctx.newReg(_resType, AotValue::Temp);
-            if(returnValue->type->type() == ValueType::Struct)
-                returnValue->flags |= AotValue::HeapRef;
+            if(_resType->type() != ValueType::Struct)
+                returnValue = ctx.newReg(_resType, AotValue::Temp);
+            else
+            {
+                //Return reference to ref arg, instead of an actual return register
+                assert(!args.empty());
+                returnValue = args[0];
+            }
         }
 
         ctx.appendCode(Operand::CALL, ctx.script.linkFunction(_signature));
-        if(_resType)
+        if(_resType && _resType->type() != ValueType::Struct)
             ctx.appendCode(ctx.serialize(returnValue));
         for(auto& a : args)
             ctx.appendCode(ctx.serialize(a));
@@ -203,7 +200,7 @@ namespace BraneScript
 
     AotJumpTarget::AotJumpTarget(uint32_t id) : AotNode(nullptr) { _id = id; }
 
-    AotNode* AotJumpTarget::optimize() { return this; }
+    AotNode* AotJumpTarget::optimize(FunctionCompilerCtx& ctx) { return this; }
 
     AotValue* AotJumpTarget::generateBytecode(FunctionCompilerCtx& ctx) const
     {

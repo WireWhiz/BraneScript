@@ -106,16 +106,34 @@ namespace BraneScript
 
         AotNode* visitFunctionCall(const FunctionCallContext* ctx)
         {
+            auto* stmts = new AotNodeList{};
+
             std::vector<AotNode*> args;
+
+            if(ctx->function->returnType.type.structDef)
+            {
+                auto retType = ctx->function->returnType;
+                retType.isRef = true;
+                AotValue* retVal = regFromValueCtx(retType);
+                stmts->appendStatement(new AotAllocNode(retVal));
+                args.push_back(new AotValueReference{retVal});
+            }
+
             for(auto& arg : ctx->arguments)
                 args.push_back(visitExpression(arg.get()));
 
             // Replace a call with inline code if this is an inlined function
             std::string sig = ctx->function->signature();
             if(const AotInlineFunction* func = _compileCtx->compiler->getInlineFunction(sig, args))
-                return func->generateAotTree(args);
+            {
+                stmts->appendStatement(func->generateAotTree(args));
+                return stmts;
+            }
 
-            return new AotFunctionCall(sig, _compileCtx->getType(ctx->returnType.type.identifier), args);
+            stmts->appendStatement(
+                new AotFunctionCall(sig, _compileCtx->getType(ctx->returnType.type.identifier), args));
+
+            return stmts;
         }
 
         AotDerefNode* visitMemberAccess(const MemberAccessContext* ctx)
@@ -185,29 +203,32 @@ namespace BraneScript
 
             // Store result to return (That way it isn't destroyed by a destructor before being read, asmjit will
             // optimize out unnecessary mov commands if this was not actually needed)
-            AotValue* retValHolder = nullptr;
-            if(ctx->value && cleanup)
+            AotNode* retNode = visitExpression(ctx->value.get());
+            if(ctx->value && (cleanup || retNode->resType()->type() == ValueType::Struct))
             {
-                auto result = visitExpression(ctx->value.get());
-                retValHolder = _currentFunc->newReg(result->resType(), AotValue::Temp);
-                if(result->resType()->type() == ValueType::Struct)
-                    nodes->appendStatement(new AotMallocNode(retValHolder));
-                nodes->appendStatement(new AotAssignNode(new AotValueReference(retValHolder), result));
+                AotValue* retValHolder = nullptr;
+                if(retNode->resType()->type() != ValueType::Struct)
+                    retValHolder = _currentFunc->newReg(retNode->resType(), AotValue::Temp);
+                else
+                    retValHolder = getVar("ret ref");
+                assert(retValHolder);
+                nodes->appendStatement(
+                    new AotAssignNode(new AotValueReference(retValHolder), retNode, !ctx->value->returnType.isConst));
+
+                if(retNode->resType()->type() != ValueType::Struct)
+                    retNode = new AotValueReference{retValHolder};
+                else
+                    retNode = nullptr;
             }
 
             if(cleanup)
                 nodes->appendStatement(cleanup);
 
             // Return value
-            if(!ctx->value)
-            {
+            if(!retNode)
                 nodes->appendStatement(new AotReturnNode());
-                return nodes;
-            }
-            if(cleanup)
-                nodes->appendStatement(new AotReturnValueNode(new AotValueReference(retValHolder)));
             else
-                nodes->appendStatement(new AotReturnValueNode(visitExpression(ctx->value.get())));
+                nodes->appendStatement(new AotReturnValueNode(retNode));
             return nodes;
         }
 
@@ -298,11 +319,21 @@ namespace BraneScript
 
             IRFunction irFunc;
             irFunc.sig = funcCtx.signature;
-            irFunc.returnType = {ctx->returnType.type.identifier, ctx->returnType.isConst, ctx->returnType.isRef};
-
             funcCtx.function = &irFunc;
 
             pushScope();
+            irFunc.returnType = {ctx->returnType.type.identifier, ctx->returnType.isConst, ctx->returnType.isRef};
+            if(ctx->returnType.type.structDef)
+            {
+                irFunc.arguments.push_back({ctx->returnType.type.identifier, ctx->returnType.isConst, true});
+                auto type = _compileCtx->getType(ctx->returnType.type.identifier);
+                if(!type)
+                    throw std::runtime_error("Could not find type! " + ctx->returnType.type.identifier);
+                currentScope().localValues.insert({"ret ref", funcCtx.newReg(type, AotValue::Initialized)});
+
+                irFunc.returnType = {};
+            }
+
             for(auto& arg : ctx->arguments)
             {
                 irFunc.arguments.push_back({arg->type.identifier, arg->isConst, arg->isRef});
@@ -318,8 +349,14 @@ namespace BraneScript
             popScope();
             assert(_scopes.empty());
 
-            operations->optimize();
+            operations->optimize(funcCtx);
             operations->generateBytecode(funcCtx);
+
+            if(ctx->isConstexpr)
+            {
+                // TODO make this work with external scripts
+                _compileCtx->compiler->loadConstexprFunction(&irFunc);
+            }
 
             _compileCtx->script->localFunctions.push_back(std::move(irFunc));
             _currentFunc = nullptr;
@@ -513,6 +550,85 @@ namespace BraneScript
 
     void Compiler::setLinker(Linker* linker) { _linker = linker; }
 
+    void Compiler::setRuntime(ScriptRuntime* runtime) { _runtime = runtime; }
+
+    void Compiler::loadConstexprFunction(IRFunction* function)
+    {
+        if(!_runtime)
+            return;
+        FunctionData fPtr = _runtime->loadFunction(function);
+        _constexprFunctions.insert({function->sig, std::move(fPtr)});
+        std::cout << "Loaded constexpr function: " + function->sig << std::endl;
+    }
+
+    Compiler::~Compiler()
+    {
+        for(auto& f : _constexprFunctions)
+            _runtime->unloadFunction(f.second.pointer);
+    }
+
+    bool Compiler::isFunctionConstexpr(const std::string& sig)
+    {
+        return _constexprFunctions.contains(sig);
+    }
+
+    AotConstNode* Compiler::evaluateConstexprFunction(const std::string& sig,
+                                                      const TypeDef* resType,
+                                                      std::vector<AotConstNode*> args,
+                                                      ScriptCompilerCtx& scriptCtx)
+    {
+        assert(resType);
+        assert(isFunctionConstexpr(sig));
+        auto funcContainer = std::make_unique<IRFunction>();
+        funcContainer->sig = "constantFuncContainer()";
+        funcContainer->returnType.type = resType->name();
+
+        FunctionCompilerCtx compileCtx(scriptCtx, funcContainer->sig);
+        compileCtx.function = funcContainer.get();
+        std::vector<AotValue*> argValues;
+        argValues.reserve(args.size());
+        for(auto arg : args)
+            argValues.push_back(compileCtx.castReg(arg->generateBytecode(compileCtx)));
+
+        auto retVal = compileCtx.newReg(resType, AotValue::Temp);
+
+        compileCtx.appendCode(Operand::CALL, int16_t(-1));
+        compileCtx.appendCode(compileCtx.serialize(retVal));
+        for(auto arg : argValues)
+            compileCtx.appendCode(compileCtx.serialize(arg));
+        compileCtx.appendCode(Operand::RETV, compileCtx.serialize(retVal));
+
+        ScriptAssembleContext assembleContext{};
+
+        assembleContext.linkedFunctions.push_back(&_constexprFunctions.at(sig));
+
+        FunctionData container = _runtime->loadFunction(funcContainer.get(), &assembleContext);
+
+        switch(resType->type())
+        {
+            case ValueType::Bool:
+                return new AotConstNode(FunctionHandle<bool>(container.pointer)());
+            case ValueType::Char:
+                return new AotConstNode(FunctionHandle<char>(container.pointer)());
+            case ValueType::UInt32:
+                return new AotConstNode(FunctionHandle<uint32_t>(container.pointer)());
+            case ValueType::UInt64:
+                return new AotConstNode(FunctionHandle<uint64_t>(container.pointer)());
+            case ValueType::Int32:
+                return new AotConstNode(FunctionHandle<int32_t>(container.pointer)());
+            case ValueType::Int64:
+                return new AotConstNode(FunctionHandle<int64_t>(container.pointer)());
+            case ValueType::Float32:
+                return new AotConstNode(FunctionHandle<float>(container.pointer)());
+            case ValueType::Float64:
+                return new AotConstNode(FunctionHandle<double>(container.pointer)());
+            default:
+                assert(false);
+                break;
+        }
+        return nullptr;
+    }
+
     AotValue* ScriptCompilerCtx::newGlobal(const TypeDef* type, uint8_t flags)
     {
         assert(type);
@@ -582,7 +698,8 @@ namespace BraneScript
 
     AotValue* FunctionCompilerCtx::newReg(const TypeDef* type, uint8_t flags)
     {
-        return newCustomReg(type, (type->type() != ValueType::Struct) ? ValueStorageType_Reg : ValueStorageType_Ptr, flags);
+        return newCustomReg(
+            type, (type->type() != ValueType::Struct) ? ValueStorageType_Reg : ValueStorageType_Ptr, flags);
     }
 
     AotValue* FunctionCompilerCtx::newCustomReg(const TypeDef* type, ValueStorageType storageType, uint8_t flags)
@@ -627,6 +744,7 @@ namespace BraneScript
     AotValue* FunctionCompilerCtx::newConst(const TypeDef* type, uint8_t flags)
     {
         assert(type);
+
         auto* value = new AotValue();
         value->type = type;
         value->flags = flags;
@@ -728,7 +846,8 @@ namespace BraneScript
         assert(offset == 0 || value->type->type() == ValueType::Struct || value->isGlobal());
         if(value->isGlobal())
         {
-            auto temp = newCustomReg(value->type, ValueStorageType_Ptr,  AotValue::Temp | value->flags & ~AotValue::Initialized);
+            auto temp =
+                newCustomReg(value->type, ValueStorageType_Ptr, AotValue::Temp | value->flags & ~AotValue::Initialized);
             temp->ptrOffset = value->ptrOffset;
             appendCode(Operand::MOV, serialize(temp), serialize(value));
             value = temp;

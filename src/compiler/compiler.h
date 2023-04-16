@@ -22,9 +22,13 @@
 #include "src/utility/staticIndexVector.h"
 #include "staticAnalysis/documentContext.h"
 #include "structDefinition.h"
+#include "functionHandle.h"
+#include "scriptRuntime.h"
 
 namespace BraneScript
 {
+
+    struct ScriptCompilerCtx;
 
     class Compiler : public braneBaseVisitor
     {
@@ -32,10 +36,14 @@ namespace BraneScript
         robin_hood::unordered_map<std::string, std::unique_ptr<StructDef>> _registeredStructs;
         robin_hood::unordered_map<std::string, std::unique_ptr<AotInlineFunction>> _inlineFunctions;
 
+        robin_hood::unordered_map<std::string, FunctionData> _constexprFunctions;
+
         StructDef structFromDocumentContext(const StructContext* ctx);
         Linker* _linker = nullptr;
+        ScriptRuntime* _runtime;
       public:
         Compiler();
+        ~Compiler();
 
         /** @brief Add an unmanaged type not controlled by this compiler */
         void registerType(const TypeDef* type);
@@ -50,9 +58,18 @@ namespace BraneScript
         IRScript* compile(const ScriptContext* script);
 
         void setLinker(Linker* linker);
+        void setRuntime(ScriptRuntime* runtime);
 
         void registerInlineFunction(AotInlineFunction* function);
         const AotInlineFunction* getInlineFunction(const std::string& name, const std::vector<AotNode*>& args);
+
+        void loadConstexprFunction(IRFunction* function);
+
+        bool isFunctionConstexpr(const std::string& sig);
+        AotConstNode* evaluateConstexprFunction(const std::string& sig,
+                                                const TypeDef* resType,
+                                                std::vector<AotConstNode*> args,
+                                                ScriptCompilerCtx& scriptCtx);
     };
 
     struct FunctionCompilerCtx;

@@ -387,7 +387,15 @@ namespace BraneScript
         std::string sig = longId();
         sig += "(";
 
-        size_t argIndex = 0;
+        if(returnType.type.structDef)
+        {
+            auto resType = returnType;
+            resType.isRef = true;
+            sig += resType.signature();
+            if(!arguments.empty())
+                sig += ",";
+        }
+
         for(auto itr = arguments.begin();itr != arguments.end();)
         {
             auto& arg = *itr;

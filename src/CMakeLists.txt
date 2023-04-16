@@ -1,3 +1,6 @@
 add_subdirectory(scriptRuntime)
 add_subdirectory(compiler)
 add_subdirectory(lspServer)
+if(BS_BUILD_EXECUTABLE)
+    #add_subdirectory(debugger)
+endif()

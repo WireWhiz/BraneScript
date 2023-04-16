@@ -16,9 +16,9 @@ namespace BraneScript
 
     AotUnaryArgNode::AotUnaryArgNode(AotNode* arg, const TypeDef* resType) : AotNode(resType), arg(arg) {}
 
-    AotNode* AotUnaryArgNode::optimize()
+    AotNode* AotUnaryArgNode::optimize(FunctionCompilerCtx& ctx)
     {
-        auto optArg = arg->optimize();
+        auto optArg = arg->optimize(ctx);
         if(optArg != arg.get())
             arg = std::unique_ptr<AotNode>(optArg);
         return this;
@@ -28,12 +28,12 @@ namespace BraneScript
         : AotNode(resType), argA(argA), argB(argB)
     {}
 
-    AotNode* AotBinaryArgNode::optimize()
+    AotNode* AotBinaryArgNode::optimize(FunctionCompilerCtx& ctx)
     {
-        auto optArgA = argA->optimize();
+        auto optArgA = argA->optimize(ctx);
         if(optArgA != argA.get())
             argA = std::unique_ptr<AotNode>(optArgA);
-        auto optArgB = argB->optimize();
+        auto optArgB = argB->optimize(ctx);
         if(optArgB != argB.get())
             argB = std::unique_ptr<AotNode>(optArgB);
         return this;

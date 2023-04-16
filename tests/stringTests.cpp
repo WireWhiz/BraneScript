@@ -55,28 +55,27 @@ TEST(BraneScript, Strings)
 
     ScriptRuntime rt;
     rt.setLinker(&l);
-    Script* testScript = rt.assembleScript(ir);
+    Script* testScript = rt.loadScript(ir);
     delete ir;
     ASSERT_TRUE(testScript);
 
     std::string argA = "a";
     std::string argB = "b";
 
-    auto constStr = testScript->getFunction<std::string*>("tests::testConst()");
+    std::string str;
+    auto constStr = testScript->getFunction<void, std::string*>("tests::testConst(ref BraneScript::string)");
     ASSERT_TRUE(constStr);
-    std::string* str = constStr();
-    EXPECT_STREQ(str->c_str(), "Hello World!");
-    delete str;
+    constStr(&str);
+    EXPECT_STREQ(str.c_str(), "Hello World!");
 
     auto returnE = testScript->getFunction<char>("tests::returnE()");
     ASSERT_TRUE(returnE);
     EXPECT_EQ('E', returnE());
 
-    auto concat = testScript->getFunction<std::string*, std::string*, std::string*>("tests::concat(ref BraneScript::string,ref BraneScript::string)");
+    auto concat = testScript->getFunction<void, std::string*, std::string*, std::string*>("tests::concat(ref BraneScript::string,ref BraneScript::string,ref BraneScript::string)");
     ASSERT_TRUE(concat);
-    str = concat(&argA, &argB);
-    EXPECT_STREQ(str->c_str(), "ab");
-    delete str;
+    concat(&str, &argA, &argB);
+    EXPECT_STREQ(str.c_str(), "ab");
 
     auto strEQ = testScript->getFunction<bool, std::string*, std::string*>("tests::strEQ(ref BraneScript::string,ref BraneScript::string)");
     ASSERT_TRUE(strEQ);
@@ -89,6 +88,6 @@ TEST(BraneScript, Strings)
     EXPECT_TRUE(strNEQ(&argA, &argB));
 
 #ifndef NDEBUG
-    EXPECT_EQ(scriptMallocDiff, 1);
+    EXPECT_EQ(scriptMallocDiff, 0);
 #endif
 }

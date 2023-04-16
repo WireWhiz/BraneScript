@@ -41,7 +41,7 @@ namespace BraneScript
         AotConstNode(double value);
         AotConstNode(std::string value);
 
-        AotNode* optimize() override;
+        AotNode* optimize(FunctionCompilerCtx& ctx) override;
 
         AotValue* generateBytecode(FunctionCompilerCtx& ctx) const override;
         ValueType type() const;
@@ -80,7 +80,7 @@ namespace BraneScript
       public:
         AotAllocNode(AotValue* value);
 
-        AotNode* optimize() override;
+        AotNode* optimize(FunctionCompilerCtx& ctx) override;
 
         AotValue* generateBytecode(FunctionCompilerCtx& ctx) const override;
     };
@@ -91,7 +91,7 @@ namespace BraneScript
       public:
         AotMallocNode(AotValue* value);
 
-        AotNode* optimize() override;
+        AotNode* optimize(FunctionCompilerCtx& ctx) override;
 
         AotValue* generateBytecode(FunctionCompilerCtx& ctx) const override;
     };
@@ -102,7 +102,7 @@ namespace BraneScript
       public:
         AotValueConstruction(AotValue* value);
 
-        AotNode* optimize() override;
+        AotNode* optimize(FunctionCompilerCtx& ctx) override;
 
         AotValue* generateBytecode(FunctionCompilerCtx& ctx) const override;
     };
@@ -113,7 +113,7 @@ namespace BraneScript
       public:
         AotValueDestruction(AotValue* value);
 
-        AotNode* optimize() override;
+        AotNode* optimize(FunctionCompilerCtx& ctx) override;
 
         AotValue* generateBytecode(FunctionCompilerCtx& ctx) const override;
     };
@@ -124,7 +124,7 @@ namespace BraneScript
       public:
         AotValueReference(AotValue* value);
 
-        AotNode* optimize() override;
+        AotNode* optimize(FunctionCompilerCtx& ctx) override;
 
         AotValue* generateBytecode(FunctionCompilerCtx& ctx) const override;
     };
@@ -137,7 +137,7 @@ namespace BraneScript
       public:
         AotDerefNode(AotNode* value, const TypeDef* type, uint32_t offset);
 
-        AotNode* optimize() override;
+        AotNode* optimize(FunctionCompilerCtx& ctx) override;
 
         AotValue* generateBytecode(FunctionCompilerCtx& ctx) const override;
     };
@@ -149,7 +149,7 @@ namespace BraneScript
       public:
         AotNewNode(StructDef* structType);
 
-        AotNode* optimize() override;
+        AotNode* optimize(FunctionCompilerCtx& ctx) override;
 
         AotValue* generateBytecode(FunctionCompilerCtx& ctx) const override;
     };
@@ -161,7 +161,7 @@ namespace BraneScript
       public:
         AotDeleteNode(AotNode* ptr);
 
-        AotNode* optimize() override;
+        AotNode* optimize(FunctionCompilerCtx& ctx) override;
 
         AotValue* generateBytecode(FunctionCompilerCtx& ctx) const override;
     };

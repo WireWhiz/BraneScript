@@ -72,7 +72,7 @@ TEST(BraneScript, GlobalVariables)
     Linker linker;
     ScriptRuntime rt;
     rt.setLinker(&linker);
-    Script* testScript = rt.assembleScript(ir);
+    Script* testScript = rt.loadScript(ir);
     delete ir;
     ASSERT_TRUE(testScript);
 
@@ -105,9 +105,9 @@ TEST(BraneScript, GlobalVariables)
     ASSERT_TRUE(getStructVar);
     EXPECT_EQ(getStructVar(), 32);
 
-    auto getStringVar = testScript->getFunction<std::string*>("tests::getStringVar()");
+    std::string strRet;
+    auto getStringVar = testScript->getFunction<void, std::string*>("tests::getStringVar(ref BraneScript::string)");
     ASSERT_TRUE(getStringVar);
-    auto strRet = getStringVar();
-    EXPECT_EQ(*strRet, str);
-    delete strRet;
+    getStringVar(&strRet);
+    EXPECT_EQ(strRet, str);
 }

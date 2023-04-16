@@ -69,6 +69,10 @@ namespace BraneScript
         CI32F64, // (Value value, Value value) cast 32 bit int to 64 bit float
         CF32I32, // (Value value, Value value) cast 32 bit float to 32 bit int
         CF64I32, // (Value value, Value value) cast 64 bit float to 32 bit int
+
+        /* Embedded debug info */
+        DBLN,  //(int32_t) Sets the line number for the following instructions
+        DBSYM, //(int16_t, char...) Must be followed by an INITR, associates a register with a name
     };
 }
 #endif //BRANESCRIPT_OPERANDS_H

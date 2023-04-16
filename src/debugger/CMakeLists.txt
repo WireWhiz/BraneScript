@@ -1,0 +1,3 @@
+
+add_executable(BraneScriptDebugger main.cpp)
+target_link_libraries(BraneScriptDebugger antlr4 BraneScriptCompiler)

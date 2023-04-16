@@ -82,6 +82,7 @@ namespace BraneScript
         bool _extractOnlyIdentifiers;
 
         bool _functionHasReturn = false;
+        bool _enforceConstexpr = false;
 
         size_t _headerSize = 0;
 
@@ -309,7 +310,7 @@ namespace BraneScript
             {
                 sig += args[i].signature();
                 if(i != args.size() - 1)
-                    sig += ", ";
+                    sig += ",";
             }
             sig += ")";
             return sig;
@@ -322,7 +323,7 @@ namespace BraneScript
             {
                 sig += args[i]->signature();
                 if(i != args.size() - 1)
-                    sig += ", ";
+                    sig += ",";
             }
             sig += ")";
             return sig;
@@ -615,6 +616,8 @@ namespace BraneScript
                 args.push_back(arg->returnType);
             for(auto f : overrides)
             {
+                if(_enforceConstexpr && !f->isConstexpr)
+                    continue;
                 auto result = compareFunctionArgs(f, args);
                 if(!result.argsMatch)
                     continue;
@@ -639,6 +642,8 @@ namespace BraneScript
                     for(auto o : overrides)
                         error += functionSig(o->longId(), o->arguments) + "\n";
                     error += "-----";
+                    if(_enforceConstexpr)
+                        error += "\nVerify the functions you call in a constexpr scope are also constexpr.";
                 }
                 return false;
             }
@@ -825,6 +830,9 @@ namespace BraneScript
             if(ctx->isRef && output.type.storageType != ValueType::Struct)
                 recordError(ctx, "Only struct types may be marked as ref!");
 
+            if(_enforceConstexpr && output.type.storageType == ValueType::Struct)
+                recordError(ctx, "Types of struct not supported in constexpr scopes");
+
             assert(output.type.storageType != ValueType::Struct || output.type.structDef);
             return output;
         }
@@ -835,7 +843,7 @@ namespace BraneScript
             if(!ctx->type())
                 return valueContext;
             initDoc(&valueContext, ctx);
-            auto type = std::any_cast<ValueContext>(visit(ctx->type()));
+            auto type = std::any_cast<ValueContext>(visitType(ctx->type()));
             valueContext.type = std::move(type.type);
             valueContext.isConst = type.isConst;
             valueContext.isRef = type.isRef;
@@ -869,7 +877,7 @@ namespace BraneScript
             for(auto& item : ctx->argumentListItem())
             {
                 if(auto* declaration = item->declaration())
-                    args.emplace_back(new LabeledValueContext{std::any_cast<LabeledValueContext>(visit(declaration))});
+                    args.emplace_back(new LabeledValueContext{std::any_cast<LabeledValueContext>(visitDeclaration(declaration))});
                 else
                 {
                     if(!_instantiatingTemplate)
@@ -1041,10 +1049,13 @@ namespace BraneScript
             if(_instantiatingTemplate && ctx->template_)
                 o.id += templateDefToString(ctx->template_);
 
+            if(_enforceConstexpr && o.returnType.type.storageType == ValueType::Struct)
+                recordError((ctx->castType) ? ctx->castType : ctx->type(), "Return types of struct are not yet supported in constexpr functions");
+
             return o;
         }
 
-        virtual std::any visitFunctionStub(braneParser::FunctionStubContext* ctx) override
+        std::any visitFunctionStub(braneParser::FunctionStubContext* ctx) override
         {
             ASSERT_EXISTS(ctx->sig);
             auto sigAny = visitFunctionSig(ctx->functionSig());
@@ -1054,7 +1065,6 @@ namespace BraneScript
             auto arguments = constructArgumentList(ctx->arguments);
 
             bool isMember = lastNode()->is<StructContext>();
-
             if(isMember)
             {
                 auto* thisRef = new LabeledValueContext{};
@@ -1070,6 +1080,8 @@ namespace BraneScript
             func->identifier.range = toRange(ctx->sig->id);
             func->returnType = sig.returnType;
             func->arguments = std::move(arguments);
+            func->isConstexpr = ctx->functionSig()->isConstexpr;
+
             for(auto& a : func->arguments)
             {
                 a->parent = func;
@@ -1109,7 +1121,6 @@ namespace BraneScript
             ArgPackInstanceContext* argPackInstanceContext = nullptr;
             auto arguments = std::move(constructArgumentList(ctx->arguments, &argPackInstanceContext));
 
-
             bool isMember = lastNode()->is<StructContext>();
             if(isMember)
             {
@@ -1129,6 +1140,7 @@ namespace BraneScript
             func->identifier.range = toRange(ctx->sig->id);
             func->returnType = sig.returnType;
             func->arguments = std::move(arguments);
+            func->isConstexpr = ctx->functionSig()->isConstexpr;
             if(argPackInstanceContext)
             {
                 func->argPackInstances.insert({argPackInstanceContext->identifier, std::move(*argPackInstanceContext)});
@@ -1154,8 +1166,11 @@ namespace BraneScript
                     return func;
                 recordError(ctx->functionSig()->id, "Redefinition of already existing function!");
             }
+
             bool cachedFHR = _functionHasReturn;
+            bool cachedConstexpr = _enforceConstexpr;
             _functionHasReturn = false;
+            _enforceConstexpr = func->isConstexpr;
 
             initDoc(func, ctx);
 
@@ -1177,6 +1192,7 @@ namespace BraneScript
                 recordError(ctx->sig->id, "Function never returns " + func->returnType.type.identifier);
 
             _functionHasReturn = cachedFHR;
+            _enforceConstexpr = cachedConstexpr;
 
             return func;
         }
@@ -2009,6 +2025,7 @@ namespace BraneScript
             {
                 if(isLocal(callCtx->function))
                     callTree.addDependency(lastNode()->getParent<FunctionContext>(), callCtx->function);
+
                 popDoc(callCtx);
                 RETURN_EXPR(callCtx);
             }

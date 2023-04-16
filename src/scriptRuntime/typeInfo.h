@@ -11,7 +11,7 @@ namespace BraneScript
 {
     struct TypeInfo
     {
-        std::string type;
+        std::string type = "void";
         bool isConst = false;
         bool isRef = false;
     };

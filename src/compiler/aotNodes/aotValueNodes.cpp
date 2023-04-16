@@ -9,7 +9,7 @@
 
 namespace BraneScript
 {
-    AotNode* AotConstNode::optimize() { return this; }
+    AotNode* AotConstNode::optimize(FunctionCompilerCtx& ctx) { return this; }
 
     AotValue* AotConstNode::generateBytecode(FunctionCompilerCtx& ctx) const
     {
@@ -75,7 +75,7 @@ namespace BraneScript
 
     AotValueReference::AotValueReference(AotValue* value) : AotNode(value->type) { _value = value; }
 
-    AotNode* AotValueReference::optimize()
+    AotNode* AotValueReference::optimize(FunctionCompilerCtx& ctx)
     {
         // TODO if is const expression just return const node
         return this;
@@ -88,9 +88,9 @@ namespace BraneScript
         _offset = offset;
     }
 
-    AotNode* AotDerefNode::optimize()
+    AotNode* AotDerefNode::optimize(FunctionCompilerCtx& ctx)
     {
-        auto optArg = _value->optimize();
+        auto optArg = _value->optimize(ctx);
         if(optArg != _value.get())
             _value = std::unique_ptr<AotNode>(optArg);
         return this;
@@ -104,7 +104,7 @@ namespace BraneScript
 
     AotNewNode::AotNewNode(StructDef* structType) : AotNode((TypeDef*)structType) {}
 
-    AotNode* AotNewNode::optimize() { return this; }
+    AotNode* AotNewNode::optimize(FunctionCompilerCtx& ctx) { return this; }
 
     AotValue* AotNewNode::generateBytecode(FunctionCompilerCtx& ctx) const
     {
@@ -115,7 +115,7 @@ namespace BraneScript
 
     AotDeleteNode::AotDeleteNode(AotNode* ptr) : AotNode(nullptr), _ptr(ptr) {}
 
-    AotNode* AotDeleteNode::optimize() { return this; }
+    AotNode* AotDeleteNode::optimize(FunctionCompilerCtx& ctx) { return this; }
 
     AotValue* AotDeleteNode::generateBytecode(FunctionCompilerCtx& ctx) const
     {
@@ -128,7 +128,7 @@ namespace BraneScript
 
     AotValueConstruction::AotValueConstruction(AotValue* value) : AotNode(value->type), _value(value) { assert(value); }
 
-    AotNode* AotValueConstruction::optimize() { return this; }
+    AotNode* AotValueConstruction::optimize(FunctionCompilerCtx& ctx) { return this; }
 
     AotValue* AotValueConstruction::generateBytecode(FunctionCompilerCtx& ctx) const
     {
@@ -157,8 +157,11 @@ namespace BraneScript
             case ValueType::Struct:
             {
                 auto* s = dynamic_cast<const StructDef*>(_value->type);
+                auto* v = ctx.castReg(_value);
                 ctx.appendCode(Operand::CALL, ctx.script.linkConstructor(s));
-                ctx.appendCode(ctx.serialize(_value));
+                ctx.appendCode(ctx.serialize(v));
+                if(v->isTemp() && v != _value)
+                    ctx.releaseValue(v);
             }
             break;
         }
@@ -167,7 +170,7 @@ namespace BraneScript
 
     AotValueDestruction::AotValueDestruction(AotValue* value) : AotNode(nullptr) { _value = value; }
 
-    AotNode* AotValueDestruction::optimize()
+    AotNode* AotValueDestruction::optimize(FunctionCompilerCtx& ctx)
     {
         if(_value && _value->type->type() != ValueType::Struct)
             return nullptr;
@@ -178,18 +181,22 @@ namespace BraneScript
     {
         if(auto s = dynamic_cast<const StructDef*>(_value->type))
         {
+            auto* v = ctx.castReg(_value);
             ctx.appendCode(Operand::CALL, ctx.script.linkDestructor(s));
-            ctx.appendCode(ctx.serialize(_value));
-            if(_value->isHeapRef())
-                ctx.appendCode(Operand::FREE, ctx.serialize(_value));
-
+            ctx.appendCode(ctx.serialize(v ));
+            if(v ->isHeapRef())
+                ctx.appendCode(Operand::FREE, ctx.serialize(v ));
+            if(v->isTemp())
+                ctx.releaseValue(v);
         }
+        if(_value->isTemp())
+            ctx.releaseValue(_value);
         return nullptr;
     }
 
     AotAllocNode::AotAllocNode(AotValue* value) : AotNode(value->type), _value(value) {}
 
-    AotNode* AotAllocNode::optimize() { return this; }
+    AotNode* AotAllocNode::optimize(FunctionCompilerCtx& ctx) { return this; }
 
     AotValue* AotAllocNode::generateBytecode(FunctionCompilerCtx& ctx) const
     {
@@ -205,7 +212,7 @@ namespace BraneScript
 
     AotMallocNode::AotMallocNode(AotValue* value) : AotNode(value->type), _value(value) {}
 
-    AotNode* AotMallocNode::optimize() { return this; }
+    AotNode* AotMallocNode::optimize(FunctionCompilerCtx& ctx) { return this; }
 
     AotValue* AotMallocNode::generateBytecode(FunctionCompilerCtx& ctx) const
     {

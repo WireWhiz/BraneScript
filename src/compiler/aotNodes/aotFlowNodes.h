@@ -21,7 +21,7 @@ namespace BraneScript
 
         void appendStatement(AotNode* stmt);
 
-        AotNode* optimize() override;
+        AotNode* optimize(FunctionCompilerCtx& ctx) override;
 
         AotValue* generateBytecode(FunctionCompilerCtx& ctx) const override;
 
@@ -31,7 +31,7 @@ namespace BraneScript
     {
       public:
         AotReturnNode();
-        AotNode* optimize() override;
+        AotNode* optimize(FunctionCompilerCtx& ctx) override;
         AotValue* generateBytecode(FunctionCompilerCtx& ctx) const override;
     };
 
@@ -49,7 +49,7 @@ namespace BraneScript
       public:
         AotJumpTarget(uint32_t id);
 
-        AotNode* optimize() override;
+        AotNode* optimize(FunctionCompilerCtx& ctx) override;
 
         AotValue* generateBytecode(FunctionCompilerCtx& ctx) const override;
 
@@ -62,7 +62,7 @@ namespace BraneScript
       public:
         AotJump(uint16_t target);
 
-        AotNode* optimize() override;
+        AotNode* optimize(FunctionCompilerCtx& ctx) override;
 
         AotValue* generateBytecode(FunctionCompilerCtx& ctx) const override;
     };
@@ -72,7 +72,7 @@ namespace BraneScript
         uint32_t _target;
       public:
         AotJumpFalse(AotNode* condition, uint16_t target);
-        AotNode* optimize() override;
+        AotNode* optimize(FunctionCompilerCtx& ctx) override;
 
         AotValue* generateBytecode(FunctionCompilerCtx& ctx) const override;
     };
@@ -83,7 +83,7 @@ namespace BraneScript
         std::vector<std::unique_ptr<AotNode>> _arguments;
     public:
         AotFunctionCall(std::string signature, const TypeDef* returnType, const std::vector<AotNode*>& arguments);
-        AotNode* optimize() override;
+        AotNode* optimize(FunctionCompilerCtx& ctx) override;
         AotValue* generateBytecode(FunctionCompilerCtx& ctx) const override;
     };
 }

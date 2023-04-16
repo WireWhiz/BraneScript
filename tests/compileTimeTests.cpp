@@ -1,5 +1,6 @@
 #include "testing.h"
 
+#include <iostream>
 #include "compiler.h"
 #include "linker.h"
 #include "script.h"
@@ -8,27 +9,21 @@
 
 using namespace BraneScript;
 
-TEST(BraneScript, Recursion)
+TEST(BraneScript, CompileTimeTests)
 {
+
     std::string testString = R"(
     link "BraneScript";
     export as "tests"
     {
-        int called1(int in)
+        constexpr int add(int a, int b)
         {
-            return in;
-        }
-        int caller1(int in)
-        {
-            return called1(in);
+            return a + b;
         }
 
-        //recursively calculate x to the nth power
-        int pow(int x, int n)
+        int testOp()
         {
-            if(n == 1)
-                return x;
-            return x * pow(x, n - 1);
+            return add(2, 2);
         }
     }
 )";
@@ -37,21 +32,19 @@ TEST(BraneScript, Recursion)
     analyzer.validate("test");
     checkCompileErrors(analyzer, testString);
 
+    Linker linker;
+    ScriptRuntime rt;
     Compiler compiler;
+    compiler.setLinker(&linker);
+    compiler.setRuntime(&rt);
     auto* ir = compiler.compile(analyzer.getCtx("test")->scriptContext.get());
     ASSERT_TRUE(ir);
 
-    ScriptRuntime rt;
     Script* testScript = rt.loadScript(ir);
     delete ir;
     ASSERT_TRUE(testScript);
 
-    auto f0 = testScript->getFunction<int, int>("tests::caller1");
-    ASSERT_TRUE(f0);
-    EXPECT_EQ(f0(5), 5);
-
-    auto pow = testScript->getFunction<int, int, int>("tests::pow");
-    ASSERT_TRUE(pow);
-    EXPECT_EQ(pow(2, 4), 16);
+    auto testOp = testScript->getFunction<int>("tests::testOp");
+    ASSERT_TRUE(testOp);
+    EXPECT_EQ(testOp(), 4);
 }
-
