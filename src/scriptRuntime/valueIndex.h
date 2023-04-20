@@ -41,7 +41,7 @@ namespace BraneScript
         ValueStorageType_DerefPtr = 6
     };
 
-    struct alignas(2) Value
+    struct alignas(2) SerializedValue
     {
         uint16_t index = 0;
         uint16_t offset = 0;

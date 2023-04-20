@@ -30,7 +30,7 @@ namespace BraneScript
         }
     };
 
-    asmjit::TypeId valueToASMType(const Value& value)
+    asmjit::TypeId valueToASMType(const SerializedValue& value)
     {
         switch(value.valueType)
         {
@@ -90,7 +90,7 @@ namespace BraneScript
         mem_mem
     };
 
-    ValueRegType getValueRegType(const Value& value)
+    ValueRegType getValueRegType(const SerializedValue& value)
     {
         switch(value.storageType)
         {
@@ -124,7 +124,7 @@ namespace BraneScript
         assert(false);
     }
 
-    OperationType getOperationType(const Value& a, const Value& b)
+    OperationType getOperationType(const SerializedValue& a, const SerializedValue& b)
     {
         const OperationType gpMap[] = {gp_gp, gp_xmm, gp_mem};
         const OperationType xmmMap[] = {xmm_gp, xmm_xmm, xmm_mem};
@@ -170,7 +170,7 @@ namespace BraneScript
         bool endOfCode() const { return iptr >= currentFunction->code.size(); }
 
         template<class RT>
-        RT getReg(Value value)
+        RT getReg(SerializedValue value)
         {
             if constexpr(std::is_same<RT, Mem>())
             {
@@ -409,7 +409,7 @@ namespace BraneScript
                     break;
                 case RETV:
                 {
-                    auto valIndex = ctx.readCode<Value>();
+                    auto valIndex = ctx.readCode<SerializedValue>();
                     assert(valIndex.storageType == ValueStorageType_Reg ||
                            valIndex.storageType == ValueStorageType_Ptr);
                     assert(function->returnType.type != "void");
@@ -420,7 +420,7 @@ namespace BraneScript
                 }
                 case INITR:
                 {
-                    auto valIndex = ctx.readCode<Value>();
+                    auto valIndex = ctx.readCode<SerializedValue>();
                     assert(valIndex.storageType == ValueStorageType_Reg ||
                            valIndex.storageType == ValueStorageType_Ptr);
                     if(valIndex.index >= ctx.registers.size())
@@ -480,7 +480,7 @@ namespace BraneScript
                 }
                 case ALLOC:
                 {
-                    auto valIndex = ctx.readCode<Value>();
+                    auto valIndex = ctx.readCode<SerializedValue>();
                     assert(valIndex.storageType == ValueStorageType_Ptr);
                     auto allocSize = ctx.readCode<uint16_t>();
                     printf("ALLOC gp%hu, %hubytes\n", valIndex.index, allocSize);
@@ -493,7 +493,7 @@ namespace BraneScript
                 }
                 case MALLOC:
                 {
-                    auto valIndex = ctx.readCode<Value>();
+                    auto valIndex = ctx.readCode<SerializedValue>();
                     assert(valIndex.storageType == ValueStorageType_Ptr);
                     auto allocSize = ctx.readCode<uint16_t>();
                     printf("EXMALLOC gp%hu, %hubytes\n", valIndex.index, allocSize);
@@ -507,7 +507,7 @@ namespace BraneScript
                 }
                 case FREE:
                 {
-                    auto valIndex = ctx.readCode<Value>();
+                    auto valIndex = ctx.readCode<SerializedValue>();
                     asmjit::InvokeNode* in;
                     cc.invoke(&in, &scriptDealoc, asmjit::FuncSignatureT<void, void*>());
                     in->setArg(0, ctx.getReg<Gp>(valIndex));
@@ -515,7 +515,7 @@ namespace BraneScript
                 }
                 case LOADC:
                 {
-                    Value constant = ctx.readCode<Value>();
+                    SerializedValue constant = ctx.readCode<SerializedValue>();
                     printf("LOADC mem%hu ", constant.index);
                     if(ctx.constants.size() <= constant.index)
                         throw std::runtime_error("attempted to use unallocated memory locations");
@@ -581,7 +581,7 @@ namespace BraneScript
                 {
                     assert(parentCtx && parentCtx->script);
 
-                    auto value = ctx.readCode<Value>();
+                    auto value = ctx.readCode<SerializedValue>();
                     auto size = ctx.readCode<uint32_t>();
                     auto* text = new std::string();
                     text->resize(size);
@@ -602,8 +602,8 @@ namespace BraneScript
                 }
                 case CMP:
                 {
-                    auto a = ctx.readCode<Value>();
-                    auto b = ctx.readCode<Value>();
+                    auto a = ctx.readCode<SerializedValue>();
+                    auto b = ctx.readCode<SerializedValue>();
                     printf("CMP ");
                     switch(getOperationType(a, b))
                     {
@@ -646,7 +646,7 @@ namespace BraneScript
                 }
                 case TEST:
                 {
-                    auto a = ctx.readCode<Value>();
+                    auto a = ctx.readCode<SerializedValue>();
                     printf("TEST ");
                     switch(getValueRegType(a))
                     {
@@ -764,12 +764,12 @@ namespace BraneScript
                         printf("%s %s(", function.returnType.type.c_str(), function.sig.c_str());
                         if(function.returnType.type != "void")
                         {
-                            auto retVal = ctx.readCode<Value>();
+                            auto retVal = ctx.readCode<SerializedValue>();
                             in->setRet(0, ctx.getReg<Reg>(retVal));
                         }
                         for(uint32_t i = 0; i < function.arguments.size(); ++i)
                         {
-                            auto argVal = ctx.readCode<Value>();
+                            auto argVal = ctx.readCode<SerializedValue>();
                             in->setArg(i, ctx.getReg<Reg>(argVal));
                             printf("reg%hu = %s", argVal.index,  function.arguments[i].type.c_str());
                             if(i != function.arguments.size() - 1)
@@ -797,13 +797,13 @@ namespace BraneScript
                     printf("ext %s %s", function->ret.c_str(), function->name.c_str());
                     if(function->ret != "void")
                     {
-                        auto retVal = ctx.readCode<Value>();
+                        auto retVal = ctx.readCode<SerializedValue>();
                         in->setRet(0, ctx.getReg<Reg>(retVal));
                         printf(", ret = %hu", retVal.index);
                     }
                     for(uint32_t i = 0; i < function->argCount; ++i)
                     {
-                        auto argVal = ctx.readCode<Value>();
+                        auto argVal = ctx.readCode<SerializedValue>();
                         in->setArg(i, ctx.getReg<Reg>(argVal));
                         printf(", arg%u = %hu", i, argVal.index);
                     }
@@ -812,8 +812,8 @@ namespace BraneScript
                 }
                 case MOV:
                 {
-                    auto dest = ctx.readCode<Value>();
-                    auto src = ctx.readCode<Value>();
+                    auto dest = ctx.readCode<SerializedValue>();
+                    auto src = ctx.readCode<SerializedValue>();
 
                     printf("MOV ");
                     switch(getOperationType(dest, src))
@@ -911,7 +911,7 @@ namespace BraneScript
                 }
                 case MOVI:
                 {
-                    auto dest = ctx.readCode<Value>();
+                    auto dest = ctx.readCode<SerializedValue>();
                     assert(dest.storageType == ValueStorageType_Reg || dest.storageType == ValueStorageType_Ptr);
 
                     printf("MOVI \n");
@@ -949,8 +949,8 @@ namespace BraneScript
                 }
                 case CI64I32:
                 {
-                    auto dest = ctx.readCode<Value>();
-                    auto src = ctx.readCode<Value>();
+                    auto dest = ctx.readCode<SerializedValue>();
+                    auto src = ctx.readCode<SerializedValue>();
 
                     printf("CI64I32 gp%hu gp%hu\n", dest.index, src.index);
                     auto destReg = ctx.getReg<Gp>(dest);
@@ -962,8 +962,8 @@ namespace BraneScript
                 break;
                 case CI32I64:
                 {
-                    auto dest = ctx.readCode<Value>();
-                    auto src = ctx.readCode<Value>();
+                    auto dest = ctx.readCode<SerializedValue>();
+                    auto src = ctx.readCode<SerializedValue>();
 
                     printf("CI32I64 gp%hu gp%hu\n", dest.index, src.index);
                     auto destReg = ctx.getReg<Gpq>(dest);
@@ -976,8 +976,8 @@ namespace BraneScript
                 }
                 case CU32U64:
                 {
-                    auto dest = ctx.readCode<Value>();
-                    auto src = ctx.readCode<Value>();
+                    auto dest = ctx.readCode<SerializedValue>();
+                    auto src = ctx.readCode<SerializedValue>();
 
                     printf("CU32U64 gp%hu gp%hu\n", dest.index, src.index);
                     auto destReg = ctx.getReg<Gpq>(dest);
@@ -990,8 +990,8 @@ namespace BraneScript
                 }
                 case CU32I32:
                 {
-                    auto dest = ctx.readCode<Value>();
-                    auto src = ctx.readCode<Value>();
+                    auto dest = ctx.readCode<SerializedValue>();
+                    auto src = ctx.readCode<SerializedValue>();
 
                     printf("CU32I32 gp%hu gp%hu\n", dest.index, src.index);
                     auto destReg = ctx.getReg<Gpd>(dest);
@@ -1005,8 +1005,8 @@ namespace BraneScript
                 }
                 case CU64I64:
                 {
-                    auto dest = ctx.readCode<Value>();
-                    auto src = ctx.readCode<Value>();
+                    auto dest = ctx.readCode<SerializedValue>();
+                    auto src = ctx.readCode<SerializedValue>();
 
                     printf("CU64I64 gp%hu gp%hu\n", dest.index, src.index);
                     auto destReg = ctx.getReg<Gp>(dest);
@@ -1021,8 +1021,8 @@ namespace BraneScript
                 }
                 case CF32I32:
                 {
-                    auto dest = ctx.readCode<Value>();
-                    auto src = ctx.readCode<Value>();
+                    auto dest = ctx.readCode<SerializedValue>();
+                    auto src = ctx.readCode<SerializedValue>();
 
                     printf("CF32I32 gp%hu xmm%hu\n", dest.index, src.index);
                     auto destReg = ctx.getReg<Gp>(dest);
@@ -1032,8 +1032,8 @@ namespace BraneScript
                 break;
                 case CF64I32:
                 {
-                    auto dest = ctx.readCode<Value>();
-                    auto src = ctx.readCode<Value>();
+                    auto dest = ctx.readCode<SerializedValue>();
+                    auto src = ctx.readCode<SerializedValue>();
 
                     printf("CF64I32 gp%hu xmm%hu\n", dest.index, src.index);
                     auto destReg = ctx.getReg<Gp>(dest);
@@ -1043,8 +1043,8 @@ namespace BraneScript
                 break;
                 case CI32F32:
                 {
-                    auto dest = ctx.readCode<Value>();
-                    auto src = ctx.readCode<Value>();
+                    auto dest = ctx.readCode<SerializedValue>();
+                    auto src = ctx.readCode<SerializedValue>();
 
                     printf("CI32F32 xmm%hu gp%hu\n", dest.index, src.index);
                     auto destReg = ctx.getReg<Xmm>(dest);
@@ -1054,8 +1054,8 @@ namespace BraneScript
                 break;
                 case CI32F64:
                 {
-                    auto dest = ctx.readCode<Value>();
-                    auto src = ctx.readCode<Value>();
+                    auto dest = ctx.readCode<SerializedValue>();
+                    auto src = ctx.readCode<SerializedValue>();
 
                     printf("CI32F64 xmm%hu gp%hu\n", dest.index, src.index);
                     auto destReg = ctx.getReg<Xmm>(dest);
@@ -1065,8 +1065,8 @@ namespace BraneScript
                 break;
                 case CF32F64:
                 {
-                    auto dest = ctx.readCode<Value>();
-                    auto src = ctx.readCode<Value>();
+                    auto dest = ctx.readCode<SerializedValue>();
+                    auto src = ctx.readCode<SerializedValue>();
 
                     printf("CF32F64 xmm%hu xmm%hu\n", dest.index, src.index);
                     auto destReg = ctx.getReg<Xmm>(dest);
@@ -1077,8 +1077,8 @@ namespace BraneScript
                 break;
                 case CF64F32:
                 {
-                    auto dest = ctx.readCode<Value>();
-                    auto src = ctx.readCode<Value>();
+                    auto dest = ctx.readCode<SerializedValue>();
+                    auto src = ctx.readCode<SerializedValue>();
 
                     printf("CF64F32 xmm%hu xmm%hu\n", dest.index, src.index);
                     auto destReg = ctx.getReg<Xmm>(dest);
@@ -1089,7 +1089,7 @@ namespace BraneScript
                 break;
                 case SETE:
                 {
-                    auto regIndex = ctx.readCode<Value>();
+                    auto regIndex = ctx.readCode<SerializedValue>();
                     assert(regIndex.storageType == ValueStorageType_Reg);
 
                     printf("SETE gp%hu\n", regIndex.index);
@@ -1098,7 +1098,7 @@ namespace BraneScript
                 }
                 case SETNE:
                 {
-                    auto regIndex = ctx.readCode<Value>();
+                    auto regIndex = ctx.readCode<SerializedValue>();
                     assert(regIndex.storageType == ValueStorageType_Reg);
 
                     printf("SETNE gp%hu\n", regIndex.index);
@@ -1107,7 +1107,7 @@ namespace BraneScript
                 }
                 case SETA:
                 {
-                    auto regIndex = ctx.readCode<Value>();
+                    auto regIndex = ctx.readCode<SerializedValue>();
                     assert(regIndex.storageType == ValueStorageType_Reg);
 
                     printf("SETA gp%hu\n", regIndex.index);
@@ -1116,7 +1116,7 @@ namespace BraneScript
                 }
                 case SETG:
                 {
-                    auto regIndex = ctx.readCode<Value>();
+                    auto regIndex = ctx.readCode<SerializedValue>();
                     assert(regIndex.storageType == ValueStorageType_Reg);
 
                     printf("SETG gp%hu\n", regIndex.index);
@@ -1125,7 +1125,7 @@ namespace BraneScript
                 }
                 case SETAE:
                 {
-                    auto regIndex = ctx.readCode<Value>();
+                    auto regIndex = ctx.readCode<SerializedValue>();
                     assert(regIndex.storageType == ValueStorageType_Reg);
 
                     printf("SETAE gp%hu\n", regIndex.index);
@@ -1134,7 +1134,7 @@ namespace BraneScript
                 }
                 case SETGE:
                 {
-                    auto regIndex = ctx.readCode<Value>();
+                    auto regIndex = ctx.readCode<SerializedValue>();
                     assert(regIndex.storageType == ValueStorageType_Reg);
 
                     printf("SETGE gp%hu\n", regIndex.index);
@@ -1143,8 +1143,8 @@ namespace BraneScript
                 }
                 case ADD:
                 {
-                    auto a = ctx.readCode<Value>();
-                    auto b = ctx.readCode<Value>();
+                    auto a = ctx.readCode<SerializedValue>();
+                    auto b = ctx.readCode<SerializedValue>();
                     printf("ADD ");
                     switch(getOperationType(a, b))
                     {
@@ -1193,7 +1193,7 @@ namespace BraneScript
                 }
                 case ADDI:
                 {
-                    auto dest = ctx.readCode<Value>();
+                    auto dest = ctx.readCode<SerializedValue>();
                     assert(dest.storageType == ValueStorageType_Reg || dest.storageType == ValueStorageType_Ptr);
 
                     printf("ADDI \n");
@@ -1227,8 +1227,8 @@ namespace BraneScript
                 }
                 case SUB:
                 {
-                    auto a = ctx.readCode<Value>();
-                    auto b = ctx.readCode<Value>();
+                    auto a = ctx.readCode<SerializedValue>();
+                    auto b = ctx.readCode<SerializedValue>();
                     printf("SUB ");
                     switch(getOperationType(a, b))
                     {
@@ -1277,8 +1277,8 @@ namespace BraneScript
                 }
                 case MUL:
                 {
-                    auto a = ctx.readCode<Value>();
-                    auto b = ctx.readCode<Value>();
+                    auto a = ctx.readCode<SerializedValue>();
+                    auto b = ctx.readCode<SerializedValue>();
                     printf("MUL ");
                     switch(getOperationType(a, b))
                     {
@@ -1393,8 +1393,8 @@ namespace BraneScript
                 }
                 case DIV:
                 {
-                    auto a = ctx.readCode<Value>();
-                    auto b = ctx.readCode<Value>();
+                    auto a = ctx.readCode<SerializedValue>();
+                    auto b = ctx.readCode<SerializedValue>();
                     printf("DIV ");
                     switch(getOperationType(a, b))
                     {

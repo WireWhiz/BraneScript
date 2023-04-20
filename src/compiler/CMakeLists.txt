@@ -14,7 +14,7 @@ add_library(BraneScriptCompiler STATIC
 
         aotInlineFunctions/aotInlineFunction.cpp
         aotInlineFunctions/aotNativeOperators.cpp
-        staticAnalysis/functionCallTree.cpp)
+        staticAnalysis/functionCallTree.cpp staticAnalysis/constexprEvaluator.cpp staticAnalysis/constexprEvaluator.h)
 target_link_libraries(BraneScriptCompiler PUBLIC BraneScriptRuntime antlr4 JsonCpp::JsonCpp)
 target_include_directories(BraneScriptCompiler PUBLIC ${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE_SOURCE_DIR} ${robin_hood_INCLUDE_DIRS} ../scriptRuntime)
 

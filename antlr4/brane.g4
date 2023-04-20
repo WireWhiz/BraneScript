@@ -32,11 +32,10 @@ progSegment : function
 global      : type id=ID ';';
 
 
-templateDefArgument : 'type' isPack='...'? id=ID
-                 //| expressionType=type id=ID
-                 ;
+templateDefArgument : is'type'  isPack='...'? id=ID;
 templateDef      : 'template' '<' templateDefArgument (',' templateDefArgument)* '>';
 templateArg      : t=type          #templateTypeArg
+                 | expr=expression #templateExprArg
                  | packID=ID '...' #packExpansionArg
                  ;
 templateArgs     : '<' templateArg (',' templateArg)* '>';

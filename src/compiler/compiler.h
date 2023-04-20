@@ -29,18 +29,18 @@ namespace BraneScript
 {
 
     struct ScriptCompilerCtx;
+    class ConstexprEvaluator;
 
     class Compiler : public braneBaseVisitor
     {
         robin_hood::unordered_map<std::string, const TypeDef*> _nativeTypes;
         robin_hood::unordered_map<std::string, std::unique_ptr<StructDef>> _registeredStructs;
-        robin_hood::unordered_map<std::string, std::unique_ptr<AotInlineFunction>> _inlineFunctions;
-
-        robin_hood::unordered_map<std::string, FunctionData> _constexprFunctions;
+        static robin_hood::unordered_map<std::string, std::unique_ptr<AotInlineFunction>> _inlineFunctions;
 
         StructDef structFromDocumentContext(const StructContext* ctx);
         Linker* _linker = nullptr;
-        ScriptRuntime* _runtime;
+        ScriptRuntime* _runtime = nullptr;
+        ConstexprEvaluator* _evaluator;
       public:
         Compiler();
         ~Compiler();
@@ -59,23 +59,17 @@ namespace BraneScript
 
         void setLinker(Linker* linker);
         void setRuntime(ScriptRuntime* runtime);
+        void setConstexprEvaluator(ConstexprEvaluator* evaluator);
 
         void registerInlineFunction(AotInlineFunction* function);
         const AotInlineFunction* getInlineFunction(const std::string& name, const std::vector<AotNode*>& args);
-
-        void loadConstexprFunction(IRFunction* function);
-
-        bool isFunctionConstexpr(const std::string& sig);
-        AotConstNode* evaluateConstexprFunction(const std::string& sig,
-                                                const TypeDef* resType,
-                                                std::vector<AotConstNode*> args,
-                                                ScriptCompilerCtx& scriptCtx);
     };
 
     struct FunctionCompilerCtx;
     struct ScriptCompilerCtx
     {
         Compiler* compiler;
+        ConstexprEvaluator* evaluator = nullptr;
         std::unique_ptr<IRScript> script;
         std::vector<std::unique_ptr<const StructDef>> localStructDefs;
 
@@ -111,8 +105,8 @@ namespace BraneScript
 
         bool compareFlagsInUse = false;
 
-        staticIndexVector<Value> registers;
-        staticIndexVector<Value> memoryLocations;
+        staticIndexVector<SerializedValue> registers;
+        staticIndexVector<SerializedValue> memoryLocations;
         uint8_t jumpTargetIDCounter = 0;
 
         robin_hood::unordered_map<const StructDef*, int16_t> localStructIndices;
@@ -130,20 +124,20 @@ namespace BraneScript
         AotValue* castReg(AotValue* value);
         AotValue* derefPtr(AotValue* value, const TypeDef* type, uint16_t offset = 0);
 
-        Value serialize(AotValue* value) const;
+        SerializedValue serialize(AotValue* value) const;
         void releaseValue(AotValue* value);
 
         void appendCode(Operand op);
         void appendCode(const std::string& string);
 
-        void appendCode(Operand op, Value a);
-        void appendCode(Operand op, Value a, Value b);
+        void appendCode(Operand op, SerializedValue a);
+        void appendCode(Operand op, SerializedValue a, SerializedValue b);
         void appendCode(Operand op, int16_t index);
         void appendCode(Operand op, uint16_t index);
         void appendCode(Operand op, uint32_t index);
 
         template<typename T>
-        void appendCode(Operand op, Value a, T value)
+        void appendCode(Operand op, SerializedValue a, T value)
         {
             appendCode(op, a);
             static_assert(!std::is_pointer<T>());

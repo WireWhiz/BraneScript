@@ -16,48 +16,56 @@ namespace BraneScript
     }
 
     Identifier::operator std::string&() { return text; }
+
     bool Identifier::operator==(const Identifier& o) const { return text == o.text; }
+
     bool Identifier::operator!=(const Identifier& o) const { return text == o.text; }
 
     bool TypeContext::operator==(const TypeContext& o) const
     {
         return identifier == o.identifier && storageType == o.storageType;
     }
+
     bool TypeContext::operator!=(const TypeContext& o) const
     {
         return identifier != o.identifier || storageType != o.storageType;
     }
+
     bool TypeContext::isScalar() const
     {
         return ValueType::Scalar_Begin <= storageType && storageType <= ValueType::Scalar_End;
     }
+
     bool TypeContext::isUnsigned() const
     {
         return ValueType::Unsigned_Begin <= storageType && storageType <= ValueType::Unsigned_End;
     }
+
     bool TypeContext::isInt() const { return ValueType::Int_Begin <= storageType && storageType <= ValueType::Int_End; }
+
     bool TypeContext::isFloat() const
     {
         return ValueType::Float_Begin <= storageType && storageType <= ValueType::Float_End;
     }
+
     uint8_t TypeContext::size() const
     {
         switch(storageType)
         {
-        case ValueType::Void:
-        case ValueType::Bool:
-        case ValueType::Char:
-            return 1;
-        case ValueType::UInt32:
-        case ValueType::Int32:
-        case ValueType::Float32:
-            return 4;
-        case ValueType::UInt64:
-        case ValueType::Int64:
-        case ValueType::Float64:
-            return 8;
-        case ValueType::Struct:
-            return sizeof(void*); // Not too important, these values are mostly used for casting cost calculations
+            case ValueType::Void:
+            case ValueType::Bool:
+            case ValueType::Char:
+                return 1;
+            case ValueType::UInt32:
+            case ValueType::Int32:
+            case ValueType::Float32:
+                return 4;
+            case ValueType::UInt64:
+            case ValueType::Int64:
+            case ValueType::Float64:
+                return 8;
+            case ValueType::Struct:
+                return sizeof(void*); // Not too important, these values are mostly used for casting cost calculations
         }
         return 1;
     }
@@ -121,7 +129,7 @@ namespace BraneScript
         return parent->longId();
     }
 
-    void DocumentContext::copyBase(DocumentContext* src, DocumentContext* dest)
+    void DocumentContext::copyBase(const DocumentContext* src, DocumentContext* dest) const
     {
         dest->range = src->range;
         dest->version = src->version;
@@ -139,6 +147,7 @@ namespace BraneScript
     }
 
     std::string LabeledValueContext::signature() const { return ValueContext::signature() + " " + identifier.text; }
+
     std::string LabeledValueContext::longId() const
     {
         if(parent && getParent<FunctionContext>())
@@ -149,7 +158,8 @@ namespace BraneScript
         return prefix + "::" + identifier.text;
     }
 
-    DocumentContext* LabeledValueContext::deepCopy(const std::function<DocumentContext*(DocumentContext*)>& callback)
+    DocumentContext*
+    LabeledValueContext::deepCopy(const std::function<DocumentContext*(DocumentContext*)>& callback) const
     {
         return callback(new LabeledValueContext(*this));
     }
@@ -159,23 +169,28 @@ namespace BraneScript
         this->identifier.text = std::move(identifier);
     }
 
-    DocumentContext* StatementErrorContext::deepCopy(const std::function<DocumentContext*(DocumentContext*)>& callback)
+    DocumentContext*
+    StatementErrorContext::deepCopy(const std::function<DocumentContext*(DocumentContext*)>& callback) const
     {
         return callback(new StatementErrorContext{*this});
     }
 
-    DocumentContext* ExpressionErrorContext::deepCopy(const std::function<DocumentContext*(DocumentContext*)>& callback)
+    bool StatementErrorContext::isConstexpr() const { return false; }
+
+    DocumentContext*
+    ExpressionErrorContext::deepCopy(const std::function<DocumentContext*(DocumentContext*)>& callback) const
     {
         return callback(new ExpressionErrorContext{*this});
     }
 
-    void ExpressionContext::copyBase(DocumentContext* src, DocumentContext* dest)
+    bool ExpressionErrorContext::isConstexpr() const { return false; }
+
+    void ExpressionContext::copyBase(const DocumentContext* src, DocumentContext* dest) const
     {
         DocumentContext::copyBase(src, dest);
         auto srcExpr = (ExpressionContext*)src;
         auto destExpr = (ExpressionContext*)dest;
         destExpr->returnType = srcExpr->returnType;
-        destExpr->isConstexpr = srcExpr->isConstexpr;
     }
 
     DocumentContext* ScopeContext::findIdentifier(const std::string& identifier, uint8_t searchOptions)
@@ -188,7 +203,7 @@ namespace BraneScript
         return DocumentContext::findIdentifier(identifier, searchOptions);
     }
 
-    DocumentContext* ScopeContext::deepCopy(const std::function<DocumentContext*(DocumentContext*)>& callback)
+    DocumentContext* ScopeContext::deepCopy(const std::function<DocumentContext*(DocumentContext*)>& callback) const
     {
         auto* copy = new ScopeContext{};
         copyBase(this, copy);
@@ -207,7 +222,15 @@ namespace BraneScript
         return callback(copy);
     }
 
-    DocumentContext* ReturnContext::deepCopy(const std::function<DocumentContext*(DocumentContext*)>& callback)
+    bool ScopeContext::isConstexpr() const
+    {
+        for(auto& stmt : statements)
+            if(!stmt->isConstexpr())
+                return false;
+        return true;
+    }
+
+    DocumentContext* ReturnContext::deepCopy(const std::function<DocumentContext*(DocumentContext*)>& callback) const
     {
         auto* copy = new ReturnContext{};
         copyBase(this, copy);
@@ -216,7 +239,9 @@ namespace BraneScript
         return callback(copy);
     }
 
-    DocumentContext* IfContext::deepCopy(const std::function<DocumentContext*(DocumentContext*)>& callback)
+    bool ReturnContext::isConstexpr() const { return value->isConstexpr(); }
+
+    DocumentContext* IfContext::deepCopy(const std::function<DocumentContext*(DocumentContext*)>& callback) const
     {
         auto* copy = new IfContext{};
         copyBase(this, copy);
@@ -232,7 +257,14 @@ namespace BraneScript
         return callback(copy);
     }
 
-    DocumentContext* WhileContext::deepCopy(const std::function<DocumentContext*(DocumentContext*)>& callback)
+    bool IfContext::isConstexpr() const
+    {
+        if(elseBody && !elseBody->isConstexpr())
+            return false;
+        return condition->isConstexpr() && body->isConstexpr();
+    }
+
+    DocumentContext* WhileContext::deepCopy(const std::function<DocumentContext*(DocumentContext*)>& callback) const
     {
         auto* copy = new WhileContext{};
         copyBase(this, copy);
@@ -243,7 +275,10 @@ namespace BraneScript
         return callback(copy);
     }
 
-    DocumentContext* AssignmentContext::deepCopy(const std::function<DocumentContext*(DocumentContext*)>& callback)
+    bool WhileContext::isConstexpr() const { return condition->isConstexpr() && body->isConstexpr(); }
+
+    DocumentContext*
+    AssignmentContext::deepCopy(const std::function<DocumentContext*(DocumentContext*)>& callback) const
     {
         auto* copy = new AssignmentContext{};
         copyBase(this, copy);
@@ -254,16 +289,20 @@ namespace BraneScript
         return callback(copy);
     }
 
+    bool AssignmentContext::isConstexpr() const { return lValue->isConstexpr() && rValue->isConstexpr(); }
+
     ConstBoolContext::ConstBoolContext()
     {
         returnType.type = {"bool", ValueType::Bool};
         returnType.isConst = true;
     }
 
-    DocumentContext* ConstBoolContext::deepCopy(const std::function<DocumentContext*(DocumentContext*)>& callback)
+    DocumentContext* ConstBoolContext::deepCopy(const std::function<DocumentContext*(DocumentContext*)>& callback) const
     {
         return callback(new ConstBoolContext{*this});
     }
+
+    ConstBoolContext::ConstBoolContext(bool value) : ConstBoolContext() { this->value = value; }
 
     ConstCharContext::ConstCharContext()
     {
@@ -271,10 +310,12 @@ namespace BraneScript
         returnType.isConst = true;
     }
 
-    DocumentContext* ConstCharContext::deepCopy(const std::function<DocumentContext*(DocumentContext*)>& callback)
+    DocumentContext* ConstCharContext::deepCopy(const std::function<DocumentContext*(DocumentContext*)>& callback) const
     {
         return callback(new ConstCharContext{*this});
     }
+
+    ConstCharContext::ConstCharContext(char value) : ConstCharContext() { this->value = value; }
 
     ConstIntContext::ConstIntContext()
     {
@@ -282,10 +323,12 @@ namespace BraneScript
         returnType.isConst = true;
     }
 
-    DocumentContext* ConstIntContext::deepCopy(const std::function<DocumentContext*(DocumentContext*)>& callback)
+    DocumentContext* ConstIntContext::deepCopy(const std::function<DocumentContext*(DocumentContext*)>& callback) const
     {
         return callback(new ConstIntContext{*this});
     }
+
+    ConstIntContext::ConstIntContext(int value) : ConstIntContext() { this->value = value; }
 
     ConstFloatContext::ConstFloatContext()
     {
@@ -293,9 +336,19 @@ namespace BraneScript
         returnType.isConst = true;
     }
 
-    DocumentContext* ConstFloatContext::deepCopy(const std::function<DocumentContext*(DocumentContext*)>& callback)
+    DocumentContext*
+    ConstFloatContext::deepCopy(const std::function<DocumentContext*(DocumentContext*)>& callback) const
     {
         return callback(new ConstFloatContext{*this});
+    }
+
+    ConstFloatContext::ConstFloatContext(float value) : ConstFloatContext() {
+        this->value = value;
+    }
+
+    ConstStringContext::ConstStringContext(std::string value) : ConstStringContext()
+    {
+        this->value = value;
     }
 
     ConstStringContext::ConstStringContext()
@@ -304,7 +357,8 @@ namespace BraneScript
         returnType.isConst = true;
     }
 
-    DocumentContext* ConstStringContext::deepCopy(const std::function<DocumentContext*(DocumentContext*)>& callback)
+    DocumentContext*
+    ConstStringContext::deepCopy(const std::function<DocumentContext*(DocumentContext*)>& callback) const
     {
         return callback(new ConstStringContext{*this});
     }
@@ -315,7 +369,13 @@ namespace BraneScript
         returnType = value;
     }
 
-    DocumentContext* LabeledValueConstructionContext::deepCopy(const std::function<DocumentContext*(DocumentContext*)>& callback)
+    bool LabeledValueConstructionContext::isConstexpr() const
+    {
+        return false;
+    }
+
+    DocumentContext*
+    LabeledValueConstructionContext::deepCopy(const std::function<DocumentContext*(DocumentContext*)>& callback) const
     {
         return callback(new LabeledValueConstructionContext{*this});
     }
@@ -324,14 +384,15 @@ namespace BraneScript
     {
         identifier = value.longId();
         returnType = value;
-
     }
 
     DocumentContext*
-    LabeledValueReferenceContext::deepCopy(const std::function<DocumentContext*(DocumentContext*)>& callback)
+    LabeledValueReferenceContext::deepCopy(const std::function<DocumentContext*(DocumentContext*)>& callback) const
     {
         return callback(new LabeledValueReferenceContext{*this});
     }
+
+    bool LabeledValueReferenceContext::isConstexpr() const { return false; }
 
     MemberAccessContext::MemberAccessContext(ExpressionContext* base, StructContext* baseType, size_t member)
     {
@@ -342,7 +403,8 @@ namespace BraneScript
         this->member = member;
     }
 
-    DocumentContext* MemberAccessContext::deepCopy(const std::function<DocumentContext*(DocumentContext*)>& callback)
+    DocumentContext*
+    MemberAccessContext::deepCopy(const std::function<DocumentContext*(DocumentContext*)>& callback) const
     {
         auto* copy = new MemberAccessContext{};
         copyBase(this, copy);
@@ -352,7 +414,10 @@ namespace BraneScript
         return callback(copy);
     }
 
-    DocumentContext* FunctionCallContext::deepCopy(const std::function<DocumentContext*(DocumentContext*)>& callback)
+    bool MemberAccessContext::isConstexpr() const { return false; }
+
+    DocumentContext*
+    FunctionCallContext::deepCopy(const std::function<DocumentContext*(DocumentContext*)>& callback) const
     {
         auto* copy = new FunctionCallContext{};
         copyBase(this, copy);
@@ -360,6 +425,16 @@ namespace BraneScript
         for(auto& arg : arguments)
             copy->arguments.emplace_back(assertCast<ExpressionContext>(arg->deepCopy(callback)));
         return callback(copy);
+    }
+
+    bool FunctionCallContext::isConstexpr() const
+    {
+        if(!function->isConstexpr)
+            return false;
+        for(auto& arg : arguments)
+            if(!arg->isConstexpr())
+                return false;
+        return true;
     }
 
     DocumentContext* FunctionContext::findIdentifier(const std::string& identifier, uint8_t searchOptions)
@@ -383,7 +458,8 @@ namespace BraneScript
         return prefix + "::" + identifier.text;
     }
 
-    std::string FunctionContext::signature() const {
+    std::string FunctionContext::signature() const
+    {
         std::string sig = longId();
         sig += "(";
 
@@ -396,7 +472,7 @@ namespace BraneScript
                 sig += ",";
         }
 
-        for(auto itr = arguments.begin();itr != arguments.end();)
+        for(auto itr = arguments.begin(); itr != arguments.end();)
         {
             auto& arg = *itr;
             if(arg->isConst)
@@ -409,11 +485,11 @@ namespace BraneScript
             else
                 break;
         }
-        sig+= ")";
+        sig += ")";
         return sig;
     }
 
-    DocumentContext* FunctionContext::deepCopy(const std::function<DocumentContext*(DocumentContext*)>& callback)
+    DocumentContext* FunctionContext::deepCopy(const std::function<DocumentContext*(DocumentContext*)>& callback) const
     {
         auto* copy = new FunctionContext{};
         copyBase(this, copy);
@@ -493,7 +569,7 @@ namespace BraneScript
         return prefix + "::" + identifier.text;
     }
 
-    DocumentContext* StructContext::deepCopy(const std::function<DocumentContext*(DocumentContext*)>& callback)
+    DocumentContext* StructContext::deepCopy(const std::function<DocumentContext*(DocumentContext*)>& callback) const
     {
         auto* copy = new StructContext{};
         copyBase(this, copy);
@@ -577,7 +653,7 @@ namespace BraneScript
         return prefix + "::" + identifier.text;
     }
 
-    DocumentContext* LibraryContext::deepCopy(const std::function<DocumentContext*(DocumentContext*)>& callback)
+    DocumentContext* LibraryContext::deepCopy(const std::function<DocumentContext*(DocumentContext*)>& callback) const
     {
         auto* copy = new LibraryContext{};
         copyBase(this, copy);
@@ -673,7 +749,7 @@ namespace BraneScript
         }
     }
 
-    DocumentContext* ScriptContext::deepCopy(const std::function<DocumentContext*(DocumentContext*)>& callback)
+    DocumentContext* ScriptContext::deepCopy(const std::function<DocumentContext*(DocumentContext*)>& callback) const
     {
         auto* copy = new ScriptContext{};
         copyBase(this, copy);
@@ -715,7 +791,7 @@ namespace BraneScript
             lib->getFunction(identifier, overrides, searchOptions);
     }
 
-    DocumentContext* LibrarySet::deepCopy(const std::function<DocumentContext*(DocumentContext*)>& callback)
+    DocumentContext* LibrarySet::deepCopy(const std::function<DocumentContext*(DocumentContext*)>& callback) const
     {
         return callback(new LibrarySet{*this});
     }
@@ -727,17 +803,21 @@ namespace BraneScript
         return (*exports.begin())->longId();
     }
 
-    DocumentContext* ImportContext::deepCopy(const std::function<DocumentContext*(DocumentContext*)>& callback)
+    DocumentContext* ImportContext::deepCopy(const std::function<DocumentContext*(DocumentContext*)>& callback) const
     {
         return callback(new ImportContext{*this});
     }
 
-    TemplateTypeArgContext::TemplateTypeArgContext(std::string id, ValueContext value) : value(std::move(value)) {
+    TypedefArgContext::TypedefArgContext(std::string id, ValueContext value) : value(std::move(value))
+    {
         identifier = std::move(id);
     }
 
-    DocumentContext* ArgPackInstanceContext::deepCopy(const std::function<DocumentContext*(DocumentContext*)>& callback)
+    DocumentContext*
+    ArgPackInstanceContext::deepCopy(const std::function<DocumentContext*(DocumentContext*)>& callback) const
     {
         return new ArgPackInstanceContext{*this};
     }
+
+    bool ConstValueContext::isConstexpr() const { return true; }
 } // namespace BraneScript

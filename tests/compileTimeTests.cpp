@@ -5,6 +5,7 @@
 #include "linker.h"
 #include "script.h"
 #include "scriptRuntime.h"
+#include "staticAnalysis/constexprEvaluator.h"
 #include "staticAnalysis/staticAnalyzer.h"
 
 using namespace BraneScript;
@@ -27,6 +28,7 @@ TEST(BraneScript, CompileTimeTests)
         }
     }
 )";
+    ConstexprEvaluator evaluator;
     StaticAnalyzer analyzer;
     analyzer.load("test", testString);
     analyzer.validate("test");
@@ -35,6 +37,7 @@ TEST(BraneScript, CompileTimeTests)
     Linker linker;
     ScriptRuntime rt;
     Compiler compiler;
+    compiler.setConstexprEvaluator(&evaluator);
     compiler.setLinker(&linker);
     compiler.setRuntime(&rt);
     auto* ir = compiler.compile(analyzer.getCtx("test")->scriptContext.get());

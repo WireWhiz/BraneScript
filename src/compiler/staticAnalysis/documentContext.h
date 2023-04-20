@@ -80,9 +80,11 @@ namespace BraneScript
     {
         std::string identifier;
         enum ArgType {
-            ValueType,
-            ValueTypePack
-        } type = ValueType;
+            Typedef,
+            TypedefPack,
+            Constant
+        } type = Typedef;
+        TypeContext expectedType;
     };
 
     struct TemplateArgContext
@@ -91,19 +93,22 @@ namespace BraneScript
         virtual ~TemplateArgContext() = default;
     };
 
-    struct TemplateTypeArgContext : public TemplateArgContext
+    struct TypedefArgContext : public TemplateArgContext
     {
         ValueContext value;
-        TemplateTypeArgContext(std::string id, ValueContext value);
+        TypedefArgContext(std::string id, ValueContext value);
     };
 
-    struct TemplateTypePackArgContext : public TemplateArgContext
+    struct TypedefPackArgContext : public TemplateArgContext
     {
         std::vector<ValueContext> values;
     };
 
-    using TemplateArgDefs = robin_hood::unordered_map<std::string, TemplateDefArgumentContext>;
-    using TemplateArgs = robin_hood::unordered_map<std::string, std::unique_ptr<TemplateArgContext>>;
+    struct ConstValueContext;
+    struct ConstantArgContext : public TemplateArgContext
+    {
+        std::unique_ptr<ConstValueContext> values;
+    };
 
     // Not yet implemented
     enum IDSearchOptions : uint8_t
@@ -153,9 +158,9 @@ namespace BraneScript
          * @param callback called each time a node is copied, said node is passed to the callback.
          * This is intended to allow for modification of nodes
          */
-        virtual DocumentContext* deepCopy(const std::function<DocumentContext*(DocumentContext*)>& callback) = 0;
+        virtual DocumentContext* deepCopy(const std::function<DocumentContext*(DocumentContext*)>& callback) const = 0;
       protected:
-        virtual void copyBase(DocumentContext* src, DocumentContext* dest);
+        virtual void copyBase(const DocumentContext* src, DocumentContext* dest) const;
     };
 
     struct LabeledValueReferenceContext;
@@ -166,7 +171,7 @@ namespace BraneScript
 
         std::string signature() const override;
         std::string longId() const override;
-        DocumentContext* deepCopy(const std::function<DocumentContext*(DocumentContext*)>& callback) override;
+        DocumentContext* deepCopy(const std::function<DocumentContext*(DocumentContext*)>& callback) const override;
         LabeledValueContext() = default;
         LabeledValueContext(std::string identifier, ValueContext value);
     };
@@ -176,7 +181,7 @@ namespace BraneScript
     {
         std::string identifier;
         std::vector<LabeledValueContext*> values;
-        virtual DocumentContext* deepCopy(const std::function<DocumentContext*(DocumentContext*)>& callback);
+        virtual DocumentContext* deepCopy(const std::function<DocumentContext*(DocumentContext*)>& callback) const;
     };
 
     struct ErrorContext
@@ -187,6 +192,7 @@ namespace BraneScript
 
     struct StatementContext : public DocumentContext
     {
+        virtual bool isConstexpr() const = 0;
     };
 
     struct StatementErrorContext : public StatementContext, ErrorContext
@@ -196,16 +202,16 @@ namespace BraneScript
             this->message = std::move(message);
             this->line = line;
         }
-        DocumentContext* deepCopy(const std::function<DocumentContext*(DocumentContext*)>& callback) override;
+        bool isConstexpr() const override;
+        DocumentContext* deepCopy(const std::function<DocumentContext*(DocumentContext*)>& callback) const override;
     };
 
     struct ExpressionContext : public StatementContext
     {
         ValueContext returnType;
         // Is the result of this expression a constant?
-        bool isConstexpr = false;
       protected:
-        void copyBase(DocumentContext* src, DocumentContext* dest) override;
+        void copyBase(const DocumentContext* src, DocumentContext* dest) const override;
     };
 
     struct ExpressionErrorContext : public ExpressionContext, ErrorContext
@@ -215,7 +221,8 @@ namespace BraneScript
             this->message = std::move(message);
             this->line = line;
         }
-        DocumentContext* deepCopy(const std::function<DocumentContext*(DocumentContext*)>& callback) override;
+        DocumentContext* deepCopy(const std::function<DocumentContext*(DocumentContext*)>& callback) const override;
+        bool isConstexpr() const override;
     };
 
     struct ScopeContext : public StatementContext
@@ -225,13 +232,15 @@ namespace BraneScript
         std::vector<std::unique_ptr<StatementContext>> statements;
 
         DocumentContext* findIdentifier(const std::string& identifier, uint8_t searchOptions) override;
-        DocumentContext* deepCopy(const std::function<DocumentContext*(DocumentContext*)>& callback) override;
+        DocumentContext* deepCopy(const std::function<DocumentContext*(DocumentContext*)>& callback) const override;
+        bool isConstexpr() const override;
     };
 
     struct ReturnContext : public StatementContext
     {
         std::unique_ptr<ExpressionContext> value;
-        DocumentContext* deepCopy(const std::function<DocumentContext*(DocumentContext*)>& callback) override;
+        DocumentContext* deepCopy(const std::function<DocumentContext*(DocumentContext*)>& callback) const override;
+        bool isConstexpr() const override;
     };
 
     struct IfContext : public StatementContext
@@ -239,60 +248,69 @@ namespace BraneScript
         std::unique_ptr<ExpressionContext> condition;
         std::unique_ptr<StatementContext> body;
         std::unique_ptr<StatementContext> elseBody;
-        DocumentContext* deepCopy(const std::function<DocumentContext*(DocumentContext*)>& callback) override;
+        bool isConstexpr() const override;
+        DocumentContext* deepCopy(const std::function<DocumentContext*(DocumentContext*)>& callback) const override;
     };
 
     struct WhileContext : public StatementContext
     {
         std::unique_ptr<ExpressionContext> condition;
         std::unique_ptr<StatementContext> body;
-        DocumentContext* deepCopy(const std::function<DocumentContext*(DocumentContext*)>& callback) override;
+        bool isConstexpr() const override;
+        DocumentContext* deepCopy(const std::function<DocumentContext*(DocumentContext*)>& callback) const override;
     };
 
     struct AssignmentContext : public StatementContext
     {
         std::unique_ptr<ExpressionContext> lValue;
         std::unique_ptr<ExpressionContext> rValue;
-        DocumentContext* deepCopy(const std::function<DocumentContext*(DocumentContext*)>& callback) override;
+        bool isConstexpr() const override;
+        DocumentContext* deepCopy(const std::function<DocumentContext*(DocumentContext*)>& callback) const override;
     };
 
     struct ConstValueContext : public ExpressionContext
     {
+        bool isConstexpr() const override;
     };
 
     struct ConstBoolContext : public ConstValueContext
     {
         bool value;
         ConstBoolContext();
-        DocumentContext* deepCopy(const std::function<DocumentContext*(DocumentContext*)>& callback) override;
+        ConstBoolContext(bool value);
+        DocumentContext* deepCopy(const std::function<DocumentContext*(DocumentContext*)>& callback) const override;
     };
 
     struct ConstCharContext : public ConstValueContext
     {
         char value;
         ConstCharContext();
-        DocumentContext* deepCopy(const std::function<DocumentContext*(DocumentContext*)>& callback) override;
+        ConstCharContext(char value);
+        DocumentContext* deepCopy(const std::function<DocumentContext*(DocumentContext*)>& callback) const override;
     };
 
     struct ConstIntContext : public ConstValueContext
     {
         int value;
         ConstIntContext();
-        DocumentContext* deepCopy(const std::function<DocumentContext*(DocumentContext*)>& callback) override;
+        ConstIntContext(int value);
+        DocumentContext* deepCopy(const std::function<DocumentContext*(DocumentContext*)>& callback) const override;
     };
 
     struct ConstFloatContext : public ConstValueContext
     {
         float value;
         ConstFloatContext();
-        DocumentContext* deepCopy(const std::function<DocumentContext*(DocumentContext*)>& callback) override;
+        ConstFloatContext(float value);
+        DocumentContext* deepCopy(const std::function<DocumentContext*(DocumentContext*)>& callback) const override;
     };
 
     struct ConstStringContext : public ConstValueContext
     {
         std::string value;
         ConstStringContext();
-        DocumentContext* deepCopy(const std::function<DocumentContext*(DocumentContext*)>& callback) override;
+        ConstStringContext(std::string value);
+        DocumentContext* deepCopy(const std::function<DocumentContext*(DocumentContext*)>& callback) const override;
     };
 
     struct LabeledValueConstructionContext : public ExpressionContext
@@ -300,14 +318,18 @@ namespace BraneScript
         std::string identifier;
         LabeledValueConstructionContext(const LabeledValueContext& value);
         LabeledValueConstructionContext() = default;
-        DocumentContext* deepCopy(const std::function<DocumentContext*(DocumentContext*)>& callback) override;
+
+        bool isConstexpr() const override;
+        DocumentContext* deepCopy(const std::function<DocumentContext*(DocumentContext*)>& callback) const override;
     };
 
     struct LabeledValueReferenceContext : public ExpressionContext
     {
         std::string identifier;
         LabeledValueReferenceContext(const LabeledValueContext& value);
-        DocumentContext* deepCopy(const std::function<DocumentContext*(DocumentContext*)>& callback) override;
+
+        bool isConstexpr() const override;
+        DocumentContext* deepCopy(const std::function<DocumentContext*(DocumentContext*)>& callback) const override;
     };
 
     struct MemberAccessContext : public ExpressionContext
@@ -316,14 +338,18 @@ namespace BraneScript
         size_t member = -1;
         MemberAccessContext() = default;
         MemberAccessContext(ExpressionContext* base, StructContext* baseType, size_t member);
-        DocumentContext* deepCopy(const std::function<DocumentContext*(DocumentContext*)>& callback) override;
+
+        bool isConstexpr() const override;
+        DocumentContext* deepCopy(const std::function<DocumentContext*(DocumentContext*)>& callback) const override;
     };
 
     struct FunctionCallContext : public ExpressionContext
     {
         FunctionContext* function;
         std::vector<std::unique_ptr<ExpressionContext>> arguments;
-        DocumentContext* deepCopy(const std::function<DocumentContext*(DocumentContext*)>& callback) override;
+
+        bool isConstexpr() const override;
+        DocumentContext* deepCopy(const std::function<DocumentContext*(DocumentContext*)>& callback) const override;
     };
 
     struct FunctionContext : public DocumentContext
@@ -345,7 +371,7 @@ namespace BraneScript
         DocumentContext* findIdentifier(const std::string& identifier, uint8_t searchOptions) override;
         std::string longId() const override;
         std::string signature() const;
-        DocumentContext* deepCopy(const std::function<DocumentContext*(DocumentContext*)>& callback) override;
+        DocumentContext* deepCopy(const std::function<DocumentContext*(DocumentContext*)>& callback) const override;
     };
 
     struct StructContext : public DocumentContext
@@ -366,7 +392,7 @@ namespace BraneScript
                          std::list<FunctionContext*>& overrides,
                          uint8_t searchOptions) override;
         std::string longId() const override;
-        DocumentContext* deepCopy(const std::function<DocumentContext*(DocumentContext*)>& callback) override;
+        DocumentContext* deepCopy(const std::function<DocumentContext*(DocumentContext*)>& callback) const override;
     };
 
     struct LibraryContext : public DocumentContext
@@ -382,7 +408,7 @@ namespace BraneScript
                          std::list<FunctionContext*>& overrides,
                          uint8_t searchOptions) override;
         std::string longId() const override;
-        DocumentContext* deepCopy(const std::function<DocumentContext*(DocumentContext*)>& callback) override;
+        DocumentContext* deepCopy(const std::function<DocumentContext*(DocumentContext*)>& callback) const override;
     };
 
     struct LibrarySet : public DocumentContext
@@ -392,7 +418,7 @@ namespace BraneScript
         void getFunction(const std::string& identifier,
                          std::list<FunctionContext*>& overrides,
                          uint8_t searchOptions) override;
-        DocumentContext* deepCopy(const std::function<DocumentContext*(DocumentContext*)>& callback) override;
+        DocumentContext* deepCopy(const std::function<DocumentContext*(DocumentContext*)>& callback) const override;
         std::string longId() const override;
     };
 
@@ -401,7 +427,7 @@ namespace BraneScript
         std::string library;
         // If alias is empty, that means that the library is imported without a prefix (like a using namespace)
         std::string alias;
-        DocumentContext* deepCopy(const std::function<DocumentContext*(DocumentContext*)>& callback) override;
+        DocumentContext* deepCopy(const std::function<DocumentContext*(DocumentContext*)>& callback) const override;
     };
 
     struct ScriptContext : public DocumentContext
@@ -419,7 +445,7 @@ namespace BraneScript
         void getFunction(const std::string& identifier,
                          std::list<FunctionContext*>& overrides,
                          uint8_t searchOptions) override;
-        DocumentContext* deepCopy(const std::function<DocumentContext*(DocumentContext*)>& callback) override;
+        DocumentContext* deepCopy(const std::function<DocumentContext*(DocumentContext*)>& callback) const override;
     };
 } // namespace BraneScript
 

@@ -39,6 +39,10 @@ public:
     return visitChildren(ctx);
   }
 
+  virtual std::any visitTemplateExprArg(braneParser::TemplateExprArgContext *ctx) override {
+    return visitChildren(ctx);
+  }
+
   virtual std::any visitPackExpansionArg(braneParser::PackExpansionArgContext *ctx) override {
     return visitChildren(ctx);
   }

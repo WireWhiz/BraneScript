@@ -31,6 +31,8 @@ public:
 
     virtual std::any visitTemplateTypeArg(braneParser::TemplateTypeArgContext *context) = 0;
 
+    virtual std::any visitTemplateExprArg(braneParser::TemplateExprArgContext *context) = 0;
+
     virtual std::any visitPackExpansionArg(braneParser::PackExpansionArgContext *context) = 0;
 
     virtual std::any visitTemplateArgs(braneParser::TemplateArgsContext *context) = 0;

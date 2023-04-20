@@ -290,9 +290,9 @@ namespace BraneScript
             {
                 auto* argInstance = getTemplateArg(arg->identifier);
                 assert(argInstance);
-                if(auto typeArg = dynamic_cast<TemplateTypeArgContext*>(argInstance))
+                if(auto typeArg = dynamic_cast<TypedefArgContext*>(argInstance))
                     args.push_back(typeArg->value);
-                if(auto typePackArg = dynamic_cast<TemplateTypePackArgContext*>(argInstance))
+                if(auto typePackArg = dynamic_cast<TypedefPackArgContext*>(argInstance))
                 {
                     for(auto& value : typePackArg->values)
                         args.push_back(value);
@@ -748,7 +748,7 @@ namespace BraneScript
         std::any visitTemplateDefArgument(braneParser::TemplateDefArgumentContext* ctx) override
         {
             auto arg = new TemplateDefArgumentContext{};
-            arg->type = ctx->isPack ? TemplateDefArgumentContext::ValueTypePack : TemplateDefArgumentContext::ValueType;
+            arg->type = ctx->isPack ? TemplateDefArgumentContext::TypedefPack : TemplateDefArgumentContext::Typedef;
             arg->identifier = ctx->id->getText();
             return arg;
         }
@@ -786,7 +786,7 @@ namespace BraneScript
                         recordError(arg, packID + " does not refer to a template argument!");
                         continue;
                     }
-                    auto* pack = dynamic_cast<TemplateTypePackArgContext*>(argInstance);
+                    auto* pack = dynamic_cast<TypedefPackArgContext*>(argInstance);
                     if(!pack)
                     {
                         recordError(arg, packID + " is not a pack argument!");
@@ -818,9 +818,9 @@ namespace BraneScript
                 auto* arg = getTemplateArg(output.type.identifier);
                 if(_instantiatingTemplate && arg)
                 {
-                    if(auto* tempType = dynamic_cast<TemplateTypeArgContext*>(arg))
+                    if(auto* tempType = dynamic_cast<TypedefArgContext*>(arg))
                         output = tempType->value;
-                    else if(auto* tempTypePack = dynamic_cast<TemplateTypePackArgContext*>(arg))
+                    else if(auto* tempTypePack = dynamic_cast<TypedefPackArgContext*>(arg))
                         recordError(ctx->name, "Cannot use an argument pack as a type!");
                 }
                 else
@@ -892,7 +892,7 @@ namespace BraneScript
                         recordError(item->id, packID + " is not a template argument!");
                         continue;
                     }
-                    auto* pack = dynamic_cast<TemplateTypePackArgContext*>(argInstance);
+                    auto* pack = dynamic_cast<TypedefPackArgContext*>(argInstance);
                     if(!pack)
                     {
                         recordError(item->id, packID + " is not an argument pack!");
@@ -935,13 +935,13 @@ namespace BraneScript
                     return false;
 
                 std::string identifier = temp->args[argDef]->identifier;
-                if(temp->args[argDef]->type == TemplateDefArgumentContext::ValueType)
-                    argsToPush.emplace(identifier, new TemplateTypeArgContext{identifier, args[arg++]});
-                else if(temp->args[argDef]->type == TemplateDefArgumentContext::ValueTypePack)
+                if(temp->args[argDef]->type == TemplateDefArgumentContext::Typedef)
+                    argsToPush.emplace(identifier, new TypedefArgContext{identifier, args[arg++]});
+                else if(temp->args[argDef]->type == TemplateDefArgumentContext::TypedefPack)
                 {
                     if(argDef != temp->args.size() - 1)
                         return false;
-                    auto pack = new TemplateTypePackArgContext{};
+                    auto pack = new TypedefPackArgContext{};
                     pack->identifier = identifier;
                     while(arg != args.size())
                         pack->values.push_back(args[arg++]);
@@ -1756,7 +1756,7 @@ namespace BraneScript
                 recordError(ctx, id + " is not a template parameter!");
                 RETURN_EXPR(constCtx);
             }
-            auto* pack = dynamic_cast<TemplateTypePackArgContext*>(argInstance);
+            auto* pack = dynamic_cast<TypedefPackArgContext*>(argInstance);
             if(!pack)
             {
                 recordError(ctx, id + " is not a type pack!");
@@ -1946,7 +1946,6 @@ namespace BraneScript
                         recordError(ctx->member, "Struct " + typeName + " does not have a member " + memberName);
                     else
                     {
-                        accessCtx->isConstexpr = accessCtx->baseExpression->isConstexpr;
                         accessCtx->returnType.type = type->variables[accessCtx->member]->type;
                         accessCtx->returnType.isRef = accessCtx->returnType.type.storageType == ValueType::Struct;
                         accessCtx->returnType.isConst = accessCtx->baseExpression->returnType.isConst;
@@ -2336,6 +2335,11 @@ namespace BraneScript
                 continue;
             stream += temp.second;
         }
+    }
+
+    void StaticAnalyzer::setConstexprEvaluator(ConstexprEvaluator* evaluator)
+    {
+        _evaluator = evaluator;
     }
 
 } // namespace BraneScript

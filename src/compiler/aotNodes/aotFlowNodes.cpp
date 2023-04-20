@@ -144,30 +144,14 @@ namespace BraneScript
 
     AotNode* AotFunctionCall::optimize(FunctionCompilerCtx& ctx)
     {
-        bool constexprArgs = true;
         for(auto& arg : _arguments)
         {
             auto* result = arg->optimize(ctx);
             if(arg.get() != result)
                 arg = std::unique_ptr<AotNode>(result);
-            if(!result->is<AotConstNode>())
-                constexprArgs = false;
         }
 
-        if(!constexprArgs)
-            return this;
-
-        if(!ctx.script.compiler->isFunctionConstexpr(_signature))
-            return this;
-        std::vector<AotConstNode*> constArgs;
-        for(auto& arg : _arguments)
-        {
-            auto* constNode = dynamic_cast<AotConstNode*>(arg.get());
-            assert(constNode);
-            constArgs.push_back(constNode);
-        }
-
-        return ctx.script.compiler->evaluateConstexprFunction(_signature, _resType, constArgs, ctx.script);
+        return this;
     }
 
     AotValue* AotFunctionCall::generateBytecode(FunctionCompilerCtx& ctx) const

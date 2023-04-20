@@ -15,9 +15,13 @@
 #include "linker.h"
 #include "nativeTypes.h"
 #include "structDefinition.h"
+#include "staticAnalysis/constexprEvaluator.h"
 
 namespace BraneScript
 {
+
+    robin_hood::unordered_map<std::string, std::unique_ptr<AotInlineFunction>> Compiler::_inlineFunctions;
+
     class ScriptCompiler
     {
         std::unique_ptr<ScriptCompilerCtx> _compileCtx;
@@ -128,6 +132,11 @@ namespace BraneScript
             {
                 stmts->appendStatement(func->generateAotTree(args));
                 return stmts;
+            }
+
+            if(_compileCtx->evaluator && ctx->function->body && ctx->isConstexpr())
+            {
+                return visitConst(_compileCtx->evaluator->evaluateConstexpr(ctx));
             }
 
             stmts->appendStatement(
@@ -352,12 +361,6 @@ namespace BraneScript
             operations->optimize(funcCtx);
             operations->generateBytecode(funcCtx);
 
-            if(ctx->isConstexpr)
-            {
-                // TODO make this work with external scripts
-                _compileCtx->compiler->loadConstexprFunction(&irFunc);
-            }
-
             _compileCtx->script->localFunctions.push_back(std::move(irFunc));
             _currentFunc = nullptr;
         }
@@ -398,10 +401,11 @@ namespace BraneScript
         }
 
       public:
-        IRScript* build(Compiler* compiler, const ScriptContext* document)
+        IRScript* build(Compiler* compiler, const ScriptContext* document, ConstexprEvaluator* evaluator)
         {
             _compileCtx = std::make_unique<ScriptCompilerCtx>();
             _compileCtx->compiler = compiler;
+            _compileCtx->evaluator = evaluator;
             _compileCtx->script = std::make_unique<IRScript>();
 
             visitScript(document);
@@ -415,6 +419,8 @@ namespace BraneScript
         for(auto& type : getNativeTypes())
             registerType(type);
 
+        if(!_inlineFunctions.empty())
+            return;
         // Define our native operators as inline functions, to be inserted directly into the Aot tree
         auto scalarTypes = {getNativeTypeDef(ValueType::UInt32),
                             getNativeTypeDef(ValueType::UInt64),
@@ -474,7 +480,7 @@ namespace BraneScript
 
     void Compiler::registerType(const TypeDef* type) { _nativeTypes[type->name()] = type; }
 
-    IRScript* Compiler::compile(const ScriptContext* script) { return ScriptCompiler().build(this, script); }
+    IRScript* Compiler::compile(const ScriptContext* script) { return ScriptCompiler().build(this, script, _evaluator); }
 
     StructDef Compiler::structFromDocumentContext(const StructContext* ctx)
     {
@@ -552,81 +558,13 @@ namespace BraneScript
 
     void Compiler::setRuntime(ScriptRuntime* runtime) { _runtime = runtime; }
 
-    void Compiler::loadConstexprFunction(IRFunction* function)
-    {
-        if(!_runtime)
-            return;
-        FunctionData fPtr = _runtime->loadFunction(function);
-        _constexprFunctions.insert({function->sig, std::move(fPtr)});
-        std::cout << "Loaded constexpr function: " + function->sig << std::endl;
-    }
-
     Compiler::~Compiler()
     {
-        for(auto& f : _constexprFunctions)
-            _runtime->unloadFunction(f.second.pointer);
     }
 
-    bool Compiler::isFunctionConstexpr(const std::string& sig)
+    void Compiler::setConstexprEvaluator(ConstexprEvaluator* evaluator)
     {
-        return _constexprFunctions.contains(sig);
-    }
-
-    AotConstNode* Compiler::evaluateConstexprFunction(const std::string& sig,
-                                                      const TypeDef* resType,
-                                                      std::vector<AotConstNode*> args,
-                                                      ScriptCompilerCtx& scriptCtx)
-    {
-        assert(resType);
-        assert(isFunctionConstexpr(sig));
-        auto funcContainer = std::make_unique<IRFunction>();
-        funcContainer->sig = "constantFuncContainer()";
-        funcContainer->returnType.type = resType->name();
-
-        FunctionCompilerCtx compileCtx(scriptCtx, funcContainer->sig);
-        compileCtx.function = funcContainer.get();
-        std::vector<AotValue*> argValues;
-        argValues.reserve(args.size());
-        for(auto arg : args)
-            argValues.push_back(compileCtx.castReg(arg->generateBytecode(compileCtx)));
-
-        auto retVal = compileCtx.newReg(resType, AotValue::Temp);
-
-        compileCtx.appendCode(Operand::CALL, int16_t(-1));
-        compileCtx.appendCode(compileCtx.serialize(retVal));
-        for(auto arg : argValues)
-            compileCtx.appendCode(compileCtx.serialize(arg));
-        compileCtx.appendCode(Operand::RETV, compileCtx.serialize(retVal));
-
-        ScriptAssembleContext assembleContext{};
-
-        assembleContext.linkedFunctions.push_back(&_constexprFunctions.at(sig));
-
-        FunctionData container = _runtime->loadFunction(funcContainer.get(), &assembleContext);
-
-        switch(resType->type())
-        {
-            case ValueType::Bool:
-                return new AotConstNode(FunctionHandle<bool>(container.pointer)());
-            case ValueType::Char:
-                return new AotConstNode(FunctionHandle<char>(container.pointer)());
-            case ValueType::UInt32:
-                return new AotConstNode(FunctionHandle<uint32_t>(container.pointer)());
-            case ValueType::UInt64:
-                return new AotConstNode(FunctionHandle<uint64_t>(container.pointer)());
-            case ValueType::Int32:
-                return new AotConstNode(FunctionHandle<int32_t>(container.pointer)());
-            case ValueType::Int64:
-                return new AotConstNode(FunctionHandle<int64_t>(container.pointer)());
-            case ValueType::Float32:
-                return new AotConstNode(FunctionHandle<float>(container.pointer)());
-            case ValueType::Float64:
-                return new AotConstNode(FunctionHandle<double>(container.pointer)());
-            default:
-                assert(false);
-                break;
-        }
-        return nullptr;
+        _evaluator = evaluator;
     }
 
     AotValue* ScriptCompilerCtx::newGlobal(const TypeDef* type, uint8_t flags)
@@ -711,7 +649,7 @@ namespace BraneScript
         value->storageType = storageType;
 
         size_t newValIndex = registers.push({});
-        Value& newVal = registers[newValIndex];
+        SerializedValue& newVal = registers[newValIndex];
         newVal.index = newValIndex;
         newVal.valueType = type->type();
         newVal.storageType = value->storageType;
@@ -751,7 +689,7 @@ namespace BraneScript
         value->storageType = ValueStorageType_Const;
 
         auto newValIndex = memoryLocations.push({});
-        Value& newVal = memoryLocations[newValIndex];
+        SerializedValue& newVal = memoryLocations[newValIndex];
         newVal.index = newValIndex;
         newVal.valueType = type->type();
         newVal.storageType = value->storageType;
@@ -872,7 +810,7 @@ namespace BraneScript
         return derefValue;
     }
 
-    Value FunctionCompilerCtx::serialize(AotValue* value) const
+    SerializedValue FunctionCompilerCtx::serialize(AotValue* value) const
     {
         assert(value->flags & AotValue::Initialized);
         assert(value->storageType != ValueStorageType_Null);
@@ -883,7 +821,7 @@ namespace BraneScript
         auto& index = values[value->id];
         if(index.isReg)
         {
-            Value output = registers[index.index];
+            SerializedValue output = registers[index.index];
 
             // We reuse register indexes for pointers, so we need to pull these from the value pointer
             output.storageType = value->storageType;
@@ -924,24 +862,24 @@ namespace BraneScript
             function->code.push_back(c);
     }
 
-    void FunctionCompilerCtx::appendCode(Operand op, Value a)
+    void FunctionCompilerCtx::appendCode(Operand op, SerializedValue a)
     {
         size_t index = function->code.size();
         function->code.resize(function->code.size() + sizeof(op) + sizeof(a));
         function->code[index] = op;
         index += sizeof(Operand);
-        *(Value*)(function->code.data() + index) = a;
+        *(SerializedValue*)(function->code.data() + index) = a;
     }
 
-    void FunctionCompilerCtx::appendCode(Operand op, Value a, Value b)
+    void FunctionCompilerCtx::appendCode(Operand op, SerializedValue a, SerializedValue b)
     {
         size_t index = function->code.size();
         function->code.resize(function->code.size() + sizeof(op) + sizeof(a) + sizeof(b));
         function->code[index] = op;
         index += sizeof(Operand);
-        *(Value*)(function->code.data() + index) = a;
-        index += sizeof(Value);
-        *(Value*)(function->code.data() + index) = b;
+        *(SerializedValue*)(function->code.data() + index) = a;
+        index += sizeof(SerializedValue);
+        *(SerializedValue*)(function->code.data() + index) = b;
     }
 
     void FunctionCompilerCtx::appendCode(Operand op, int16_t index)

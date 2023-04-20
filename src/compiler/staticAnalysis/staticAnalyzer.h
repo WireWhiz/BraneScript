@@ -16,6 +16,7 @@ namespace antlr4
 namespace BraneScript
 {
     class Library;
+    class ConstexprEvaluator;
 
     struct AnalyzationMessage
     {
@@ -47,6 +48,9 @@ namespace BraneScript
         // First key is library/export name, second is the document that the section of text was exported from
         robin_hood::unordered_map<std::string, robin_hood::unordered_map<std::string, std::string>> exportedTemplateText;
 
+
+        ConstexprEvaluator* _evaluator;
+
       public:
         StaticAnalyzer();
 
@@ -69,6 +73,7 @@ namespace BraneScript
 
         void appendTemplateHeaders(const std::string& lib, const std::string& currentDocument, std::string& stream);
 
+        void setConstexprEvaluator(ConstexprEvaluator* evaluator);
 
         /**
          * @brief Validates a document will successfully compile, and populates all the fields of AnalyzationResult
