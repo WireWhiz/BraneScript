@@ -690,8 +690,13 @@ namespace BraneScript
 
             if(!bestMatch)
             {
-                error += "Could not find override of function \"" + (scope ? scope->longId() + "::" + name : name) +
-                         "\" with arguments: ";
+                error += "Could not find override of function \"" + (scope ? scope->longId() + "::" + name : name);
+                if(tempArgsCtx)
+                {
+                    TemplateArgs tempArgs = std::any_cast<TemplateArgs>(visitTemplateArgs(tempArgsCtx));
+                    error += templateArgsToString(tempArgs);
+                }
+                error += "\" with arguments: ";
                 for(auto& arg : args)
                     error += arg.signature() + ", ";
                 if(!overrides.empty())
@@ -813,7 +818,7 @@ namespace BraneScript
                 if(ctx->isPack)
                     recordError(ctx->isPack, "Expression arguments can not have variable length");
                 arg->type = TemplateDefArgumentContext::Value;
-                arg->valueType = std::any_cast<ValueContext>(visitType(ctx->exprType));
+                arg->valueType = std::any_cast<ValueContext>(visitType(ctx->exprType)).type;
             }
             arg->identifier = ctx->id->getText();
             return arg;
@@ -1025,9 +1030,11 @@ namespace BraneScript
                 {
                     if(args.args[arg].type != TemplateArgs::Type::Value)
                         return false;
+                    if(temp->args[argDef]->valueType != args.args[arg].value->returnType.type)
+                        return false;
                     auto valueArg = new ValueArgContext{};
                     valueArg->identifier = identifier;
-                    valueArg->value.reset((ConstValueContext*)args.args[arg++].value->deepCopy([](auto _){return _;}));
+                    valueArg->value.reset((ConstValueContext*)args.args[arg++].value->deepCopy());
                     argsToPush.emplace(identifier, valueArg);
                 }
                 else if(temp->args[argDef]->type == TemplateDefArgumentContext::Typedef)

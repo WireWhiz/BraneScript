@@ -84,7 +84,7 @@ namespace BraneScript
             TypedefPack,
             Value
         } type = Typedef;
-        ValueContext valueType;
+        TypeContext valueType;
     };
 
     struct TemplateArgContext
