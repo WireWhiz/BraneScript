@@ -135,6 +135,8 @@ namespace BraneScript
         dest->version = src->version;
     }
 
+    DocumentContext* DocumentContext::deepCopy() const { return deepCopy([](auto _){return _;}); }
+
     std::string ValueContext::signature() const
     {
         std::string sig;
@@ -304,6 +306,8 @@ namespace BraneScript
 
     ConstBoolContext::ConstBoolContext(bool value) : ConstBoolContext() { this->value = value; }
 
+    std::string ConstBoolContext::toString() const { return value ? "true" : "false"; }
+
     ConstCharContext::ConstCharContext()
     {
         returnType.type = {"char", ValueType::Char};
@@ -317,6 +321,8 @@ namespace BraneScript
 
     ConstCharContext::ConstCharContext(char value) : ConstCharContext() { this->value = value; }
 
+    std::string ConstCharContext::toString() const { return std::to_string(value); }
+
     ConstIntContext::ConstIntContext()
     {
         returnType.type = {"int", ValueType::Int32};
@@ -329,6 +335,8 @@ namespace BraneScript
     }
 
     ConstIntContext::ConstIntContext(int value) : ConstIntContext() { this->value = value; }
+
+    std::string ConstIntContext::toString() const { return std::to_string(value); }
 
     ConstFloatContext::ConstFloatContext()
     {
@@ -346,6 +354,8 @@ namespace BraneScript
         this->value = value;
     }
 
+    std::string ConstFloatContext::toString() const { return std::to_string(value); }
+
     ConstStringContext::ConstStringContext(std::string value) : ConstStringContext()
     {
         this->value = value;
@@ -362,6 +372,8 @@ namespace BraneScript
     {
         return callback(new ConstStringContext{*this});
     }
+
+    std::string ConstStringContext::toString() const { return value; }
 
     LabeledValueConstructionContext::LabeledValueConstructionContext(const LabeledValueContext& value)
     {
@@ -429,7 +441,7 @@ namespace BraneScript
 
     bool FunctionCallContext::isConstexpr() const
     {
-        if(!function->isConstexpr)
+        if(!function || !function->isConstexpr)
             return false;
         for(auto& arg : arguments)
             if(!arg->isConstexpr())

@@ -49,7 +49,7 @@ namespace BraneScript
         robin_hood::unordered_map<std::string, robin_hood::unordered_map<std::string, std::string>> exportedTemplateText;
 
 
-        ConstexprEvaluator* _evaluator;
+        ConstexprEvaluator* _evaluator = nullptr;
 
       public:
         StaticAnalyzer();
@@ -74,6 +74,7 @@ namespace BraneScript
         void appendTemplateHeaders(const std::string& lib, const std::string& currentDocument, std::string& stream);
 
         void setConstexprEvaluator(ConstexprEvaluator* evaluator);
+        ConstexprEvaluator* constexprEvaluator() const;
 
         /**
          * @brief Validates a document will successfully compile, and populates all the fields of AnalyzationResult

@@ -19,13 +19,26 @@ namespace BraneScript
         Value(const Value& o)
         {
             identifier = o.identifier;
-            value.reset((ConstValueContext*)o.value->deepCopy([](auto _){return _;}));
+            value.reset((ConstValueContext*)o.value->deepCopy());
         }
         Value(Value&& o) noexcept
         {
             identifier = std::move(o.identifier);
             value = std::move(o.value);
         }
+        Value& operator=(Value&& o) noexcept
+        {
+            identifier = std::move(o.identifier);
+            value = std::move(o.value);
+            return *this;
+        }
+        Value& operator=(const Value& o) noexcept
+        {
+            identifier = o.identifier;
+            value.reset((ConstValueContext*)o.value->deepCopy());
+            return *this;
+        }
+        bool empty() const { return value == nullptr; }
     };
 
     class ConstexprFunction
@@ -37,7 +50,7 @@ namespace BraneScript
     };
 
 #define ConstructConstexprBinaryOperator(className, symbol)                                 \
-    template<typename T>                                                                    \
+    template<typename T, typename RetT = T>                                                 \
     class className : public ConstexprFunction                                              \
     {                                                                                       \
       public:                                                                               \
@@ -52,7 +65,7 @@ namespace BraneScript
              T* lvalue = dynamic_cast<T*>(args[0].value.get());                             \
              T* rvalue = dynamic_cast<T*>(args[1].value.get());                             \
              assert(lvalue && rvalue);                                                      \
-             return Value("", std::make_unique<T>(lvalue->value symbol rvalue->value));     \
+             return Value("", std::make_unique<RetT>(lvalue->value symbol rvalue->value));  \
         }                                                                                   \
     };
 
@@ -100,7 +113,7 @@ namespace BraneScript
         uint32_t recursionDepth = 0;
         std::list<Scope> _scopes;
 
-        std::unique_ptr<Value> _returnValue;
+        Value _returnValue;
 
         void pushScope() { _scopes.emplace_back(); }
 
@@ -135,7 +148,7 @@ namespace BraneScript
 
         Value visitConst(const ConstValueContext* ctx)
         {
-            return {"", std::unique_ptr<ConstValueContext>((ConstValueContext*)ctx->deepCopy([](auto _){return _;}))};
+            return {"", std::unique_ptr<ConstValueContext>((ConstValueContext*)ctx->deepCopy())};
         }
 
         Value visitDeclaration(const LabeledValueConstructionContext* ctx)
@@ -173,9 +186,9 @@ namespace BraneScript
                 assert(false); //TODO allow for extern constexpr functions
 
             --recursionDepth;
-            assert(_returnValue);
-            Value returnValue = std::move(*_returnValue);
-            _returnValue = nullptr;
+            assert(!_returnValue.empty());
+            Value returnValue = std::move(_returnValue);
+            assert(_returnValue.empty());
             return returnValue;
         }
 
@@ -211,7 +224,7 @@ namespace BraneScript
 
         void visitReturn(const ReturnContext* ctx)
         {
-            _returnValue = std::make_unique<Value>(visitExpression(ctx->value.get()));
+            _returnValue = visitExpression(ctx->value.get());
         }
 
         bool checkConditionExpr(ExpressionContext* ctx)
@@ -238,7 +251,7 @@ namespace BraneScript
             while(checkConditionExpr(ctx->condition.get()) && i < maxIterations)
             {
                 visitStatement(ctx->body.get());
-                if(_returnValue)
+                if(!_returnValue.empty())
                     break;
                 i++;
             }
@@ -250,7 +263,7 @@ namespace BraneScript
             for(auto& stmt : ctx->statements)
             {
                 visitStatement(stmt.get());
-                if(_returnValue)
+                if(!_returnValue.empty())
                     break;
             }
             popScope();
@@ -295,12 +308,12 @@ namespace BraneScript
         evaluator.addInlineFunction(new ConstexprMul<T>(typenames[index]));
         evaluator.addInlineFunction(new ConstexprDiv<T>(typenames[index]));
 
-        evaluator.addInlineFunction(new ConstexprEq<T>(typenames[index]));
-        evaluator.addInlineFunction(new ConstexprNotEq<T>(typenames[index]));
-        evaluator.addInlineFunction(new ConstexprGreater<T>(typenames[index]));
-        evaluator.addInlineFunction(new ConstexprGreaterEq<T>(typenames[index]));
-        evaluator.addInlineFunction(new ConstexprLess<T>(typenames[index]));
-        evaluator.addInlineFunction(new ConstexprLessEq<T>(typenames[index]));
+        evaluator.addInlineFunction(new ConstexprEq<T, ConstBoolContext>(typenames[index]));
+        evaluator.addInlineFunction(new ConstexprNotEq<T, ConstBoolContext>(typenames[index]));
+        evaluator.addInlineFunction(new ConstexprGreater<T, ConstBoolContext>(typenames[index]));
+        evaluator.addInlineFunction(new ConstexprGreaterEq<T, ConstBoolContext>(typenames[index]));
+        evaluator.addInlineFunction(new ConstexprLess<T, ConstBoolContext>(typenames[index]));
+        evaluator.addInlineFunction(new ConstexprLessEq<T, ConstBoolContext>(typenames[index]));
 
         if constexpr(sizeof...(Args) > 0)
             addScalarOperators<index + 1, Args...>(evaluator, typenames);
@@ -327,10 +340,10 @@ namespace BraneScript
         addInlineFunction(new ConstexprCast<ConstIntContext, ConstCharContext>("int", "char"));
         addInlineFunction(new ConstexprCast<ConstCharContext, ConstFloatContext>("char", "int"));
 
-        addInlineFunction(new ConstexprEq<ConstCharContext>("char"));
-        addInlineFunction(new ConstexprNotEq<ConstCharContext>("char"));
-        addInlineFunction(new ConstexprEq<ConstBoolContext>("bool"));
-        addInlineFunction(new ConstexprNotEq<ConstBoolContext>("bool"));
+        addInlineFunction(new ConstexprEq<ConstCharContext, ConstBoolContext>("char"));
+        addInlineFunction(new ConstexprNotEq<ConstCharContext, ConstBoolContext>("char"));
+        addInlineFunction(new ConstexprEq<ConstBoolContext, ConstBoolContext>("bool"));
+        addInlineFunction(new ConstexprNotEq<ConstBoolContext, ConstBoolContext>("bool"));
     }
 
     bool ConstexprEvaluator::isNativeFunction(const std::string& sig) { return _linker->getFunction(sig); }

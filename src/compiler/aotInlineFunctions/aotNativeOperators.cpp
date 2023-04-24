@@ -16,6 +16,7 @@ namespace BraneScript
 
     AotNode* NativeCastOperator::generateAotTree(const std::vector<AotNode*>& args) const
     {
+        assert(args.size() == 1);
         return new AotCastNode(args[0], _resType);
     }
 } // namespace BraneScript

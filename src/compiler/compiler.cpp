@@ -110,6 +110,12 @@ namespace BraneScript
 
         AotNode* visitFunctionCall(const FunctionCallContext* ctx)
         {
+            if(_compileCtx->evaluator && ctx->function->body && ctx->isConstexpr())
+            {
+                auto constexprRes = std::unique_ptr<ConstValueContext>(_compileCtx->evaluator->evaluateConstexpr(ctx));
+                return visitConst(constexprRes.get());
+            }
+
             auto* stmts = new AotNodeList{};
 
             std::vector<AotNode*> args;
@@ -132,11 +138,6 @@ namespace BraneScript
             {
                 stmts->appendStatement(func->generateAotTree(args));
                 return stmts;
-            }
-
-            if(_compileCtx->evaluator && ctx->function->body && ctx->isConstexpr())
-            {
-                return visitConst(_compileCtx->evaluator->evaluateConstexpr(ctx));
             }
 
             stmts->appendStatement(
@@ -291,6 +292,8 @@ namespace BraneScript
                 return visitIf(ifStmt);
             if(auto whileStmt = dynamic_cast<const WhileContext*>(ctx))
                 return visitWhile(whileStmt);
+            if(auto scopeStmt = dynamic_cast<const ScopeContext*>(ctx))
+                return visitScope(scopeStmt);
             if(auto error = dynamic_cast<const StatementErrorContext*>(ctx))
                 throw std::runtime_error("Document with statement error node cannot be compiled (error: " +
                                          error->message + ". line: " + std::to_string(error->line) + ")");

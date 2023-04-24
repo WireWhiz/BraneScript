@@ -4,6 +4,7 @@
 #include "linker.h"
 #include "script.h"
 #include "scriptRuntime.h"
+#include "staticAnalysis/constexprEvaluator.h"
 #include "staticAnalysis/staticAnalyzer.h"
 
 using namespace BraneScript;
@@ -13,7 +14,7 @@ TEST(BraneScript, Templates)
     std::string testString = R"(
     link "BraneScript";
 
-    template<type Arg1, type Arg2>
+    template<typedef Arg1, typedef Arg2>
     Arg1 add(Arg1 a, Arg2 b)
     {
         return a + b;
@@ -34,7 +35,7 @@ TEST(BraneScript, Templates)
         return add<float, float>(a, b);
     }
 
-    template<type T1, type T2>
+    template<typedef T1, typedef T2>
     struct TestPair
     {
         T1 first;
@@ -49,13 +50,13 @@ TEST(BraneScript, Templates)
         return output;
     }
 
-    template<type T>
+    template<typedef T>
     T sumRecursive(T value)
     {
         return value;
     }
 
-    template<type T, type... Args>
+    template<typedef T, typedef... Args>
     T sumRecursive(T value, Args... args)
     {
         return value + sumRecursive<Args...>(args...);
@@ -65,13 +66,30 @@ TEST(BraneScript, Templates)
     {
         return sumRecursive<int, int, int, int>(v1, v2, v3, v4);
     }
+
+    template<int i>
+    int sumTemplate()
+    {
+        if(i > 1)
+            return i + sumTemplate<i - 1>();
+        return 1;
+    }
+
+    int testTemplateExprArg()
+    {
+        return sumTemplate<6>();
+    }
+
 )";
+    ConstexprEvaluator evaluator;
     StaticAnalyzer analyzer;
+    analyzer.setConstexprEvaluator(&evaluator);
     analyzer.load("test", testString);
     analyzer.validate("test");
     checkCompileErrors(analyzer, testString);
 
     Compiler compiler;
+    compiler.setConstexprEvaluator(&evaluator);
     auto* ir = compiler.compile(analyzer.getCtx("test")->scriptContext.get());
     ASSERT_TRUE(ir);
 
@@ -80,7 +98,7 @@ TEST(BraneScript, Templates)
      * global function template instances = 2
      * template struct constructors = 4
      */
-    EXPECT_EQ(ir->localFunctions.size(), 15);
+    EXPECT_EQ(ir->localFunctions.size(), 22);
 
     ScriptRuntime rt;
     Script* testScript = rt.loadScript(ir);
@@ -111,4 +129,8 @@ TEST(BraneScript, Templates)
     auto sum4 = testScript->getFunction<int, int, int, int, int>("sum4");
     ASSERT_TRUE(sum4);
     EXPECT_EQ(sum4(1, 2, 3, 4), 10);
+
+    auto testTemplateExprArg = testScript->getFunction<int>("testTemplateExprArg");
+    ASSERT_TRUE(testTemplateExprArg);
+    EXPECT_EQ(testTemplateExprArg(), 6 + 5 + 4 + 3 + 2 + 1);
 }

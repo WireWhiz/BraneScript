@@ -32,7 +32,7 @@ progSegment : function
 global      : type id=ID ';';
 
 
-templateDefArgument : is'type'  isPack='...'? id=ID;
+templateDefArgument : ((exprType=type) | (isTypedef='typedef')) isPack='...'? id=ID;
 templateDef      : 'template' '<' templateDefArgument (',' templateDefArgument)* '>';
 templateArg      : t=type          #templateTypeArg
                  | expr=expression #templateExprArg

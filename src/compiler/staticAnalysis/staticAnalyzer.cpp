@@ -7,6 +7,7 @@
 #include "antlr4/braneBaseVisitor.h"
 #include "antlr4/braneLexer.h"
 #include "functionCallTree.h"
+#include "constexprEvaluator.h"
 
 namespace BraneScript
 {
@@ -125,11 +126,55 @@ namespace BraneScript
             }
         };
 
-        using TemplateArgs = robin_hood::unordered_map<std::string, std::unique_ptr<TemplateArgContext>>;
+        struct TemplateArgs
+        {
+            enum class Type
+            {
+                Value,
+                Typedef
+            };
+            struct Arg
+            {
+                ValueContext typeDef;
+                std::unique_ptr<ConstValueContext> value;
+                Type type;
+                Arg(ValueContext arg) : typeDef(std::move(arg)), type(Type::Typedef)
+                {
+                }
+                Arg(ConstValueContext* arg) : value(arg), type(Type::Value)
+                {
+                }
+                Arg(const Arg& o)
+                {
+                    typeDef = o.typeDef;
+                    if(o.value)
+                        value.reset((ConstValueContext*)o.value->deepCopy([](auto _){return _;}));
+                    type = o.type;
+                }
+                Arg(Arg&& o)
+                {
+                    typeDef = std::move(o.typeDef);
+                    value = std::move(o.value);
+                    type = o.type;
+                }
+            };
+            std::vector<Arg> args;
 
+            void addArg(ValueContext typeDef)
+            {
+                args.emplace_back(std::move(typeDef));
+            }
+
+            void addArg(ConstValueContext* value)
+            {
+                args.emplace_back(value);
+            }
+        };
+
+        using MappedTemplateArgs = robin_hood::unordered_map<std::string, std::unique_ptr<TemplateArgContext>>;
 
         robin_hood::unordered_map<std::string, std::vector<std::unique_ptr<TemplateHandle>>> _registeredTemplates;
-        std::list<TemplateArgs> _templateArgs;
+        std::list<MappedTemplateArgs> _templateArgs;
         bool _instantiatingTemplate = false;
 
         TemplateArgContext* getTemplateArg(const std::string& id)
@@ -269,13 +314,17 @@ namespace BraneScript
             return token->getText();
         }
 
-        std::string templateArgsToString(const std::vector<ValueContext>& args)
+        std::string templateArgsToString(const TemplateArgs& args)
         {
             std::string str = "<";
-            for(int i = 0; i < args.size(); ++i)
+            for(int i = 0; i < args.args.size(); ++i)
             {
-                str += args[i].signature();
-                if(i != args.size() - 1)
+                auto& arg = args.args[i];
+                if(arg.type == TemplateArgs::Type::Typedef)
+                    str += arg.typeDef.signature();
+                else if(arg.type == TemplateArgs::Type::Value)
+                    str += arg.value->toString();
+                if(i != args.args.size() - 1)
                     str += ",";
             }
             str += ">";
@@ -284,23 +333,31 @@ namespace BraneScript
 
         std::string templateDefToString(braneParser::TemplateDefContext* tempDef)
         {
-            std::vector<ValueContext> args;
+            std::string str = "<";
             auto argDefs = std::any_cast<std::vector<TemplateDefArgumentContext*>>(visitTemplateDef(tempDef));
+            size_t index = 0;
             for(auto& arg : argDefs)
             {
                 auto* argInstance = getTemplateArg(arg->identifier);
                 assert(argInstance);
+                if(auto typeArg = dynamic_cast<ValueArgContext*>(argInstance))
+                    str += typeArg->value->toString();
                 if(auto typeArg = dynamic_cast<TypedefArgContext*>(argInstance))
-                    args.push_back(typeArg->value);
+                    str += typeArg->value.signature();
                 if(auto typePackArg = dynamic_cast<TypedefPackArgContext*>(argInstance))
                 {
                     for(auto& value : typePackArg->values)
-                        args.push_back(value);
+                        str += value.signature() + ",";
+
                 }
 
                 delete arg;
+                index++;
+                if(index != argDefs.size())
+                    str += ",";
             }
-            return templateArgsToString(args);
+            str += ">";
+            return str;
         }
 
         std::string functionSig(const std::string& identifier, const std::vector<ValueContext> args)
@@ -390,7 +447,7 @@ namespace BraneScript
 
             if(ctx->template_)
             {
-                auto args = std::any_cast<std::vector<ValueContext>>(visitTemplateArgs(ctx->template_));
+                TemplateArgs args = std::any_cast<TemplateArgs>(visitTemplateArgs(ctx->template_));
                 if(parent)
                     id = parent->longId() + "::" + id;
                 found = getTemplateInstance(id, args);
@@ -445,6 +502,7 @@ namespace BraneScript
                         callTree.addDependency(parentFunc, sCtx->copyConstructor);
                     }
                 }
+                return output;
             }
 
             return output;
@@ -574,7 +632,7 @@ namespace BraneScript
                 std::string longID = name;
                 if(scope)
                     longID = scope->longId() + "::" + name;
-                auto tempArgs = std::any_cast<std::vector<ValueContext>>(visitTemplateArgs(tempArgsCtx));
+                TemplateArgs tempArgs = std::any_cast<TemplateArgs>(visitTemplateArgs(tempArgsCtx));
 
                 auto tempFunction =
                     dynamic_cast<FunctionContext*>(getTemplateInstance(longID, tempArgs, TemplateHandle::Function));
@@ -748,7 +806,15 @@ namespace BraneScript
         std::any visitTemplateDefArgument(braneParser::TemplateDefArgumentContext* ctx) override
         {
             auto arg = new TemplateDefArgumentContext{};
-            arg->type = ctx->isPack ? TemplateDefArgumentContext::TypedefPack : TemplateDefArgumentContext::Typedef;
+            if(ctx->isTypedef)
+                arg->type = ctx->isPack ? TemplateDefArgumentContext::TypedefPack : TemplateDefArgumentContext::Typedef;
+            else if(ctx->exprType)
+            {
+                if(ctx->isPack)
+                    recordError(ctx->isPack, "Expression arguments can not have variable length");
+                arg->type = TemplateDefArgumentContext::Value;
+                arg->valueType = std::any_cast<ValueContext>(visitType(ctx->exprType));
+            }
             arg->identifier = ctx->id->getText();
             return arg;
         }
@@ -769,12 +835,32 @@ namespace BraneScript
 
         std::any visitTemplateArgs(braneParser::TemplateArgsContext* ctx) override
         {
-            std::vector<ValueContext> args;
+            TemplateArgs args;
             for(auto* arg : ctx->templateArg())
             {
+                if(auto* exprArg = dynamic_cast<braneParser::TemplateExprArgContext*>(arg))
+                {
+                    auto expr = asExpr(visit(exprArg->expr));
+                    if(!expr->isConstexpr())
+                    {
+                        recordError(exprArg, "Template arguments must be constant expressions");
+                        continue;
+                    }
+                    if(!_analyzer.constexprEvaluator())
+                        throw std::runtime_error("Static analyzer must have an attached constexpr evaluator to use expressions as template arguments");
+                    auto exprResult = _analyzer.constexprEvaluator()->evaluateConstexpr(expr.get());
+                    if(!exprResult)
+                    {
+                        recordError(exprArg, "Could not evaluate expression");
+                        continue;
+                    }
+                    args.addArg(exprResult);
+
+                    continue;
+                }
                 if(auto* typeArg = dynamic_cast<braneParser::TemplateTypeArgContext*>(arg))
                 {
-                    args.push_back(std::any_cast<ValueContext>(visit(typeArg)));
+                    args.addArg(std::any_cast<ValueContext>(visit(typeArg)));
                     continue;
                 }
                 if(auto* packArg = dynamic_cast<braneParser::PackExpansionArgContext*>(arg))
@@ -793,7 +879,7 @@ namespace BraneScript
                         continue;
                     }
                     for(auto& value : pack->values)
-                        args.push_back(value);
+                        args.addArg(value);
                     break;
                 }
             }
@@ -824,7 +910,7 @@ namespace BraneScript
                         recordError(ctx->name, "Cannot use an argument pack as a type!");
                 }
                 else
-                    recordError(ctx->name, "Type could not be found!");
+                    recordError(ctx->name, "Type " + ctx->getText() + " could not be found!");
             }
 
             if(ctx->isRef && output.type.storageType != ValueType::Struct)
@@ -923,39 +1009,56 @@ namespace BraneScript
             return std::move(args);
         }
 
-        bool populateTemplateArgs(TemplateHandle* temp, const std::vector<ValueContext>& args)
+        bool populateTemplateArgs(TemplateHandle* temp, const TemplateArgs& args)
         {
-            if(args.size() < temp->args.size())
+            if(args.args.size() < temp->args.size())
                 return false;
             size_t arg = 0;
-            TemplateArgs argsToPush;
+            MappedTemplateArgs argsToPush;
             for(size_t argDef = 0; argDef < temp->args.size(); ++argDef)
             {
-                if(arg == args.size())
+                if(arg == args.args.size())
                     return false;
 
                 std::string identifier = temp->args[argDef]->identifier;
-                if(temp->args[argDef]->type == TemplateDefArgumentContext::Typedef)
-                    argsToPush.emplace(identifier, new TypedefArgContext{identifier, args[arg++]});
+                if(temp->args[argDef]->type == TemplateDefArgumentContext::Value)
+                {
+                    if(args.args[arg].type != TemplateArgs::Type::Value)
+                        return false;
+                    auto valueArg = new ValueArgContext{};
+                    valueArg->identifier = identifier;
+                    valueArg->value.reset((ConstValueContext*)args.args[arg++].value->deepCopy([](auto _){return _;}));
+                    argsToPush.emplace(identifier, valueArg);
+                }
+                else if(temp->args[argDef]->type == TemplateDefArgumentContext::Typedef)
+                {
+                    if(args.args[arg].type != TemplateArgs::Type::Typedef)
+                        return false;
+                    argsToPush.emplace(identifier, new TypedefArgContext{identifier, args.args[arg++].typeDef});
+                }
                 else if(temp->args[argDef]->type == TemplateDefArgumentContext::TypedefPack)
                 {
                     if(argDef != temp->args.size() - 1)
                         return false;
                     auto pack = new TypedefPackArgContext{};
                     pack->identifier = identifier;
-                    while(arg != args.size())
-                        pack->values.push_back(args[arg++]);
+                    while(arg != args.args.size())
+                    {
+                        if(args.args[arg].type != TemplateArgs::Type::Typedef)
+                            return false;
+                        pack->values.push_back(args.args[arg++].typeDef);
+                    }
                     argsToPush.emplace(std::move(identifier), pack);
                 }
             }
-            if(arg != args.size())
+            if(arg != args.args.size())
                 return false;
             _templateArgs.push_back(std::move(argsToPush));
             return true;
         }
 
         DocumentContext* getTemplateInstance(const std::string& identifier,
-                                             const std::vector<ValueContext>& args,
+                                             const TemplateArgs& args,
                                              TemplateHandle::Type expectedType = TemplateHandle::Any)
         {
             if(!_registeredTemplates.contains(identifier))
@@ -1020,7 +1123,7 @@ namespace BraneScript
             auto func = new FunctionContext{};
             func->identifier.text = identifier;
             func->version = -1;
-            functions->push_back(std::unique_ptr<FunctionContext>(func));
+            functions->emplace_back(func);
             return func;
         }
 
@@ -1255,7 +1358,7 @@ namespace BraneScript
                 std::string prefix = lastNode()->longId();
                 if(!prefix.empty())
                     id = prefix + "::" + id;
-                auto args = std::any_cast<std::vector<TemplateDefArgumentContext*>>(visit(ctx->template_));
+                auto args = std::any_cast<std::vector<TemplateDefArgumentContext*>>(visitTemplateDef(ctx->template_));
                 _registeredTemplates[id].emplace_back(
                     new TemplateHandle(TemplateHandle::Struct, ctx, lastNode(), args));
                 return (StructContext*)nullptr;
@@ -1584,10 +1687,27 @@ namespace BraneScript
             auto ifCtx = new IfContext{};
             initDoc(ifCtx, ctx);
             ifCtx->condition = asExpr(visit(ctx->cond));
+            if(ifCtx->condition->returnType.type.storageType != ValueType::Bool)
+                recordError(ctx->cond, "Condition must be a Boolean value");
+
+            if(_instantiatingTemplate && _analyzer.constexprEvaluator() && ifCtx->condition->isConstexpr() && _result.errors.empty())
+            {
+                auto condRes = std::unique_ptr<ConstValueContext>(_analyzer.constexprEvaluator()->evaluateConstexpr(ifCtx->condition.get()));
+                popDoc(ifCtx);
+                delete ifCtx;
+                if(dynamic_cast<ConstBoolContext*>(condRes.get())->value)
+                    RETURN_STMT(asStmt(visit(ctx->operation)).release());
+                if(ctx->elseOp)
+                    RETURN_STMT(asStmt(visit(ctx->elseOp)).release());
+                RETURN_STMT(new ScopeContext{});
+            }
+
+
             ifCtx->body = asStmt(visit(ctx->operation));
             if(ctx->elseOp)
                 ifCtx->elseBody = asStmt(visit(ctx->elseOp));
             popDoc(ifCtx);
+
             RETURN_STMT(ifCtx);
         }
 
@@ -1873,6 +1993,12 @@ namespace BraneScript
             auto node = lastNode()->findIdentifier(identifier, 0);
             if(!node)
             {
+                if(_instantiatingTemplate)
+                {
+                    auto* tempArg = getTemplateArg(identifier);
+                    if(auto* tempValueArg = dynamic_cast<ValueArgContext*>(tempArg))
+                        RETURN_EXPR(tempValueArg->value->deepCopy([](auto _){return _;}));
+                }
                 recordError(ctx, "\"" + identifier + "\" is not a variable!");
                 return NULL_EXPR;
             }
@@ -2341,5 +2467,7 @@ namespace BraneScript
     {
         _evaluator = evaluator;
     }
+
+    ConstexprEvaluator* StaticAnalyzer::constexprEvaluator() const { return _evaluator; }
 
 } // namespace BraneScript
