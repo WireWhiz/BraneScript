@@ -5,7 +5,8 @@ gtest/cci.20210126
 robin-hood-hashing/3.11.5
 asio/1.27.0
 jsoncpp/1.9.5
+llvm-core/13.0.0
 
 [generators]
-CMakeDeps
-CMakeToolchain
+cmake_find_package
+cmake_paths

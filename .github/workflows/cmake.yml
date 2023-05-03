@@ -35,8 +35,9 @@ jobs:
 
     - name: Install & configure conan
       run: |
-        pip install --upgrade conan==2.0.2
-        conan profile detect
+        pip install --upgrade conan==1.59
+        conan profile new default --detect 
+        conan profile update settings.compiler.libcxx=libstdc++11 default
 
     - name: Configure CMake
       # Configure CMake in a 'build' subdirectory. `CMAKE_BUILD_TYPE` is only required if you are using a single-configuration generator such as make.
