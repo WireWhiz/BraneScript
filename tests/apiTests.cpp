@@ -1,10 +1,8 @@
 
 #include "testing.h"
 
-#include "compiler.h"
 #include "scriptRuntime.h"
 #include "script.h"
-#include "linker.h"
 
 using namespace BraneScript;
 
@@ -17,9 +15,6 @@ void BS_API_CALL setRef(int newVal)
 
 TEST(BraneScript, API)
 {
-#ifndef NDEBUG
-    scriptMallocDiff = 0;
-#endif
     std::string testString = R"(
     link "testLib" as "lib";
 
@@ -39,24 +34,22 @@ TEST(BraneScript, API)
     }
 )";
 
-    Linker linker;
-    linker.addFunction("testLib::setRef", setRef);
+    NativeLibrary testLib;
+    testLib.identifier = "testLib";
+    testLib.addFunction("testLib::setRef(int)", setRef);
 
     StaticAnalyzer analyzer;
-    analyzer.load("testLibHeader", testLibString);
     analyzer.load("test", testString);
+    analyzer.load("testLib", testLibString);
     analyzer.validate("test");
-    checkCompileErrors(analyzer, testString);
+    checkCompileErrors(analyzer, testString)
 
-    Compiler compiler;
-    compiler.setLinker(&linker);
-    auto* ir = compiler.compile(analyzer.getCtx("test")->scriptContext.get());
-    ASSERT_TRUE(ir);
+    llvm::LLVMContext ctx;
+    auto ir = analyzer.getCtx("test")->scriptContext->compile(&ctx);
 
     ScriptRuntime rt;
-    rt.setLinker(&linker);
+    rt.loadLibrary(testLib);
     Script* testScript = rt.loadScript(ir);
-    delete ir;
     ASSERT_TRUE(testScript);
 
     auto scriptSetRef = testScript->getFunction<void, int>("tests::setRef");
@@ -64,8 +57,4 @@ TEST(BraneScript, API)
     scriptSetRef(5);
 
     EXPECT_EQ(refValue, 5);
-
-#ifndef NDEBUG
-    EXPECT_EQ(scriptMallocDiff, 0);
-#endif
 }

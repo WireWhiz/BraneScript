@@ -1,8 +1,6 @@
 
 #include "testing.h"
 
-#include "src/compiler/compiler.h"
-#include "src/scriptRuntime/linker.h"
 #include "src/scriptRuntime/script.h"
 #include "src/scriptRuntime/scriptRuntime.h"
 #include "staticAnalysis/staticAnalyzer.h"
@@ -19,7 +17,6 @@ void testFunction(const std::string& name, Script* script)
 TEST(BraneScript, FlowStatements)
 {
     std::string testString = R"(
-    link "BraneScript";
     export as "tests"
     {
         bool testConstTrueIf()
@@ -67,12 +64,11 @@ TEST(BraneScript, FlowStatements)
     analyzer.validate("test");
     checkCompileErrors(analyzer, testString);
 
-    Compiler compiler;
-    auto* ir = compiler.compile(analyzer.getCtx("test")->scriptContext.get());
+    llvm::LLVMContext ctx;
+    auto ir = analyzer.getCtx("test")->scriptContext->compile(&ctx);
 
     ScriptRuntime rt;
     Script* testScript = rt.loadScript(ir);
-    delete ir;
     ASSERT_TRUE(testScript);
 
     testFunction("tests::testConstTrueIf", testScript);

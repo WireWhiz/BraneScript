@@ -1,8 +1,6 @@
 #include "testing.h"
 
 #include <iostream>
-#include "compiler.h"
-#include "linker.h"
 #include "script.h"
 #include "scriptRuntime.h"
 #include "staticAnalysis/staticAnalyzer.h"
@@ -38,7 +36,6 @@ TEST(BraneScript, Speed)
 {
 
     std::string testString = R"(
-    link "BraneScript";
     export as "tests"
     {
         int iFib(int n)
@@ -60,13 +57,11 @@ TEST(BraneScript, Speed)
     analyzer.validate("test");
     checkCompileErrors(analyzer, testString);
 
-    Compiler compiler;
-    auto* ir = compiler.compile(analyzer.getCtx("test")->scriptContext.get());
-    ASSERT_TRUE(ir);
+    llvm::LLVMContext ctx;
+    auto ir = analyzer.getCtx("test")->scriptContext->compile(&ctx);
 
     ScriptRuntime rt;
     Script* testScript = rt.loadScript(ir);
-    delete ir;
     ASSERT_TRUE(testScript);
 
     auto scIFib = testScript->getFunction<int, int>("tests::iFib");
@@ -82,11 +77,11 @@ TEST(BraneScript, Speed)
 
     size_t c = 2000;
     int n = 30;
-    /*std::cout << "Testing with n = " << n << ", " << c << " times" << std::endl;
+    std::cout << "Testing with n = " << n << ", " << c << " times" << std::endl;
     std::cout << "native int fib: " << speedTestFib(iFib, n, c) << " milliseconds" << std::endl;
     std::cout << "native float fib: " << speedTestFib(fFib, n, c) << " milliseconds" << std::endl;
     std::cout << "script int fib: " << speedTestFib(scIFib, n, c) << " milliseconds" << std::endl;
-    std::cout << "script float fib: " << speedTestFib(scFFib, n, c) << " milliseconds" << std::endl;*/
+    std::cout << "script float fib: " << speedTestFib(scFFib, n, c) << " milliseconds" << std::endl;
 
 
 }

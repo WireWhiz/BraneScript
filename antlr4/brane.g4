@@ -88,6 +88,7 @@ expression  : INT                                                           #con
             | id=scopedID '(' argumentPack ')'                              #functionCall
             | base=expression '.' name=ID (template=templateArgs)? '(' argumentPack ')' #memberFunctionCall
             | ID                                                            #id
+            | 'ref' source=expression                                       #makeRef
             | base=expression '[' arg=expression ']'                        #indexAccess
             | base=expression '.' member=ID                                 #memberAccess
             | '(' type ')' expression                                       #cast

@@ -1,5 +1,5 @@
-find_package(asmjit)
 find_package(robin_hood)
+find_package(LLVM)
 
 add_library(BraneScriptRuntime STATIC
         typeDef.cpp
@@ -8,10 +8,8 @@ add_library(BraneScriptRuntime STATIC
         nativeTypes.cpp
         valueIndex.cpp
         functionHandle.cpp
-        linker.cpp
         structDefinition.cpp
         script.cpp
         nativeLibrary.cpp)
-target_link_libraries(BraneScriptRuntime PUBLIC antlr4 asmjit::asmjit)
-target_compile_definitions(BraneScriptRuntime PUBLIC ${asmjit_COMPILE_DEFINITIONS})
-target_include_directories(BraneScriptRuntime PUBLIC ${asmjit_INCLUDE_DIRS} ${robin_hood_INCLUDE_DIRS} ${CMAKE_CURRENT_SOURCE_DIR})
+target_link_libraries(BraneScriptRuntime PUBLIC LLVM::LLVMOrcJIT LLVM::LLVMAsmPrinter LLVM::LLVMX86AsmParser)
+target_include_directories(BraneScriptRuntime PUBLIC ${robin_hood_INCLUDE_DIRS} ${CMAKE_CURRENT_SOURCE_DIR})

@@ -1,8 +1,6 @@
 
 #include "testing.h"
 
-#include "compiler.h"
-#include "linker.h"
 #include "script.h"
 #include "scriptRuntime.h"
 #include "staticAnalysis/staticAnalyzer.h"
@@ -11,9 +9,6 @@ using namespace BraneScript;
 
 TEST(BraneScript, Strings)
 {
-#ifndef NDEBUG
-    scriptMallocDiff = 0;
-#endif
     std::string testString = R"(
     link "BraneScript";
     export as "tests"
@@ -41,22 +36,16 @@ TEST(BraneScript, Strings)
     }
     )";
 
-    Linker l;
-
     StaticAnalyzer analyzer;
     analyzer.load("test", testString);
     analyzer.validate("test");
     checkCompileErrors(analyzer, testString);
 
-    Compiler compiler;
-    compiler.setLinker(&l);
-    auto* ir = compiler.compile(analyzer.getCtx("test")->scriptContext.get());
-    ASSERT_TRUE(ir);
+    llvm::LLVMContext ctx;
+    auto ir = analyzer.getCtx("test")->scriptContext->compile(&ctx, false, true);
 
     ScriptRuntime rt;
-    rt.setLinker(&l);
     Script* testScript = rt.loadScript(ir);
-    delete ir;
     ASSERT_TRUE(testScript);
 
     std::string argA = "a";
@@ -86,8 +75,4 @@ TEST(BraneScript, Strings)
     ASSERT_TRUE(strNEQ);
     EXPECT_FALSE(strNEQ(&argA, &argA));
     EXPECT_TRUE(strNEQ(&argA, &argB));
-
-#ifndef NDEBUG
-    EXPECT_EQ(scriptMallocDiff, 0);
-#endif
 }

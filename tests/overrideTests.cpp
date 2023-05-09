@@ -2,8 +2,6 @@
 
 #include "testing.h"
 
-#include "compiler.h"
-#include "linker.h"
 #include "script.h"
 #include "scriptRuntime.h"
 #include "staticAnalysis/staticAnalyzer.h"
@@ -13,7 +11,6 @@ using namespace BraneScript;
 TEST(BraneScript, Overrides)
 {
     std::string testString = R"(
-    link "BraneScript";
     export as "tests"
     {
         bool func(int a, float b, bool c)
@@ -34,19 +31,16 @@ TEST(BraneScript, Overrides)
         }
     }
 )";
-    Linker l;
     StaticAnalyzer analyzer;
     analyzer.load("test", testString);
-    !analyzer.validate("test");
+    analyzer.validate("test");
     checkCompileErrors(analyzer, testString);
 
-    Compiler compiler;
-    auto* ir = compiler.compile(analyzer.getCtx("test")->scriptContext.get());
-    ASSERT_TRUE(ir);
+    llvm::LLVMContext ctx;
+    auto ir = analyzer.getCtx("test")->scriptContext->compile(&ctx);
 
     ScriptRuntime rt;
     Script* testScript = rt.loadScript(ir);
-    delete ir;
     ASSERT_TRUE(testScript);
 
     auto f0 = testScript->getFunction<int>("tests::func");

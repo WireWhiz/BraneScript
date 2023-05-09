@@ -7,47 +7,53 @@
 
 #include <memory>
 #include <vector>
-#include "asmjit/core/jitruntime.h"
 #include "functionHandle.h"
+#include "nativeLibrary.h"
 #include "robin_hood.h"
+
+namespace llvm
+{
+    class DataLayout;
+
+    namespace orc
+    {
+        class ExecutionSession;
+        class IRCompileLayer;
+        class MangleAndInterner;
+        class RTDyldObjectLinkingLayer;
+        class IRTransformLayer;
+        class JITDylib;
+    } // namespace orc
+} // namespace llvm
 
 namespace BraneScript
 {
     class Script;
     class IRScript;
-    class IRFunction;
-    class Linker;
     class StructDef;
-
-#ifndef NDEBUG
-    extern int scriptMallocDiff;
-#endif
-
-    struct ScriptAssembleContext
-    {
-        IRScript* irScript = nullptr;
-        Script* script = nullptr;
-
-        std::vector<const StructDef*> linkedStructs;
-        std::vector<const FunctionData*> linkedFunctions;
-    };
 
     class ScriptRuntime
     {
-        asmjit::JitRuntime _runtime;
-        std::vector<std::unique_ptr<Script>> _scripts;
-        Linker* _linker = nullptr;
-        size_t maxStackSize = 32768;
+        robin_hood::unordered_map<std::string, std::unique_ptr<Script>> _scripts;
+        robin_hood::unordered_map<std::string, robin_hood::unordered_set<llvm::orc::JITDylib*>> _modules;
 
-        robin_hood::unordered_map<void*, std::string> _exportedFunctions;
+        std::unique_ptr<llvm::orc::ExecutionSession> _session;
+        std::unique_ptr<llvm::DataLayout> _layout;
+        std::unique_ptr<llvm::orc::MangleAndInterner> _mangler;
 
-    public:
-        Script* loadScript(IRScript* irScript);
-        FunctionData loadFunction(IRFunction* function, ScriptAssembleContext* parentCtx = nullptr);
-        void setLinker(Linker* linker);
+        std::unique_ptr<llvm::orc::RTDyldObjectLinkingLayer> _linkingLayer;
+        std::unique_ptr<llvm::orc::IRCompileLayer> _compileLayer;
+        std::unique_ptr<llvm::orc::IRTransformLayer> _transformLayer;
 
-        void unloadFunction(void* func);
+      public:
+        ScriptRuntime();
+        ~ScriptRuntime();
+
+        void loadLibrary(const NativeLibrary& lib);
+
+        Script* loadScript(const IRScript& irScript);
+        void unloadScript(const std::string& id);
     };
-}
+} // namespace BraneScript
 
-#endif //BRANESCRIPT_SCRIPTRUNTIME_H
+#endif // BRANESCRIPT_SCRIPTRUNTIME_H

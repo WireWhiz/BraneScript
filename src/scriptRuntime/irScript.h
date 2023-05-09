@@ -7,37 +7,37 @@
 
 #include <vector>
 #include <string>
-#include "irFunction.h"
+
+namespace llvm
+{
+    class Module;
+}
+
 namespace BraneScript
 {
-    struct IRScript
+    struct IRStructDef
     {
-        std::string namespace_;
-        std::vector<IRFunction> localFunctions;
-        uint32_t globalVarAllocSize = 0;
-
-        struct IRStructDef
+        struct Member
         {
-            struct Member
-            {
-                std::string name;
-                uint16_t offset;
-                std::string type;
-            };
             std::string name;
-            std::vector<Member> members;
-            bool isPublic = false;
+            std::string type;
         };
-        std::vector<IRStructDef> publicStructs;
-
-        std::vector<std::string> linkedFunctions;
-        std::vector<std::string> linkedStructs;
-
-        int16_t findLocalFuncIndex(const std::string& name) const;
-
-        int16_t linkFunction(const std::string& name);
-        int16_t linkStruct(const std::string& name);
+        std::string name;
+        std::vector<Member> members;
+        bool packed;
     };
 
+    struct IRScript
+    {
+        std::string id;
+        std::string bitcode;
+
+        std::vector<std::string> exportedFunctions;
+        std::vector<std::string> exportedGlobals;
+        std::vector<IRStructDef> exportedStructs;
+
+        std::vector<std::string> importedLibs;
+        std::vector<std::string> exportedLibs;
+    };
 }
 #endif //BRANESCRIPT_IRSCRIPT_H

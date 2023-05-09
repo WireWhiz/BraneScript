@@ -89,6 +89,8 @@ public:
 
     virtual std::any visitDecl(braneParser::DeclContext *context) = 0;
 
+    virtual std::any visitMakeRef(braneParser::MakeRefContext *context) = 0;
+
     virtual std::any visitAddsub(braneParser::AddsubContext *context) = 0;
 
     virtual std::any visitConstInt(braneParser::ConstIntContext *context) = 0;

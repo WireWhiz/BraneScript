@@ -45,7 +45,10 @@ namespace BraneScript
             m.offset = _size;
             _size += t->size();
         }
-        _size += largestItem - (_size % largestItem);
+        if(largestItem != 0)
+            _size += largestItem - (_size % largestItem);
+        else
+            _size = 1;
     }
 
     void StructDef::packMembers()

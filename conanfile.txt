@@ -1,5 +1,4 @@
 [requires]
-asmjit/cci.20221111
 antlr4-cppruntime/4.12.0
 gtest/cci.20210126
 robin-hood-hashing/3.11.5

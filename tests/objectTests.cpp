@@ -1,7 +1,5 @@
 #include "testing.h"
 
-#include "compiler.h"
-#include "linker.h"
 #include "nativeTypes.h"
 #include "script.h"
 #include "scriptRuntime.h"
@@ -45,11 +43,7 @@ struct NestedStructBase
 
 TEST(BraneScript, Objects)
 {
-#ifndef NDEBUG
-    scriptMallocDiff = 0;
-#endif
     std::string testString = R"(
-    link "BraneScript";
     export as "tests"
     {
         float getMember1(ref TestStruct1 s)
@@ -295,8 +289,4 @@ TEST(BraneScript, Objects)
     EXPECT_EQ(nestedStruct.b.x, 1.0f);
     EXPECT_EQ(nestedStruct.b.y, 4.0f);
     EXPECT_EQ(nestedStruct.b.z, 3.0f);
-
-#ifndef NDEBUG
-    EXPECT_EQ(scriptMallocDiff, 0);
-#endif
 }

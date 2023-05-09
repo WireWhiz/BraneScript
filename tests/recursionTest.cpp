@@ -1,7 +1,5 @@
 #include "testing.h"
 
-#include "compiler.h"
-#include "linker.h"
 #include "script.h"
 #include "scriptRuntime.h"
 #include "staticAnalysis/staticAnalyzer.h"
@@ -11,7 +9,6 @@ using namespace BraneScript;
 TEST(BraneScript, Recursion)
 {
     std::string testString = R"(
-    link "BraneScript";
     export as "tests"
     {
         int called1(int in)
@@ -37,13 +34,11 @@ TEST(BraneScript, Recursion)
     analyzer.validate("test");
     checkCompileErrors(analyzer, testString);
 
-    Compiler compiler;
-    auto* ir = compiler.compile(analyzer.getCtx("test")->scriptContext.get());
-    ASSERT_TRUE(ir);
+    llvm::LLVMContext ctx;
+    auto ir = analyzer.getCtx("test")->scriptContext->compile(&ctx);
 
     ScriptRuntime rt;
     Script* testScript = rt.loadScript(ir);
-    delete ir;
     ASSERT_TRUE(testScript);
 
     auto f0 = testScript->getFunction<int, int>("tests::caller1");

@@ -629,6 +629,16 @@ public:
     virtual std::any accept(antlr4::tree::ParseTreeVisitor *visitor) override;
   };
 
+  class  MakeRefContext : public ExpressionContext {
+  public:
+    MakeRefContext(ExpressionContext *ctx);
+
+    braneParser::ExpressionContext *source = nullptr;
+    ExpressionContext *expression();
+
+    virtual std::any accept(antlr4::tree::ParseTreeVisitor *visitor) override;
+  };
+
   class  AddsubContext : public ExpressionContext {
   public:
     AddsubContext(ExpressionContext *ctx);

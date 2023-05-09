@@ -11,12 +11,24 @@
 #include <vector>
 #include "robin_hood.h"
 #include "src/scriptRuntime/valueIndex.h"
+#include "structDefinition.h"
 #include "textPos.h"
 #include <json/json.h>
+#include <llvm/IR/PassManager.h>
+
+#include "irScript.h"
+#include "llvm/IR/IRBuilder.h"
+#include "llvm/IR/LLVMContext.h"
 
 namespace antlr4
 {
     class TokenStream;
+}
+
+namespace llvm
+{
+    class Value;
+    class Module;
 }
 
 namespace BraneScript
@@ -24,6 +36,8 @@ namespace BraneScript
     class StaticAnalyzer;
     struct FunctionContext;
     struct StructContext;
+    class TypeDef;
+    class StructDef;
 
     struct Identifier
     {
@@ -38,7 +52,7 @@ namespace BraneScript
     {
         std::string identifier = "void";
         ValueType storageType = ValueType::Void;
-        StructContext* structDef = nullptr;
+        StructContext* structCtx = nullptr;
 
         bool operator==(const TypeContext&) const;
         bool operator!=(const TypeContext&) const;
@@ -110,6 +124,67 @@ namespace BraneScript
         std::unique_ptr<ConstValueContext> value;
     };
 
+    struct ScriptContext;
+
+    struct ASTContext
+    {
+        llvm::LLVMContext* llvmCtx;
+        llvm::IRBuilder<> builder;
+        std::unique_ptr<llvm::Module> module;
+
+        std::unique_ptr<llvm::FunctionAnalysisManager> fam;
+        std::unique_ptr<llvm::ModuleAnalysisManager> mam;
+        std::unique_ptr<llvm::ModulePassManager> mpm;
+        std::unique_ptr<llvm::FunctionPassManager> fpm;
+
+        llvm::Function* func = nullptr;
+        llvm::BasicBlock* currentBlock = nullptr;
+
+        uint32_t blockCounter = 0;
+
+        struct StructEntry
+        {
+            IRStructDef def;
+            llvm::StructType* llvmType = nullptr;
+            bool isExported = false;
+        };
+        robin_hood::unordered_map<std::string, StructEntry> definedStructs;
+
+        robin_hood::unordered_map<std::string, llvm::Constant*> globals;
+        robin_hood::unordered_map<std::string, llvm::Function*> functions;
+        std::vector<std::string> exportedFunctions;
+        std::vector<std::string> exportedGlobals;
+
+        robin_hood::unordered_set<std::string> exports;
+        robin_hood::unordered_set<std::string> imports;
+
+        struct Scope
+        {
+            robin_hood::unordered_map<std::string, llvm::Value*> values;
+        };
+        std::list<Scope> scopes;
+
+        void pushScope();
+        void popScope();
+        void addValue(std::string id, llvm::Value* value);
+        llvm::Value* findValue(const std::string& id);
+
+        ASTContext(llvm::LLVMContext* llvmCtx, std::string moduleSource);
+        llvm::Type* getLLVMType(const ValueContext& valueCtx);
+        llvm::StructType* getStructDef(const StructContext* structCtx);
+
+        std::function<llvm::GlobalVariable*()> makeGlobalVariable(LabeledValueContext& valueContext, bool shouldExport);
+        std::function<llvm::GlobalVariable*()> makeExternGlobalVariable(LabeledValueContext& valueContext);
+
+        void setInsertPoint(llvm::BasicBlock* block);
+        std::string blockName(std::string name);
+
+        void printModule() const;
+        llvm::Value* convertToType(llvm::Value* value, const ValueContext& valueCtx, bool forceToValue = false);
+
+        ~ASTContext();
+    };
+
     // Not yet implemented
     enum IDSearchOptions : uint8_t
     {
@@ -158,6 +233,8 @@ namespace BraneScript
          * @param callback called each time a node is copied, said node is passed to the callback.
          * This is intended to allow for modification of nodes
          */
+        virtual llvm::Value* createAST(ASTContext& ctx) const = 0;
+
          DocumentContext* deepCopy() const;
          virtual DocumentContext* deepCopy(const std::function<DocumentContext*(DocumentContext*)>& callback) const = 0;
       protected:
@@ -174,6 +251,7 @@ namespace BraneScript
         std::string longId() const override;
         DocumentContext* deepCopy(const std::function<DocumentContext*(DocumentContext*)>& callback) const override;
         LabeledValueContext() = default;
+        llvm::Value* createAST(ASTContext& ctx) const override;
         LabeledValueContext(std::string identifier, ValueContext value);
     };
 
@@ -182,6 +260,8 @@ namespace BraneScript
     {
         std::string identifier;
         std::vector<LabeledValueContext*> values;
+
+        llvm::Value* createAST(ASTContext& ctx) const override;
         virtual DocumentContext* deepCopy(const std::function<DocumentContext*(DocumentContext*)>& callback) const;
     };
 
@@ -203,6 +283,7 @@ namespace BraneScript
             this->message = std::move(message);
             this->line = line;
         }
+        llvm::Value* createAST(ASTContext& ctx) const override;
         bool isConstexpr() const override;
         DocumentContext* deepCopy(const std::function<DocumentContext*(DocumentContext*)>& callback) const override;
     };
@@ -222,6 +303,7 @@ namespace BraneScript
             this->message = std::move(message);
             this->line = line;
         }
+        llvm::Value* createAST(ASTContext& ctx) const override;
         DocumentContext* deepCopy(const std::function<DocumentContext*(DocumentContext*)>& callback) const override;
         bool isConstexpr() const override;
     };
@@ -230,9 +312,11 @@ namespace BraneScript
     {
         // This must be a list so that we can keep construction/destruction order consistent
         std::vector<std::unique_ptr<LabeledValueContext>> localVariables;
-        std::vector<std::unique_ptr<StatementContext>> statements;
+        std::vector<std::unique_ptr<StatementContext>> expressions;
 
         DocumentContext* findIdentifier(const std::string& identifier, uint8_t searchOptions) override;
+
+        llvm::Value* createAST(ASTContext& ctx) const override;
         DocumentContext* deepCopy(const std::function<DocumentContext*(DocumentContext*)>& callback) const override;
         bool isConstexpr() const override;
     };
@@ -240,6 +324,8 @@ namespace BraneScript
     struct ReturnContext : public StatementContext
     {
         std::unique_ptr<ExpressionContext> value;
+
+        llvm::Value* createAST(ASTContext& ctx) const override;
         DocumentContext* deepCopy(const std::function<DocumentContext*(DocumentContext*)>& callback) const override;
         bool isConstexpr() const override;
     };
@@ -250,6 +336,8 @@ namespace BraneScript
         std::unique_ptr<StatementContext> body;
         std::unique_ptr<StatementContext> elseBody;
         bool isConstexpr() const override;
+
+        llvm::Value* createAST(ASTContext& ctx) const override;
         DocumentContext* deepCopy(const std::function<DocumentContext*(DocumentContext*)>& callback) const override;
     };
 
@@ -258,6 +346,8 @@ namespace BraneScript
         std::unique_ptr<ExpressionContext> condition;
         std::unique_ptr<StatementContext> body;
         bool isConstexpr() const override;
+
+        llvm::Value* createAST(ASTContext& ctx) const override;
         DocumentContext* deepCopy(const std::function<DocumentContext*(DocumentContext*)>& callback) const override;
     };
 
@@ -266,6 +356,8 @@ namespace BraneScript
         std::unique_ptr<ExpressionContext> lValue;
         std::unique_ptr<ExpressionContext> rValue;
         bool isConstexpr() const override;
+
+        llvm::Value* createAST(ASTContext& ctx) const override;
         DocumentContext* deepCopy(const std::function<DocumentContext*(DocumentContext*)>& callback) const override;
     };
 
@@ -281,6 +373,7 @@ namespace BraneScript
         ConstBoolContext();
         ConstBoolContext(bool value);
         std::string toString() const override;
+        llvm::Value* createAST(ASTContext& ctx) const override;
         DocumentContext* deepCopy(const std::function<DocumentContext*(DocumentContext*)>& callback) const override;
     };
 
@@ -290,6 +383,7 @@ namespace BraneScript
         ConstCharContext();
         ConstCharContext(char value);
         std::string toString() const override;
+        llvm::Value* createAST(ASTContext& ctx) const override;
         DocumentContext* deepCopy(const std::function<DocumentContext*(DocumentContext*)>& callback) const override;
     };
 
@@ -299,6 +393,7 @@ namespace BraneScript
         ConstIntContext();
         ConstIntContext(int value);
         std::string toString() const override;
+        llvm::Value* createAST(ASTContext& ctx) const override;
         DocumentContext* deepCopy(const std::function<DocumentContext*(DocumentContext*)>& callback) const override;
     };
 
@@ -308,6 +403,7 @@ namespace BraneScript
         ConstFloatContext();
         ConstFloatContext(float value);
         std::string toString() const override;
+        llvm::Value* createAST(ASTContext& ctx) const override;
         DocumentContext* deepCopy(const std::function<DocumentContext*(DocumentContext*)>& callback) const override;
     };
 
@@ -317,6 +413,7 @@ namespace BraneScript
         ConstStringContext();
         ConstStringContext(std::string value);
         std::string toString() const override;
+        llvm::Value* createAST(ASTContext& ctx) const override;
         DocumentContext* deepCopy(const std::function<DocumentContext*(DocumentContext*)>& callback) const override;
     };
 
@@ -327,6 +424,18 @@ namespace BraneScript
         LabeledValueConstructionContext() = default;
 
         bool isConstexpr() const override;
+        llvm::Value* createAST(ASTContext& ctx) const override;
+        DocumentContext* deepCopy(const std::function<DocumentContext*(DocumentContext*)>& callback) const override;
+    };
+
+    struct LabeledValueDestructionContext : public ExpressionContext
+    {
+        std::string identifier;
+        LabeledValueDestructionContext(const LabeledValueContext& value);
+        LabeledValueDestructionContext() = default;
+
+        bool isConstexpr() const override;
+        llvm::Value* createAST(ASTContext& ctx) const override;
         DocumentContext* deepCopy(const std::function<DocumentContext*(DocumentContext*)>& callback) const override;
     };
 
@@ -336,6 +445,7 @@ namespace BraneScript
         LabeledValueReferenceContext(const LabeledValueContext& value);
 
         bool isConstexpr() const override;
+        llvm::Value* createAST(ASTContext& ctx) const override;
         DocumentContext* deepCopy(const std::function<DocumentContext*(DocumentContext*)>& callback) const override;
     };
 
@@ -347,6 +457,83 @@ namespace BraneScript
         MemberAccessContext(ExpressionContext* base, StructContext* baseType, size_t member);
 
         bool isConstexpr() const override;
+        llvm::Value* createAST(ASTContext& ctx) const override;
+        DocumentContext* deepCopy(const std::function<DocumentContext*(DocumentContext*)>& callback) const override;
+    };
+
+    struct CreateReferenceContext : public ExpressionContext
+    {
+        std::unique_ptr<ExpressionContext> _source;
+        CreateReferenceContext(ExpressionContext* source);
+
+        bool isConstexpr() const override;
+        llvm::Value* createAST(ASTContext& ctx) const override;
+        DocumentContext* deepCopy(const std::function<DocumentContext*(DocumentContext*)>& callback) const override;
+    };
+
+    struct DereferenceContext : public ExpressionContext
+    {
+        std::unique_ptr<ExpressionContext> _source;
+        DereferenceContext(ExpressionContext* source);
+
+        bool isConstexpr() const override;
+        llvm::Value* createAST(ASTContext& ctx) const override;
+        DocumentContext* deepCopy(const std::function<DocumentContext*(DocumentContext*)>& callback) const override;
+    };
+
+    struct NativeCastContext : public ExpressionContext
+    {
+        std::unique_ptr<ExpressionContext> sourceExpr;
+
+        NativeCastContext(ValueContext targetType, ExpressionContext* source);
+        static bool validCast(const ValueContext& from, const ValueContext& to);
+
+        bool isConstexpr() const override;
+        llvm::Value* createAST(ASTContext& ctx) const override;
+        DocumentContext* deepCopy(const std::function<DocumentContext*(DocumentContext*)>& callback) const override;
+    };
+
+    struct NativeArithmeticContext : public ExpressionContext
+    {
+        enum Operation
+        {
+            ADD,
+            SUB,
+            MUL,
+            DIV
+        } op;
+
+        std::unique_ptr<ExpressionContext> lValue;
+        std::unique_ptr<ExpressionContext> rValue;
+
+        static bool validArithmetic(const ValueContext& left, const ValueContext& right);
+        NativeArithmeticContext(Operation op, ExpressionContext* lValue, ExpressionContext* rValue);
+
+        bool isConstexpr() const override;
+        llvm::Value* createAST(ASTContext& ctx) const override;
+        DocumentContext* deepCopy(const std::function<DocumentContext*(DocumentContext*)>& callback) const override;
+    };
+
+    struct NativeCompareContext : public ExpressionContext
+    {
+        enum Operation
+        {
+            EQ,
+            NEQ,
+            GT,
+            GE,
+            LT,
+            LE
+        } op;
+
+        std::unique_ptr<ExpressionContext> lValue;
+        std::unique_ptr<ExpressionContext> rValue;
+
+        static bool validCompare(const ValueContext& left, const ValueContext& right);
+        NativeCompareContext(Operation op, ExpressionContext* lValue, ExpressionContext* rValue);
+
+        bool isConstexpr() const override;
+        llvm::Value* createAST(ASTContext& ctx) const override;
         DocumentContext* deepCopy(const std::function<DocumentContext*(DocumentContext*)>& callback) const override;
     };
 
@@ -356,6 +543,7 @@ namespace BraneScript
         std::vector<std::unique_ptr<ExpressionContext>> arguments;
 
         bool isConstexpr() const override;
+        llvm::Value* createAST(ASTContext& ctx) const override;
         DocumentContext* deepCopy(const std::function<DocumentContext*(DocumentContext*)>& callback) const override;
     };
 
@@ -378,6 +566,8 @@ namespace BraneScript
         DocumentContext* findIdentifier(const std::string& identifier, uint8_t searchOptions) override;
         std::string longId() const override;
         std::string signature() const;
+
+        llvm::Value* createAST(ASTContext& ctx) const override;
         DocumentContext* deepCopy(const std::function<DocumentContext*(DocumentContext*)>& callback) const override;
     };
 
@@ -399,7 +589,13 @@ namespace BraneScript
                          std::list<FunctionContext*>& overrides,
                          uint8_t searchOptions) override;
         std::string longId() const override;
+        llvm::Value* createAST(ASTContext& ctx) const override;
         DocumentContext* deepCopy(const std::function<DocumentContext*(DocumentContext*)>& callback) const override;
+
+        std::string constructorSig() const;
+        std::string moveConstrutorSig() const;
+        std::string copyConstructorSig() const;
+        std::string destructorSig() const;
     };
 
     struct LibraryContext : public DocumentContext
@@ -414,6 +610,7 @@ namespace BraneScript
         void getFunction(const std::string& identifier,
                          std::list<FunctionContext*>& overrides,
                          uint8_t searchOptions) override;
+        llvm::Value* createAST(ASTContext& ctx) const override;
         std::string longId() const override;
         DocumentContext* deepCopy(const std::function<DocumentContext*(DocumentContext*)>& callback) const override;
     };
@@ -427,6 +624,7 @@ namespace BraneScript
                          uint8_t searchOptions) override;
         DocumentContext* deepCopy(const std::function<DocumentContext*(DocumentContext*)>& callback) const override;
         std::string longId() const override;
+        llvm::Value* createAST(ASTContext& ctx) const;
     };
 
     struct ImportContext : public DocumentContext
@@ -434,11 +632,15 @@ namespace BraneScript
         std::string library;
         // If alias is empty, that means that the library is imported without a prefix (like a using namespace)
         std::string alias;
+
+        std::vector<LibraryContext*> importedModules;
+        llvm::Value* createAST(ASTContext& ctx) const;
         DocumentContext* deepCopy(const std::function<DocumentContext*(DocumentContext*)>& callback) const override;
     };
 
     struct ScriptContext : public DocumentContext
     {
+        std::string id;
         LabeledNodeList<LabeledValueContext> globals;
         LabeledNodeList<StructContext> structs;
         LabeledNodeList<FunctionContext> functions;
@@ -452,6 +654,11 @@ namespace BraneScript
         void getFunction(const std::string& identifier,
                          std::list<FunctionContext*>& overrides,
                          uint8_t searchOptions) override;
+
+        llvm::Value* createAST(ASTContext& ctx) const override;
+
+        IRScript compile(llvm::LLVMContext* ctx, bool optimize = true, bool print = false);
+
         DocumentContext* deepCopy(const std::function<DocumentContext*(DocumentContext*)>& callback) const override;
     };
 } // namespace BraneScript

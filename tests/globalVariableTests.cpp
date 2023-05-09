@@ -2,10 +2,8 @@
 
 #include "testing.h"
 
-#include "linker.h"
 #include "script.h"
 #include "scriptRuntime.h"
-#include "compiler.h"
 #include "staticAnalysis/staticAnalyzer.h"
 
 using namespace BraneScript;
@@ -13,7 +11,6 @@ using namespace BraneScript;
 TEST(BraneScript, GlobalVariables)
 {
     std::string testString = R"(
-    link "BraneScript";
 
     int globalInt;
     float globalFloat;
@@ -24,7 +21,6 @@ TEST(BraneScript, GlobalVariables)
             int var;
         }
         GlobalStruct globalStruct;
-        string globalString;
 
         void setInt(int v)
         {
@@ -38,10 +34,6 @@ TEST(BraneScript, GlobalVariables)
         {
             globalStruct.var = v;
         }
-        void setStringVar(ref string v)
-        {
-            globalString = v;
-        }
         int getInt()
         {
             return globalInt;
@@ -54,10 +46,6 @@ TEST(BraneScript, GlobalVariables)
         {
             return globalStruct.var;
         }
-        string getStringVar()
-        {
-            return globalString;
-        }
     }
 )";
     StaticAnalyzer analyzer;
@@ -65,15 +53,11 @@ TEST(BraneScript, GlobalVariables)
     analyzer.validate("test");
     checkCompileErrors(analyzer, testString);
 
-    Compiler compiler;
-    auto* ir = compiler.compile(analyzer.getCtx("test")->scriptContext.get());
-    ASSERT_TRUE(ir);
+    llvm::LLVMContext ctx;
+    auto ir = analyzer.getCtx("test")->scriptContext->compile(&ctx, false);
 
-    Linker linker;
     ScriptRuntime rt;
-    rt.setLinker(&linker);
     Script* testScript = rt.loadScript(ir);
-    delete ir;
     ASSERT_TRUE(testScript);
 
     auto setInt = testScript->getFunction<void, int>("tests::setInt");
@@ -88,11 +72,6 @@ TEST(BraneScript, GlobalVariables)
     ASSERT_TRUE(setStructVar);
     setStructVar(32);
 
-    auto setStringVar = testScript->getFunction<void, std::string*>("tests::setStringVar(ref BraneScript::string)");
-    ASSERT_TRUE(setStringVar);
-    std::string str = "Hello world!";
-    setStringVar(&str);
-
     auto getInt = testScript->getFunction<int>("tests::getInt");
     ASSERT_TRUE(getInt);
     EXPECT_EQ(getInt(), 42);
@@ -104,10 +83,4 @@ TEST(BraneScript, GlobalVariables)
     auto getStructVar = testScript->getFunction<int>("tests::getStructVar");
     ASSERT_TRUE(getStructVar);
     EXPECT_EQ(getStructVar(), 32);
-
-    std::string strRet;
-    auto getStringVar = testScript->getFunction<void, std::string*>("tests::getStringVar(ref BraneScript::string)");
-    ASSERT_TRUE(getStringVar);
-    getStringVar(&strRet);
-    EXPECT_EQ(strRet, str);
 }

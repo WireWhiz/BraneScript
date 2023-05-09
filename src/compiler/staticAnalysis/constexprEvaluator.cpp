@@ -3,7 +3,6 @@
 //
 
 #include "constexprEvaluator.h"
-#include "linker.h"
 
 namespace BraneScript
 {
@@ -183,7 +182,7 @@ namespace BraneScript
                 popScope();
             }
             else
-                assert(false); //TODO allow for extern constexpr functions
+                assert(false); // TODO allow for extern constexpr functions
 
             --recursionDepth;
             assert(!_returnValue.empty());
@@ -192,9 +191,235 @@ namespace BraneScript
             return returnValue;
         }
 
-        Value visitValueAccess(const LabeledValueReferenceContext* ctx)
+        Value visitValueAccess(const LabeledValueReferenceContext* ctx) { return getVar(ctx->identifier); }
+
+        Value visitNativeArithmeticContext(const NativeArithmeticContext* ctx)
         {
-            return getVar(ctx->identifier);
+            Value l = visitExpression(ctx->lValue.get());
+            Value r = visitExpression(ctx->rValue.get());
+
+            switch(ctx->op)
+            {
+                case NativeArithmeticContext::ADD:
+                    switch(l.value->returnType.type.storageType)
+                    {
+                        case ValueType::Char:
+                            return {"", std::make_unique<ConstCharContext>(
+                                            l.value->as<ConstCharContext>()->value + r.value->as<ConstCharContext>()->value)};
+                        case ValueType::Int32:
+                            return {"", std::make_unique<ConstIntContext>(
+                                            l.value->as<ConstIntContext>()->value + r.value->as<ConstIntContext>()->value)};
+                        case ValueType::Float32:
+                            return {"", std::make_unique<ConstFloatContext>(
+                                            l.value->as<ConstFloatContext>()->value + r.value->as<ConstFloatContext>()->value)};
+                        default:
+                            assert(false);
+                    }
+                case NativeArithmeticContext::SUB:
+                    switch(l.value->returnType.type.storageType)
+                    {
+                        case ValueType::Char:
+                            return {"", std::make_unique<ConstCharContext>(
+                                            l.value->as<ConstCharContext>()->value - r.value->as<ConstCharContext>()->value)};
+                        case ValueType::Int32:
+                            return {"", std::make_unique<ConstIntContext>(
+                                            l.value->as<ConstIntContext>()->value - r.value->as<ConstIntContext>()->value)};
+                        case ValueType::Float32:
+                            return {"", std::make_unique<ConstFloatContext>(
+                                            l.value->as<ConstFloatContext>()->value - r.value->as<ConstFloatContext>()->value)};
+                        default:
+                            assert(false);
+                    }
+                    break;
+                case NativeArithmeticContext::MUL:
+                    switch(l.value->returnType.type.storageType)
+                    {
+                        case ValueType::Char:
+                            return {"", std::make_unique<ConstCharContext>(
+                                            l.value->as<ConstCharContext>()->value * r.value->as<ConstCharContext>()->value)};
+                        case ValueType::Int32:
+                            return {"", std::make_unique<ConstIntContext>(
+                                            l.value->as<ConstIntContext>()->value * r.value->as<ConstIntContext>()->value)};
+                        case ValueType::Float32:
+                            return {"", std::make_unique<ConstFloatContext>(
+                                            l.value->as<ConstFloatContext>()->value * r.value->as<ConstFloatContext>()->value)};
+                        default:
+                            assert(false);
+                    }
+                    break;
+                case NativeArithmeticContext::DIV:
+                    switch(l.value->returnType.type.storageType)
+                    {
+                        case ValueType::Char:
+                            return {"", std::make_unique<ConstCharContext>(
+                                            l.value->as<ConstCharContext>()->value / r.value->as<ConstCharContext>()->value)};
+                        case ValueType::Int32:
+                            return {"", std::make_unique<ConstIntContext>(
+                                            l.value->as<ConstIntContext>()->value / r.value->as<ConstIntContext>()->value)};
+                        case ValueType::Float32:
+                            return {"", std::make_unique<ConstFloatContext>(
+                                            l.value->as<ConstFloatContext>()->value / r.value->as<ConstFloatContext>()->value)};
+                        default:
+                            assert(false);
+                    }
+                    break;
+            }
+        }
+
+        Value visitNativeCompareContext(const NativeCompareContext* ctx)
+        {
+            Value l = visitExpression(ctx->lValue.get());
+            Value r = visitExpression(ctx->rValue.get());
+            switch(ctx->op)
+            {
+                case NativeCompareContext::EQ:
+                    switch(l.value->returnType.type.storageType)
+                    {
+                        case ValueType::Bool:
+                            return {"", std::make_unique<ConstBoolContext>(
+                                            l.value->as<ConstBoolContext>()->value == r.value->as<ConstBoolContext>()->value)};
+                        case ValueType::Char:
+                            return {"", std::make_unique<ConstBoolContext>(
+                                            l.value->as<ConstCharContext>()->value == r.value->as<ConstCharContext>()->value)};
+                        case ValueType::Int32:
+                            return {"", std::make_unique<ConstBoolContext>(
+                                            l.value->as<ConstIntContext>()->value == r.value->as<ConstIntContext>()->value)};
+                        case ValueType::Float32:
+                            return {"", std::make_unique<ConstBoolContext>(
+                                            l.value->as<ConstFloatContext>()->value == r.value->as<ConstFloatContext>()->value)};
+                        default:
+                            assert(false);
+                    }
+                case NativeCompareContext::NEQ:
+                    switch(l.value->returnType.type.storageType)
+                    {
+                        case ValueType::Bool:
+                            return {"", std::make_unique<ConstBoolContext>(
+                                            l.value->as<ConstBoolContext>()->value != r.value->as<ConstBoolContext>()->value)};
+                        case ValueType::Char:
+                            return {"", std::make_unique<ConstBoolContext>(
+                                            l.value->as<ConstCharContext>()->value != r.value->as<ConstCharContext>()->value)};
+                        case ValueType::Int32:
+                            return {"", std::make_unique<ConstBoolContext>(
+                                            l.value->as<ConstIntContext>()->value != r.value->as<ConstIntContext>()->value)};
+                        case ValueType::Float32:
+                            return {"", std::make_unique<ConstBoolContext>(
+                                            l.value->as<ConstFloatContext>()->value != r.value->as<ConstFloatContext>()->value)};
+                        default:
+                            assert(false);
+                    }
+                case NativeCompareContext::GT:
+                    switch(l.value->returnType.type.storageType)
+                    {
+                        case ValueType::Char:
+                            return {"", std::make_unique<ConstBoolContext>(
+                                            l.value->as<ConstCharContext>()->value > r.value->as<ConstCharContext>()->value)};
+                        case ValueType::Int32:
+                            return {"", std::make_unique<ConstBoolContext>(
+                                            l.value->as<ConstIntContext>()->value > r.value->as<ConstIntContext>()->value)};
+                        case ValueType::Float32:
+                            return {"", std::make_unique<ConstBoolContext>(
+                                            l.value->as<ConstFloatContext>()->value > r.value->as<ConstFloatContext>()->value)};
+                        default:
+                            assert(false);
+                    }
+                case NativeCompareContext::GE:
+                    switch(l.value->returnType.type.storageType)
+                    {
+                        case ValueType::Char:
+                            return {"", std::make_unique<ConstBoolContext>(
+                                            l.value->as<ConstCharContext>()->value >= r.value->as<ConstCharContext>()->value)};
+                        case ValueType::Int32:
+                            return {"", std::make_unique<ConstBoolContext>(
+                                            l.value->as<ConstIntContext>()->value >= r.value->as<ConstIntContext>()->value)};
+                        case ValueType::Float32:
+                            return {"", std::make_unique<ConstBoolContext>(
+                                            l.value->as<ConstFloatContext>()->value >= r.value->as<ConstFloatContext>()->value)};
+                        default:
+                            assert(false);
+                    }
+                case NativeCompareContext::LT:
+                    switch(l.value->returnType.type.storageType)
+                    {
+                        case ValueType::Char:
+                            return {"", std::make_unique<ConstBoolContext>(
+                                            l.value->as<ConstCharContext>()->value < r.value->as<ConstCharContext>()->value)};
+                        case ValueType::Int32:
+                            return {"", std::make_unique<ConstBoolContext>(
+                                            l.value->as<ConstIntContext>()->value < r.value->as<ConstIntContext>()->value)};
+                        case ValueType::Float32:
+                            return {"", std::make_unique<ConstBoolContext>(
+                                            l.value->as<ConstFloatContext>()->value < r.value->as<ConstFloatContext>()->value)};
+                        default:
+                            assert(false);
+                    }
+                case NativeCompareContext::LE:
+                    switch(l.value->returnType.type.storageType)
+                    {
+                        case ValueType::Char:
+                            return {"", std::make_unique<ConstBoolContext>(
+                                            l.value->as<ConstCharContext>()->value <= r.value->as<ConstCharContext>()->value)};
+                        case ValueType::Int32:
+                            return {"", std::make_unique<ConstBoolContext>(
+                                            l.value->as<ConstIntContext>()->value <= r.value->as<ConstIntContext>()->value)};
+                        case ValueType::Float32:
+                            return {"", std::make_unique<ConstBoolContext>(
+                                            l.value->as<ConstFloatContext>()->value <= r.value->as<ConstFloatContext>()->value)};
+                        default:
+                            assert(false);
+                    }
+            }
+        }
+
+        Value visitNativeCastContext(const NativeCastContext* ctx)
+        {
+            Value source = visitExpression(ctx->sourceExpr.get());
+            switch(ctx->returnType.type.storageType)
+            {
+                case ValueType::Bool:
+                    switch(source.value->returnType.type.storageType)
+                    {
+                        case ValueType::Int32:
+                            return {"", std::make_unique<ConstBoolContext>(source.value->as<ConstIntContext>()->value)};
+                        default:
+                            assert(false);
+                    }
+                    break;
+                case ValueType::Char:
+                    switch(source.value->returnType.type.storageType)
+                    {
+                        case ValueType::Int32:
+                            return {"", std::make_unique<ConstCharContext>(source.value->as<ConstIntContext>()->value)};
+                        default:
+                            assert(false);
+                    }
+                case ValueType::Int32:
+                    switch(source.value->returnType.type.storageType)
+                    {
+                        case ValueType::Bool:
+                            return {"", std::make_unique<ConstIntContext>(source.value->as<ConstBoolContext>()->value)};
+                        case ValueType::Char:
+                            return {"", std::make_unique<ConstIntContext>(source.value->as<ConstCharContext>()->value)};
+                        case ValueType::Float32:
+                            return {"", std::make_unique<ConstIntContext>(source.value->as<ConstFloatContext>()->value)};
+                        default:
+                            assert(false);
+                    }
+                case ValueType::Float32:
+                    switch(source.value->returnType.type.storageType)
+                    {
+                        case ValueType::Bool:
+                            return {"", std::make_unique<ConstFloatContext>(source.value->as<ConstBoolContext>()->value)};
+                        case ValueType::Char:
+                            return {"", std::make_unique<ConstFloatContext>(source.value->as<ConstCharContext>()->value)};
+                        case ValueType::Int32:
+                            return {"", std::make_unique<ConstFloatContext>(source.value->as<ConstIntContext>()->value)};
+                        default:
+                            assert(false);
+                    }
+                default:
+                    assert(false);
+            }
         }
 
         Value visitExpression(const ExpressionContext* ctx)
@@ -202,6 +427,12 @@ namespace BraneScript
             assert(ctx);
             if(auto* node = dynamic_cast<const ConstValueContext*>(ctx))
                 return visitConst(node);
+            if(auto* node = dynamic_cast<const NativeArithmeticContext*>(ctx))
+                return visitNativeArithmeticContext(node);
+            if(auto* node = dynamic_cast<const NativeCompareContext*>(ctx))
+                return visitNativeCompareContext(node);
+            if(auto* node = dynamic_cast<const NativeCastContext*>(ctx))
+                return visitNativeCastContext(node);
             if(auto* node = dynamic_cast<const LabeledValueConstructionContext*>(ctx))
                 return visitDeclaration(node);
             if(auto* node = dynamic_cast<const FunctionCallContext*>(ctx))
@@ -260,7 +491,7 @@ namespace BraneScript
         void visitScope(const ScopeContext* ctx)
         {
             pushScope();
-            for(auto& stmt : ctx->statements)
+            for(auto& stmt : ctx->expressions)
             {
                 visitStatement(stmt.get());
                 if(!_returnValue.empty())
@@ -322,7 +553,6 @@ namespace BraneScript
     ConstexprEvaluator::ConstexprEvaluator()
     {
         _linker = nullptr;
-        _runtime = nullptr;
 
         if(!_inlineFunctions.empty())
             return;
@@ -334,11 +564,7 @@ namespace BraneScript
 
         addScalarOperators<0, ConstIntContext, ConstFloatContext>(*this, scalarNames);
 
-        addInlineFunction(new ConstexprCast<ConstIntContext, ConstFloatContext>("int", "float"));
-        addInlineFunction(new ConstexprCast<ConstIntContext, ConstFloatContext>("float", "int"));
 
-        addInlineFunction(new ConstexprCast<ConstIntContext, ConstCharContext>("int", "char"));
-        addInlineFunction(new ConstexprCast<ConstCharContext, ConstFloatContext>("char", "int"));
 
         addInlineFunction(new ConstexprEq<ConstCharContext, ConstBoolContext>("char"));
         addInlineFunction(new ConstexprNotEq<ConstCharContext, ConstBoolContext>("char"));
@@ -346,63 +572,6 @@ namespace BraneScript
         addInlineFunction(new ConstexprNotEq<ConstBoolContext, ConstBoolContext>("bool"));
     }
 
-    bool ConstexprEvaluator::isNativeFunction(const std::string& sig) { return _linker->getFunction(sig); }
-
-    AotConstNode* ConstexprEvaluator::evaluateNativeFunction(const std::string& sig,
-                                                             const TypeDef* resType,
-                                                             std::vector<AotConstNode*>& args,
-                                                             ScriptCompilerCtx& scriptCtx)
-    {
-        assert(resType);
-        auto funcContainer = std::make_unique<IRFunction>();
-        funcContainer->sig = "constantFuncContainer()";
-        funcContainer->returnType.type = resType->name();
-
-        FunctionCompilerCtx compileCtx(scriptCtx, funcContainer->sig);
-        compileCtx.function = funcContainer.get();
-        std::vector<AotValue*> argValues;
-        argValues.reserve(args.size());
-        for(auto arg : args)
-            argValues.push_back(compileCtx.castReg(arg->generateBytecode(compileCtx)));
-
-        auto retVal = compileCtx.newReg(resType, AotValue::Temp);
-
-        compileCtx.appendCode(Operand::CALL, int16_t(-1));
-        compileCtx.appendCode(compileCtx.serialize(retVal));
-        for(auto arg : argValues)
-            compileCtx.appendCode(compileCtx.serialize(arg));
-        compileCtx.appendCode(Operand::RETV, compileCtx.serialize(retVal));
-
-        ScriptAssembleContext assembleContext{};
-
-        assembleContext.linkedFunctions.push_back(_linker->getFunction(sig));
-
-        FunctionData container = _runtime->loadFunction(funcContainer.get(), &assembleContext);
-
-        switch(resType->type())
-        {
-            case ValueType::Bool:
-                return new AotConstNode(FunctionHandle<bool>(container.pointer)());
-            case ValueType::Char:
-                return new AotConstNode(FunctionHandle<char>(container.pointer)());
-            case ValueType::UInt32:
-                return new AotConstNode(FunctionHandle<uint32_t>(container.pointer)());
-            case ValueType::UInt64:
-                return new AotConstNode(FunctionHandle<uint64_t>(container.pointer)());
-            case ValueType::Int32:
-                return new AotConstNode(FunctionHandle<int32_t>(container.pointer)());
-            case ValueType::Int64:
-                return new AotConstNode(FunctionHandle<int64_t>(container.pointer)());
-            case ValueType::Float32:
-                return new AotConstNode(FunctionHandle<float>(container.pointer)());
-            case ValueType::Float64:
-                return new AotConstNode(FunctionHandle<double>(container.pointer)());
-            default:
-                assert(false);
-                break;
-        }
-        return nullptr;
-    }
 
     ConstexprFunction* ConstexprEvaluator::getInlineFunction(const std::string& sig)
     {

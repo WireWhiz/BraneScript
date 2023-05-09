@@ -1,21 +1,14 @@
 find_package(robin_hood)
 find_package(jsoncpp)
+find_package(LLVM)
 
 add_library(BraneScriptCompiler STATIC
-        compiler.cpp
         staticAnalysis/staticAnalyzer.cpp
         staticAnalysis/documentContext.cpp
 
-        aotNodes/aotFlowNodes.cpp
-        aotNodes/aotNode.cpp
-        aotNodes/aotValueNodes.cpp
-        aotNodes/aotModifierNodes.cpp
-        aotNodes/aotLogicNodes.cpp
-
-        aotInlineFunctions/aotInlineFunction.cpp
-        aotInlineFunctions/aotNativeOperators.cpp
-        staticAnalysis/functionCallTree.cpp staticAnalysis/constexprEvaluator.cpp staticAnalysis/constexprEvaluator.h)
-target_link_libraries(BraneScriptCompiler PUBLIC BraneScriptRuntime antlr4 JsonCpp::JsonCpp)
+        staticAnalysis/functionCallTree.cpp
+        staticAnalysis/constexprEvaluator.cpp)
+target_link_libraries(BraneScriptCompiler PUBLIC BraneScriptRuntime antlr4 JsonCpp::JsonCpp LLVM::LLVMAsmPrinter LLVM::LLVMX86CodeGen)
 target_include_directories(BraneScriptCompiler PUBLIC ${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE_SOURCE_DIR} ${robin_hood_INCLUDE_DIRS} ../scriptRuntime)
 
 file(MAKE_DIRECTORY ${EXECUTABLE_OUTPUT_PATH}/include)

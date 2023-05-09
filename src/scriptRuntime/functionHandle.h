@@ -57,6 +57,9 @@ namespace BraneScript
     template<typename T>
     std::string typeName()
     {
+        if constexpr(std::is_pointer<T>())
+            return "ref " + typeName<typename std::remove_pointer<T>::type>();
+
         std::string name;
         if constexpr(std::is_same<T, void>())
             name = "void";

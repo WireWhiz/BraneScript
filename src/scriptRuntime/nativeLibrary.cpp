@@ -3,13 +3,12 @@
 //
 
 #include "nativeLibrary.h"
-#include "linker.h"
 
 namespace BraneScript
 {
     void addNativeFunctions(Linker& linker)
     {
-        linker.addFunction("BraneScript::string::_construct(ref BraneScript::string)", "void", 1, (void*)(FunctionHandle<void, void*>)[](void* data){
+        /*linker.addFunction("BraneScript::string::_construct(ref BraneScript::string)", "void", 1, (void*)(FunctionHandle<void, void*>)[](void* data){
             new (data)std::string;
         });
         linker.addFunction("BraneScript::string::_copy(ref BraneScript::string,const ref BraneScript::string)", "void", 2, (void*)(FunctionHandle<void, std::string*, std::string*>)[](std::string* thisRef, std::string* other){
@@ -32,6 +31,10 @@ namespace BraneScript
         });
         linker.addFunction("BraneScript::opr [](const ref BraneScript::string,int)", "char", 2, (void*)(FunctionHandle<char, const std::string*, uint32_t>)[](const std::string* str, uint32_t index){
             return (*str)[index];
-        });
+        });*/
+    }
+
+    void NativeLibrary::addFunction(std::string signature, void* f) {
+        functions.emplace_back(std::move(signature), f);
     }
 }

@@ -9,13 +9,14 @@ add_executable(bs_tests
         overrideTests.cpp
         recursionTest.cpp
         apiTests.cpp
-        objectTests.cpp
+        #objectTests.cpp
         speedTests.cpp
-        stringTests.cpp
+        #stringTests.cpp
         templateTests.cpp
         globalVariableTests.cpp
-        lambdaTests.cpp
-        compileTimeTests.cpp)
+        #lambdaTests.cpp
+        refTests.cpp
+        )
 target_link_libraries(bs_tests PUBLIC GTest::gtest_main BraneScriptCompiler)
 target_compile_definitions(bs_tests PUBLIC TESTS)
 

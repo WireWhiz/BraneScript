@@ -3,23 +3,16 @@
 //
 
 #include "script.h"
+#include "llvm/ExecutionEngine/Orc/Core.h"
 
-void BraneScript::Script::init()
-{
-    if(globalVars.empty())
-        return;
-    auto constructor = getFunction<void>("_construct()");
-    if(!constructor)
-        throw std::runtime_error("Script has global vars but no constructor!");
-    constructor();
-}
+BraneScript::Script::Script(llvm::orc::JITDylib& lib) : lib(lib){}
 
 BraneScript::Script::~Script()
 {
     if(globalVars.empty())
         return;
-    auto destructor = getFunction<void>("_destruct()");
-    if(!destructor)
-        throw std::runtime_error("Script has global vars but no destructor! This may result in memory leaks!");
-    destructor();
+    if(destructor)
+        destructor();
+    if(auto err = rt->remove())
+        throw std::runtime_error("Error deallocating script resources: " + toString(std::move(err)));
 }
