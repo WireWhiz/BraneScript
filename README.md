@@ -15,10 +15,14 @@ loading and linking for highly modular use cases.
 * Separate function for printing out opcode debugging
 
 ## Building
-We use the conan package manager, if you don't have it already, [download it here](https://conan.io/downloads.html).<br>
+We use the conan package manager version 1.x, we will update to conan 2.x once all our dependencies supported by the new version, for now install it with:
+```
+pip install --upgrade conan==1.59
+conan profile update settings.compiler.libcxx=libstdc++11 default
+```
 If you wish to edit the grammar file, you will also need [Antlr](https://www.antlr.org/download.html).
 
-Cmake automatically installs the dependencies so all you need to run is:
+Cmake automatically calls conan to instal the dependencies so all you need to run is:
 ```  
 mkdir build && cd build
 cmake .. -DCMAKE_BUILD_TYPE=[Debug or Release] -DBUILD_TESTS=[ON/OFF]
