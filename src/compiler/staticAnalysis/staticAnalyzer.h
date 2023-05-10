@@ -65,6 +65,9 @@ namespace BraneScript
         void load(const std::string& path, std::string document, bool cacheDocument = true);
         void reload(const std::string& path);
 
+        bool isValid(const std::string& path);
+        IRScript compile(const std::string& path);
+
         AnalyzationContext* getCtx(const std::string& path);
 
         void registerLibrary(LibraryContext* lib);

@@ -86,8 +86,7 @@ TEST(BraneScript, Templates)
     analyzer.validate("test");
     checkCompileErrors(analyzer, testString);
 
-    llvm::LLVMContext ctx;
-    auto ir = analyzer.getCtx("test")->scriptContext->compile(&ctx, false, true);
+    auto ir = analyzer.compile("test");
 
     ScriptRuntime rt;
     Script* testScript = rt.loadScript(ir);

@@ -2663,4 +2663,18 @@ namespace BraneScript
 
     ConstexprEvaluator* StaticAnalyzer::constexprEvaluator() const { return _evaluator; }
 
+    bool StaticAnalyzer::isValid(const std::string& path)
+    {
+        if(!_analyzationContexts.contains(path))
+            return false;
+        return _analyzationContexts.at(path)->errors.empty();
+    }
+
+    IRScript StaticAnalyzer::compile(const std::string& path)
+    {
+        assert(isValid(path));
+        assert(_analyzationContexts.at(path)->complete); // validate() must be called before compile()
+        llvm::LLVMContext llvmContext;
+        return _analyzationContexts.at(path)->scriptContext->compile(&llvmContext);
+    }
 } // namespace BraneScript
