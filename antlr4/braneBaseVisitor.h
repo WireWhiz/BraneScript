@@ -115,6 +115,10 @@ public:
     return visitChildren(ctx);
   }
 
+  virtual std::any visitMemberFunctionStub(braneParser::MemberFunctionStubContext *ctx) override {
+    return visitChildren(ctx);
+  }
+
   virtual std::any visitExprStatement(braneParser::ExprStatementContext *ctx) override {
     return visitChildren(ctx);
   }

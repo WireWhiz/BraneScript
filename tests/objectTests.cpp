@@ -7,17 +7,24 @@
 
 using namespace BraneScript;
 
-bool constructorCalled = false;
-bool copyConstructorCalled = false;
-bool moveConstructorCalled = false;
-bool destructorCalled = false;
+int constructorCalled = 0;
+int copyConstructorCalled = 0;
+int moveConstructorCalled = 0;
+int destructorCalled = 0;
+
+void resetTestCounters()
+{
+    constructorCalled = 0;
+    copyConstructorCalled = 0;
+    moveConstructorCalled = 0;
+    destructorCalled = 0;
+}
 
 struct TestStruct1
 {
-    bool c;
-    float a;
-    int b;
-public:
+    bool c = false;
+    float a = 0;
+    int b = 0;
 };
 
 struct TestStruct2
@@ -44,6 +51,7 @@ struct NestedStructBase
 TEST(BraneScript, Objects)
 {
     std::string testString = R"(
+    link "BraneScript";
     export as "tests"
     {
         float getMember1(ref TestStruct1 s)
@@ -68,6 +76,20 @@ TEST(BraneScript, Objects)
             TestStruct1 notOut = output;
             notOut.a = 43;
             return output;
+        }
+
+        TestStruct1 createStructClean()
+        {
+            TestStruct1 output;
+            output.a = 6.9f;
+            output.b = 420;
+            output.c = false;
+            return output;
+        }
+
+        TestStruct1 testReturnThroughArg()
+        {
+            return createStructClean();
         }
 
         void testDestruct()
@@ -146,6 +168,10 @@ TEST(BraneScript, Objects)
             bool c;
             float a;
             int b;
+            void _construct() ext;
+            void _copy(const ref TestStruct1 o) ext;
+            void _move(ref TestStruct1 o) ext;
+            void _destruct() ext;
         }
     }
 )";
@@ -161,40 +187,24 @@ TEST(BraneScript, Objects)
     EXPECT_EQ(testStruct1Def.memberVars()[1].offset, offsetof(TestStruct1, a));
     EXPECT_EQ(testStruct1Def.memberVars()[2].offset, offsetof(TestStruct1, b));
 
-    Linker linker;
-    linker.addStruct(testStruct1Def);
-    auto sSig = std::string(testStruct1Def.name());
-    linker.addFunction(sSig + "::_construct(ref " + sSig + ")",
-        "void",
-        1,
-        (void*)(FunctionHandle<void, void*>)[](void* data) {
-            new(data) TestStruct1();
-            constructorCalled = true;
-        });
-    linker.addFunction(
-        sSig + "::_copy(ref " + sSig + ",const ref " + sSig + ")",
-        "void",
-        2,
-        (void*)(FunctionHandle<void, void*, const void*>)[](void* dest, const void* src) {
-            *((TestStruct1*)dest) = *((TestStruct1*)src);
-            copyConstructorCalled = true;
-        });
-    linker.addFunction(
-        sSig + "::_move(ref " + sSig + ",ref " + sSig + ")",
-        "void",
-        2,
-        (void*)(FunctionHandle<void, void*, void*>)[](void* dest, void* src) {
-            *((TestStruct1*)dest) = std::move(*((TestStruct1*)src));
-            moveConstructorCalled = true;
-        });
-    linker.addFunction(
-        sSig + "::_destruct(ref " + sSig + ")",
-        "void",
-        1,
-        (void*)(FunctionHandle<void, void*>)[](void* data) {
-            ((TestStruct1*)data)->~TestStruct1();
-            destructorCalled = true;
-        });
+    NativeLibrary constructors;
+    constructors.identifier = "BraneScript";
+    constructors.addFunction("BraneScript::TestStruct1::_construct(ref BraneScript::TestStruct1)",  (void*)(FunctionHandle<void, void*>)[](void* data) {
+        new(data) TestStruct1();
+        constructorCalled++;
+    });
+    constructors.addFunction("BraneScript::TestStruct1::_copy(ref BraneScript::TestStruct1,const ref BraneScript::TestStruct1)", (void*)(FunctionHandle<void, void*, const void*>)[](void* dest, const void* src) {
+        *((TestStruct1*)dest) = *((TestStruct1*)src);
+        copyConstructorCalled++;
+    });
+    constructors.addFunction("BraneScript::TestStruct1::_move(ref BraneScript::TestStruct1,ref BraneScript::TestStruct1)", (void*)(FunctionHandle<void, void*, void*>)[](void* dest, void* src) {
+        *((TestStruct1*)dest) = std::move(*((TestStruct1*)src));
+        moveConstructorCalled++;
+    });
+    constructors.addFunction("BraneScript::TestStruct1::_destruct(ref BraneScript::TestStruct1)", (void*)(FunctionHandle<void, void*>)[](void* data) {
+        ((TestStruct1*)data)->~TestStruct1();
+        destructorCalled++;
+    });
 
     StaticAnalyzer analyzer;
     analyzer.load("header", header);
@@ -202,21 +212,12 @@ TEST(BraneScript, Objects)
     analyzer.validate("test");
     checkCompileErrors(analyzer, testString);
 
-    Compiler compiler;
-    compiler.setLinker(&linker);
-    auto* ir = compiler.compile(analyzer.getCtx("test")->scriptContext.get());
-    ASSERT_TRUE(ir);
-
-    /*IRScript::IRStructDef& scriptStructDef = ir->localStructs[0];
-    EXPECT_TRUE(scriptStructDef.isPublic);
-    EXPECT_EQ(scriptStructDef.members[0].offset, offsetof(TestStruct2, a));
-    EXPECT_EQ(scriptStructDef.members[1].offset, offsetof(TestStruct2, b));
-    EXPECT_EQ(scriptStructDef.members[2].offset, offsetof(TestStruct2, c));*/
+    llvm::LLVMContext llvmContext;
+    auto ir = analyzer.getCtx("test")->scriptContext->compile(&llvmContext, false, true);
 
     ScriptRuntime rt;
-    rt.setLinker(&linker);
+    rt.loadLibrary(constructors);
     Script* testScript = rt.loadScript(ir);
-    delete ir;
     ASSERT_TRUE(testScript);
 
     TestStruct1 testStruct1{true, 23.3, 45};
@@ -233,10 +234,11 @@ TEST(BraneScript, Objects)
     ASSERT_TRUE(getMember3);
     EXPECT_EQ(getMember3(&testStruct1), true);
 
-    EXPECT_FALSE(constructorCalled);
-    EXPECT_FALSE(moveConstructorCalled);
-    EXPECT_FALSE(copyConstructorCalled);
-    EXPECT_FALSE(destructorCalled);
+    EXPECT_EQ(constructorCalled, 0);
+    EXPECT_EQ(moveConstructorCalled, 0);
+    EXPECT_EQ(copyConstructorCalled, 0);
+    EXPECT_EQ(destructorCalled, 0);
+    resetTestCounters();
 
     TestStruct1 createdStruct{};
     auto createStruct = testScript->getFunction<void, TestStruct1*>("tests::createStruct(ref BraneScript::TestStruct1)");
@@ -246,11 +248,25 @@ TEST(BraneScript, Objects)
     EXPECT_EQ(createdStruct.b, 420);
     EXPECT_EQ(createdStruct.c, false);
 
-    EXPECT_TRUE(constructorCalled);
-    EXPECT_TRUE(moveConstructorCalled);
-    EXPECT_TRUE(copyConstructorCalled);
-    EXPECT_TRUE(destructorCalled);
-    destructorCalled = false;
+    EXPECT_EQ(constructorCalled, 2);
+    EXPECT_EQ(moveConstructorCalled, 1);
+    EXPECT_EQ(copyConstructorCalled, 1);
+    EXPECT_EQ(destructorCalled, 2);
+    resetTestCounters();
+
+    createdStruct = {};
+    auto testReturnThroughArg = testScript->getFunction<void, TestStruct1*>("tests::testReturnThroughArg(ref BraneScript::TestStruct1)");
+    ASSERT_TRUE(testReturnThroughArg);
+    testReturnThroughArg(&createdStruct);
+    EXPECT_EQ(createdStruct.a, 6.9f);
+    EXPECT_EQ(createdStruct.b, 420);
+    EXPECT_EQ(createdStruct.c, false);
+
+    EXPECT_EQ(constructorCalled, 1);
+    EXPECT_EQ(moveConstructorCalled, 1);
+    EXPECT_EQ(copyConstructorCalled, 0);
+    EXPECT_EQ(destructorCalled, 1);
+    resetTestCounters();
 
     auto testDestruct = testScript->getFunction<void>("tests::testDestruct()");
     ASSERT_TRUE(testDestruct);

@@ -63,6 +63,7 @@ exportSegment : function
 structDef     : (template=templateDef)?  packed='packed'? 'struct' id=ID '{' memberVars=structMember* '}';
 structMember  : var=declaration ';' #memberVariable
               | func=function       #memberFunction
+              | functionStub        #memberFunctionStub
               ;
 
 statement   : expression ';'                                                              #exprStatement

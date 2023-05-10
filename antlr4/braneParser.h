@@ -477,6 +477,15 @@ public:
     virtual std::any accept(antlr4::tree::ParseTreeVisitor *visitor) override;
   };
 
+  class  MemberFunctionStubContext : public StructMemberContext {
+  public:
+    MemberFunctionStubContext(StructMemberContext *ctx);
+
+    FunctionStubContext *functionStub();
+
+    virtual std::any accept(antlr4::tree::ParseTreeVisitor *visitor) override;
+  };
+
   class  MemberFunctionContext : public StructMemberContext {
   public:
     MemberFunctionContext(StructMemberContext *ctx);

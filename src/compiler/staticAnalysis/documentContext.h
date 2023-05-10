@@ -81,6 +81,8 @@ namespace BraneScript
         bool operator!=(const ValueContext& o) const;
 
         void operator=(const LabeledValueContext& o);
+        ValueContext() = default;
+        ValueContext(const LabeledValueContext& o);
 
         virtual std::string signature() const;
     };
@@ -160,13 +162,18 @@ namespace BraneScript
 
         struct Scope
         {
-            robin_hood::unordered_map<std::string, llvm::Value*> values;
+            struct ScopeEntry
+            {
+                llvm::Value* value;
+                ValueContext context;
+            };
+            robin_hood::unordered_map<std::string, ScopeEntry> values;
         };
         std::list<Scope> scopes;
 
         void pushScope();
         void popScope();
-        void addValue(std::string id, llvm::Value* value);
+        void addValue(std::string id, llvm::Value* value, ValueContext context);
         llvm::Value* findValue(const std::string& id);
 
         ASTContext(llvm::LLVMContext* llvmCtx, std::string moduleSource);
@@ -177,7 +184,8 @@ namespace BraneScript
         std::function<llvm::GlobalVariable*()> makeExternGlobalVariable(LabeledValueContext& valueContext);
 
         void setInsertPoint(llvm::BasicBlock* block);
-        std::string blockName(std::string name);
+
+        void destructStack(bool onlyLocal = false);
 
         void printModule() const;
         llvm::Value* convertToType(llvm::Value* value, const ValueContext& valueCtx, bool forceToValue = false);
@@ -209,6 +217,7 @@ namespace BraneScript
         template<typename T>
         T* as()
         {
+            static_assert(std::is_base_of<DocumentContext, T>::value, "T must be a subclass of DocumentContext");
             return dynamic_cast<T*>(this);
         }
 
@@ -227,6 +236,15 @@ namespace BraneScript
             if(p)
                 return p;
             return parent->getParent<T>();
+        }
+
+        template<typename T>
+        T* getLast()
+        {
+            auto o = this->as<T>();
+            if(o)
+                return o;
+            return getParent<T>();
         }
 
         /** Creates a deep copy of this node and it's children
@@ -357,6 +375,9 @@ namespace BraneScript
         std::unique_ptr<ExpressionContext> rValue;
         bool isConstexpr() const override;
 
+        AssignmentContext() = default;
+        AssignmentContext(ExpressionContext* lValue, ExpressionContext* rValue);
+        void setArgs(ExpressionContext* lValue, ExpressionContext* rValue);
         llvm::Value* createAST(ASTContext& ctx) const override;
         DocumentContext* deepCopy(const std::function<DocumentContext*(DocumentContext*)>& callback) const override;
     };

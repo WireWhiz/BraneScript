@@ -69,6 +69,8 @@ public:
 
     virtual std::any visitMemberFunction(braneParser::MemberFunctionContext *context) = 0;
 
+    virtual std::any visitMemberFunctionStub(braneParser::MemberFunctionStubContext *context) = 0;
+
     virtual std::any visitExprStatement(braneParser::ExprStatementContext *context) = 0;
 
     virtual std::any visitAssignment(braneParser::AssignmentContext *context) = 0;

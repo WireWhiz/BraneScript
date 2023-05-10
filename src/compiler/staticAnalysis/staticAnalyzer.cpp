@@ -993,7 +993,7 @@ namespace BraneScript
                         recordError(ctx->name, "Cannot use an argument pack as a type!");
                 }
                 else
-                    recordError(ctx->name, "Type " + ctx->getText() + " could not be found!");
+                    recordError(ctx->name, "Type " + output.signature() + " could not be found!");
             }
 
             if(_enforceConstexpr && ctx->isRef)
@@ -1257,7 +1257,7 @@ namespace BraneScript
             FunctionSig sig = std::move(std::any_cast<FunctionSig>(sigAny));
             auto arguments = constructArgumentList(ctx->arguments);
 
-            auto parentStruct = lastNode()->getParent<StructContext>();
+            auto parentStruct = lastNode()->getLast<StructContext>();
             if(parentStruct)
             {
                 auto* thisRef = new LabeledValueContext{};
@@ -1316,7 +1316,7 @@ namespace BraneScript
             ArgPackInstanceContext* argPackInstanceContext = nullptr;
             auto arguments = std::move(constructArgumentList(ctx->arguments, &argPackInstanceContext));
 
-            auto parentStruct = lastNode()->getParent<StructContext>();
+            auto parentStruct = lastNode()->getLast<StructContext>();
             if(parentStruct)
             {
                 auto* thisRef = new LabeledValueContext{};
@@ -1409,9 +1409,9 @@ namespace BraneScript
             initDoc(&i, ctx);
             popDoc(&i);
             auto libraries = _analyzer.getLibrary(i.library);
-            if(!libraries)
+            if(!libraries && !_extractOnlyIdentifiers)
                 recordError(ctx->library, "Library exported with identifier \"" + i.library + "\" not found!");
-            else
+            if(libraries)
             {
                 auto localLibItr = _result.scriptContext->exports.find(i.library);
                 LibraryContext* localLib = nullptr;
@@ -1609,9 +1609,7 @@ namespace BraneScript
                     }
                     else
                     {
-                        auto move = new AssignmentContext{};
-                        move->lValue.reset(memberAccess);
-                        move->rValue.reset(otherAccess);
+                        auto move = new AssignmentContext{memberAccess, otherAccess};
                         func->body->expressions.emplace_back(move);
                     }
                     varIndex++;
@@ -1675,9 +1673,7 @@ namespace BraneScript
                     }
                     else
                     {
-                        auto move = new AssignmentContext{};
-                        move->lValue.reset(memberAccess);
-                        move->rValue.reset(otherAccess);
+                        auto move = new AssignmentContext{memberAccess, otherAccess};
                         func->body->expressions.emplace_back(move);
                     }
                     varIndex++;
@@ -1873,22 +1869,25 @@ namespace BraneScript
             STMT_ASSERT_EXISTS(ctx->rValue, "rValue expected");
             auto assignmentCtx = new AssignmentContext{};
             initDoc(assignmentCtx, ctx);
-            assignmentCtx->lValue = asExpr(visit(ctx->lValue));
-            if(!assignmentCtx->lValue->returnType.isLValue)
+            auto lValue = asExpr(visit(ctx->lValue));
+            assert(lValue);
+            if(!lValue->returnType.isLValue)
                 recordError(ctx->lValue, "Expression is not an lValue!");
-            if(assignmentCtx->lValue->returnType.isConst)
+            if(lValue->returnType.isConst)
                 recordError(ctx->lValue, "Can not modify a constant value!");
 
-            assignmentCtx->rValue = asExpr(visit(ctx->rValue));
-            if(assignmentCtx->lValue->returnType.type != assignmentCtx->rValue->returnType.type)
+            auto rValue = asExpr(visit(ctx->rValue));
+            assert(rValue);
+            if(lValue->returnType.type != rValue->returnType.type)
             {
                 std::string error;
                 if(auto castCtx =
-                       resolveCast(assignmentCtx->rValue.release(), assignmentCtx->lValue->returnType, error))
-                    assignmentCtx->lValue.reset(castCtx);
+                       resolveCast(rValue.release(), lValue->returnType, error))
+                    rValue.reset(castCtx);
                 else
                     recordError(ctx->rValue, error);
             }
+            assignmentCtx->setArgs(lValue.release(), rValue.release());
             popDoc(assignmentCtx);
             RETURN_STMT(assignmentCtx);
         }

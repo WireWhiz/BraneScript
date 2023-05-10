@@ -245,7 +245,7 @@ namespace BraneScript
         {
             auto value = itr->values.find(id);
             if(value != itr->values.end())
-                return value->second;
+                return value->second.value;
         }
         auto globVar = globals.find(id);
         if(globVar != globals.end())
@@ -254,12 +254,10 @@ namespace BraneScript
         return nullptr;
     }
 
-    void ASTContext::addValue(std::string id, llvm::Value* value)
+    void ASTContext::addValue(std::string id, llvm::Value* value, ValueContext context)
     {
-        scopes.back().values.insert({std::move(id), value});
+        scopes.back().values.insert({std::move(id),  {value, std::move(context)}});
     }
-
-    std::string ASTContext::blockName(std::string name) { return name + std::to_string(blockCounter++); }
 
     void ASTContext::setInsertPoint(llvm::BasicBlock* block)
     {
@@ -287,6 +285,26 @@ namespace BraneScript
         if(!valueType->isPointerTy() && valueCtx.isRef)
             throw std::runtime_error("Unable to create ref from lValue");
         return value;
+    }
+
+    void ASTContext::destructStack(bool onlyLocal)
+    {
+        auto argScope = --scopes.rend();
+        for(auto itr = scopes.rbegin(); itr != argScope; ++itr)
+        {
+            for(auto& value : itr->values)
+            {
+                if(value.second.context.isRef)
+                    continue;
+                if(!value.second.context.type.structCtx)
+                    continue;
+                auto destructorFunc = functions.find(value.second.context.type.structCtx->destructorSig());
+                assert(destructorFunc != functions.end());
+                builder.CreateCall(destructorFunc->second, {value.second.value});
+            }
+            if(onlyLocal)
+                break;
+        }
     }
 
     ASTContext::~ASTContext() = default;
@@ -340,6 +358,13 @@ namespace BraneScript
             sig += "ref ";
         sig += type.identifier;
         return sig;
+    }
+
+    ValueContext::ValueContext(const LabeledValueContext& o)
+    {
+        type = o.type;
+        isConst = o.isConst;
+        isRef = o.isRef;
     }
 
     std::string LabeledValueContext::signature() const { return ValueContext::signature() + " " + identifier.text; }
@@ -422,7 +447,7 @@ namespace BraneScript
         for(auto& var : localVariables)
         {
             auto varValue = ctx.builder.CreateAlloca(ctx.getLLVMType(*var), nullptr, var->identifier.text);
-            ctx.addValue(var->identifier.text, varValue);
+            ctx.addValue(var->identifier.text, varValue, *var);
         }
         for(auto& expression : expressions)
         {
@@ -430,6 +455,8 @@ namespace BraneScript
                 ctx.setInsertPoint(llvm::BasicBlock::Create(*ctx.llvmCtx, "", ctx.func));
             expression->createAST(ctx);
         }
+        if(ctx.currentBlock)
+            ctx.destructStack(true);
         ctx.popScope();
         return nullptr;
     }
@@ -475,7 +502,11 @@ namespace BraneScript
     llvm::Value* ReturnContext::createAST(ASTContext& ctx) const
     {
         if(!value)
+        {
+            ctx.destructStack();
+            ctx.currentBlock = nullptr;
             return ctx.builder.CreateRetVoid();
+        }
 
         auto parentFunc = getParent<FunctionContext>();
         assert(parentFunc);
@@ -483,6 +514,14 @@ namespace BraneScript
 
         if(!parentFunc->returnType.isRef && parentFunc->returnType.type.structCtx)
         {
+            // If we are returning a value from a function, it will have detected this node as a parent and returned
+            // the value directly.
+            if(value->is<FunctionCallContext>())
+            {
+                ctx.destructStack();
+                ctx.currentBlock = nullptr;
+                return ctx.builder.CreateRetVoid();
+            }
             auto retRef = ctx.findValue("-retRef");
             assert(retRef);
 
@@ -491,12 +530,15 @@ namespace BraneScript
 
             std::vector<llvm::Value*> args = {retRef, retValue};
             ctx.builder.CreateCall(mov->second, args);
+            ctx.destructStack();
             ctx.builder.CreateRetVoid();
+            ctx.currentBlock = nullptr;
             return nullptr;
         }
 
         assert(retValue->getType() == ctx.func->getReturnType());
 
+        ctx.destructStack();
         ctx.builder.CreateRet(retValue);
         ctx.currentBlock = nullptr;
         return nullptr;
@@ -598,10 +640,20 @@ namespace BraneScript
         llvm::Value* r = rValue->createAST(ctx);
 
         assert(l->getType()->isPointerTy());
-        if(!l->getType()->getContainedType(0)->isPointerTy() && r->getType()->isPointerTy())
-            r = ctx.builder.CreateLoad(r->getType()->getContainedType(0), r);
+        if(!lValue->returnType.type.structCtx)
+        {
+            if(!l->getType()->getContainedType(0)->isPointerTy() && r->getType()->isPointerTy())
+                r = ctx.builder.CreateLoad(r->getType()->getContainedType(0), r);
+            ctx.builder.CreateStore(r, l);
+            return nullptr;
+        }
 
-        ctx.builder.CreateStore(r, l);
+        auto cc = ctx.functions.find(lValue->returnType.type.structCtx->copyConstructorSig());
+        assert(cc != ctx.functions.end());
+        assert(cc->second->arg_size() == 2);
+
+        std::vector<llvm::Value*> args = {l, r};
+        ctx.builder.CreateCall(cc->second, args);
         return nullptr;
     }
 
@@ -618,6 +670,18 @@ namespace BraneScript
     }
 
     bool AssignmentContext::isConstexpr() const { return lValue->isConstexpr() && rValue->isConstexpr(); }
+
+    AssignmentContext::AssignmentContext(ExpressionContext* lValue, ExpressionContext* rValue)
+        : lValue(lValue), rValue(rValue)
+    {
+        assert(lValue && rValue);
+    }
+
+    void AssignmentContext::setArgs(ExpressionContext* lValue, ExpressionContext* rValue)
+    {
+        this->lValue.reset(lValue);
+        this->rValue.reset(rValue);
+    }
 
     ConstBoolContext::ConstBoolContext()
     {
@@ -745,11 +809,12 @@ namespace BraneScript
 
         auto func = ctx.functions.find(returnType.type.structCtx->constructorSig());
         assert(func != ctx.functions.end());
-
+        assert(func->second->arg_size() == 1);
 
         assert(value->getType()->isPointerTy());
         std::vector<llvm::Value*> arg = {value};
-        return ctx.builder.CreateCall(func->second, arg);
+        ctx.builder.CreateCall(func->second, arg);
+        return value;
     }
 
     LabeledValueDestructionContext::LabeledValueDestructionContext(const LabeledValueContext& value)
@@ -857,20 +922,18 @@ namespace BraneScript
         returnType.isRef = false;
     }
 
-    bool DereferenceContext::isConstexpr() const
-    {
-        return false;
-    }
+    bool DereferenceContext::isConstexpr() const { return false; }
 
     llvm::Value* DereferenceContext::createAST(ASTContext& ctx) const
     {
         auto deref = _source->createAST(ctx);
-        //All lValues should be being passed around as pointers already, it's just a matter of how we use them
+        // All lValues should be being passed around as pointers already, it's just a matter of how we use them
         assert(deref->getType()->isPointerTy());
         return deref;
     }
 
-    DocumentContext* DereferenceContext::deepCopy(const std::function<DocumentContext*(DocumentContext*)>& callback) const
+    DocumentContext*
+    DereferenceContext::deepCopy(const std::function<DocumentContext*(DocumentContext*)>& callback) const
     {
         return new DereferenceContext((ExpressionContext*)_source->deepCopy());
     }
@@ -1248,7 +1311,23 @@ namespace BraneScript
         assert(funcItr != ctx.functions.end());
         llvm::Function* func = funcItr->second;
 
+        bool argRet = !returnType.isRef && returnType.type.structCtx;
         std::vector<llvm::Value*> args;
+        if(argRet)
+        {
+            // Avoid copy and construction operations by just returning the argument
+            if(parent->is<ReturnContext>() && getParent<FunctionContext>()->returnType == returnType)
+                args.push_back(ctx.findValue("-retRef"));
+            else
+            {
+                // Construct struct to be returned into
+                args.push_back(ctx.builder.CreateAlloca(ctx.getLLVMType(returnType)));
+                auto constructor = ctx.functions.find(returnType.type.structCtx->constructor->signature());
+                assert(constructor != ctx.functions.end());
+
+                ctx.builder.CreateCall(constructor->second, args[0]);
+            }
+        }
         for(auto& arg : arguments)
             args.push_back(arg->createAST(ctx));
 
@@ -1372,14 +1451,14 @@ namespace BraneScript
             {
                 std::string id = "-retRef";
                 arg.setName(id);
-                ctx.addValue(id, &arg);
+                ctx.addValue(id, &arg, returnType);
                 index++;
                 continue;
             }
             assert(index < arguments.size());
-            std::string& id = arguments[index++]->identifier.text;
+            std::string& id = arguments[index]->identifier.text;
             arg.setName(id);
-            ctx.addValue(id, &arg);
+            ctx.addValue(id, &arg, *arguments[index++]);
         }
 
         if(body)
@@ -1862,14 +1941,53 @@ namespace BraneScript
                 argTypes.reserve(f->arguments.size());
                 for(auto& arg : f->arguments)
                     argTypes.push_back(ctx.getLLVMType(*arg));
-                llvm::FunctionType* funcType =
-                    llvm::FunctionType::get(ctx.getLLVMType(f->returnType), argTypes, false);
+                bool argReturn = false;
+                if(!f->returnType.isRef && f->returnType.type.structCtx)
+                {
+                    auto thisRefType = f->returnType;
+                    thisRefType.isRef = true;
+                    argTypes.push_back(ctx.getLLVMType(thisRefType));
+                    argReturn = true;
+                }
+                llvm::Type* retType = ctx.getLLVMType(f->returnType);
+                if(argReturn)
+                    retType = ctx.getLLVMType({});
+                llvm::FunctionType* funcType = llvm::FunctionType::get(retType, argTypes, false);
 
                 auto linkage = llvm::Function::ExternalLinkage;
                 std::string id = f->signature();
                 assert(!id.empty());
                 ctx.func = llvm::Function::Create(funcType, linkage, id, *ctx.module);
                 ctx.functions.insert({id, ctx.func});
+            }
+
+            for(auto& s : lib->structs)
+            {
+                for(auto& f : s->functions)
+                {
+                    std::vector<llvm::Type*> argTypes;
+                    argTypes.reserve(f->arguments.size());
+                    for(auto& arg : f->arguments)
+                        argTypes.push_back(ctx.getLLVMType(*arg));
+                    bool argReturn = false;
+                    if(!f->returnType.isRef && f->returnType.type.structCtx)
+                    {
+                        auto thisRefType = f->returnType;
+                        thisRefType.isRef = true;
+                        argTypes.push_back(ctx.getLLVMType(thisRefType));
+                        argReturn = true;
+                    }
+                    llvm::Type* retType = ctx.getLLVMType(f->returnType);
+                    if(argReturn)
+                        retType = ctx.getLLVMType({});
+                    llvm::FunctionType* funcType = llvm::FunctionType::get(retType, argTypes, false);
+
+                    auto linkage = llvm::Function::ExternalLinkage;
+                    std::string id = f->signature();
+                    assert(!id.empty());
+                    ctx.func = llvm::Function::Create(funcType, linkage, id, *ctx.module);
+                    ctx.functions.insert({id, ctx.func});
+                }
             }
         }
 

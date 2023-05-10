@@ -9,7 +9,7 @@ add_executable(bs_tests
         overrideTests.cpp
         recursionTest.cpp
         apiTests.cpp
-        #objectTests.cpp
+        objectTests.cpp
         speedTests.cpp
         #stringTests.cpp
         templateTests.cpp

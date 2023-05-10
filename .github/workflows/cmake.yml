@@ -36,7 +36,6 @@ jobs:
     - name: Install & configure conan
       run: |
         pip install --upgrade conan==1.59
-        conan profile new default --detect 
         conan profile update settings.compiler.libcxx=libstdc++11 default
 
     - name: Configure CMake
