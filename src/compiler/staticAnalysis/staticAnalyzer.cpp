@@ -80,7 +80,9 @@ namespace BraneScript
         StaticAnalyzer& _analyzer;
         StaticAnalyzer::AnalyzationContext& _result;
         std::stack<DocumentContext*> _documentContext;
+        std::string* _rawText;
         bool _extractOnlyIdentifiers;
+        bool _allowUnsafe;
 
         bool _functionHasReturn = false;
         bool _enforceConstexpr = false;
@@ -408,9 +410,9 @@ namespace BraneScript
         {
             for(auto& imp : _result.scriptContext->imports)
             {
-                if(!imp.alias.empty())
+                if(!imp.second->alias.empty())
                     continue;
-                auto lib = _analyzer.getLibrary(imp.library);
+                auto lib = _analyzer.getLibrary(imp.second->library);
                 if(!lib)
                     continue;
                 if(auto* ident = lib->findIdentifier(identifier, IDSearchOptions_ChildrenOnly))
@@ -430,8 +432,8 @@ namespace BraneScript
 
             for(auto& alias : _result.scriptContext->imports)
             {
-                if(identifier == alias.alias)
-                    return _analyzer.getLibrary(alias.library);
+                if(identifier == alias.second->alias)
+                    return _analyzer.getLibrary(alias.second->library);
             }
             return nullptr;
         }
@@ -510,6 +512,8 @@ namespace BraneScript
 
         bool implicitCastViable(const ValueContext& current, const ValueContext& target)
         {
+            if(current.isRef && target.isRef && (current.type.storageType == ValueType::Void || target.type.storageType == ValueType::Void))
+                return true;
             return current.type.isScalar() && target.type.isScalar();
         }
 
@@ -684,9 +688,9 @@ namespace BraneScript
                     lastNode()->getFunction(name, overrides, IDSearchOptions_ParentsOnly);
                     for(auto& imp : _result.scriptContext->imports)
                     {
-                        if(!imp.alias.empty())
+                        if(!imp.second->alias.empty())
                             continue;
-                        auto lib = _analyzer.getLibrary(imp.library);
+                        auto lib = _analyzer.getLibrary(imp.second->library);
                         if(!lib)
                             continue;
                         lib->getFunction(name, overrides, IDSearchOptions_ChildrenOnly);
@@ -831,8 +835,8 @@ namespace BraneScript
         }
 
       public:
-        Analyzer(StaticAnalyzer& analyzer, StaticAnalyzer::AnalyzationContext& result, bool extractOnlyIdentifiers)
-            : _analyzer(analyzer), _result(result), _extractOnlyIdentifiers(extractOnlyIdentifiers){};
+        Analyzer(StaticAnalyzer& analyzer, StaticAnalyzer::AnalyzationContext& result, bool extractOnlyIdentifiers, bool allowUnsafe)
+            : _analyzer(analyzer), _result(result), _extractOnlyIdentifiers(extractOnlyIdentifiers), _allowUnsafe(allowUnsafe) {};
 
         std::any visitExprStatement(braneParser::ExprStatementContext* ctx) override
         {
@@ -846,9 +850,14 @@ namespace BraneScript
             std::string identifier = safeGetText(ctx->libID);
             if(identifier.size() < 2)
                 return {};
+
             identifier = identifier.substr(1, identifier.size() - 2);
             auto lib = getNode(lastNode()->as<ScriptContext>()->exports, identifier);
             lib->identifier.range = toRange(ctx->libID);
+
+            if(_extractOnlyIdentifiers)
+                lib->templateDefinitions.clear();
+
             initDoc(lib, ctx);
             visitChildren(ctx);
             popDoc(lib);
@@ -988,7 +997,11 @@ namespace BraneScript
                 if(_instantiatingTemplate && arg)
                 {
                     if(auto* tempType = dynamic_cast<TypedefArgContext*>(arg))
-                        output = tempType->value;
+                    {
+                        output.type = tempType->value.type;
+                        output.isConst = output.isConst || tempType->value.isConst;
+                        output.isRef = output.isRef || tempType->value.isRef;
+                    }
                     else if(auto* tempTypePack = dynamic_cast<TypedefPackArgContext*>(arg))
                         recordError(ctx->name, "Cannot use an argument pack as a type!");
                 }
@@ -1304,6 +1317,15 @@ namespace BraneScript
                 auto args = std::any_cast<std::vector<TemplateDefArgumentContext*>>(visit(ctx->sig->template_));
                 _registeredTemplates[id].emplace_back(
                     new TemplateHandle(TemplateHandle::Function, ctx, lastNode(), args));
+                if(_extractOnlyIdentifiers)
+                {
+                    if(auto parentLib = getLast<LibraryContext>())
+                    {
+                        auto textRange = toRange(ctx).getBoundsForText(*_rawText);
+                        std::string templateText = _rawText->substr(textRange.first, textRange.second - textRange.first);
+                        parentLib->templateDefinitions[id] = templateText;
+                    }
+                }
                 return (FunctionContext*)nullptr;
             }
 
@@ -1425,7 +1447,10 @@ namespace BraneScript
                 }
             }
 
-            lastNode()->as<ScriptContext>()->imports.push_back(std::move(i));
+            if(!_extractOnlyIdentifiers && !_allowUnsafe && i.library == "unsafe")
+                recordError(ctx->library, "Unsafe code is not allowed for this script");
+
+            lastNode()->as<ScriptContext>()->imports[i.library] =  std::make_unique<ImportContext>(std::move(i));
             return {};
         }
 
@@ -1892,6 +1917,32 @@ namespace BraneScript
             RETURN_STMT(assignmentCtx);
         }
 
+        std::any visitRefAssignment(braneParser::RefAssignmentContext* ctx) override
+        {
+            STMT_ASSERT_EXISTS(ctx->lValue, "lValue expected");
+            STMT_ASSERT_EXISTS(ctx->rValue, "rValue expected");
+            auto assignmentCtx = new RefAssignmentContext{};
+            initDoc(assignmentCtx, ctx);
+            auto lValue = asExpr(visit(ctx->lValue));
+            assert(lValue);
+            if(!lValue->returnType.isRef)
+                recordError(ctx->lValue, "Expression is not a reference!");
+            if(!lValue->returnType.isLValue)
+                recordError(ctx->lValue, "Expression is not an lValue!");
+            if(lValue->returnType.isConst)
+                recordError(ctx->lValue, "Can not modify a constant value!");
+
+            auto rValue = asExpr(visit(ctx->rValue));
+            assert(rValue);
+            if(!rValue->returnType.isRef || rValue->returnType.isLValue)
+                recordError(ctx->rValue, "Can not reference a temporary value!");
+            if(lValue->returnType.type != rValue->returnType.type)
+                recordError(ctx, "Can not reference a value of different type!");
+            assignmentCtx->setArgs(lValue.release(), rValue.release());
+            popDoc(assignmentCtx);
+            RETURN_STMT(assignmentCtx);
+        }
+
         std::any visitConstBool(braneParser::ConstBoolContext* ctx) override
         {
             EXPR_ASSERT_EXISTS(ctx->BOOL(), "constant missing");
@@ -1950,21 +2001,9 @@ namespace BraneScript
         std::any visitSizeOfType(braneParser::SizeOfTypeContext* ctx) override
         {
             EXPR_ASSERT_EXISTS(ctx->t, "type expected");
-            auto constCtx = new ConstIntContext{};
-            initDoc(constCtx, ctx);
             auto value = std::any_cast<ValueContext>(visitType(ctx->t));
-            constCtx->value = value.type.size();
-            popDoc(constCtx);
-            RETURN_EXPR(constCtx);
-        };
-
-        std::any visitSizeOfExpr(braneParser::SizeOfExprContext* ctx) override
-        {
-            EXPR_ASSERT_EXISTS(ctx->expr, "expression missing");
-            auto constCtx = new ConstIntContext{};
+            auto constCtx = new TypeSizeContext{value};
             initDoc(constCtx, ctx);
-            std::unique_ptr<ExpressionContext> expr = asExpr(visit(ctx->expr));
-            constCtx->value = expr->returnType.type.size();
             popDoc(constCtx);
             RETURN_EXPR(constCtx);
         };
@@ -2010,7 +2049,7 @@ namespace BraneScript
             EXPR_ASSERT_EXISTS(ctx->type(), "type expected");
             EXPR_ASSERT_EXISTS(ctx->expression(), "expression expected");
 
-            auto returnType = std::any_cast<ValueContext>(visit(ctx->type()));
+            auto returnType = std::any_cast<ValueContext>(visitType(ctx->type()));
             std::string error;
             if(auto* castCtx = resolveCast(asExpr(visit(ctx->expression())).release(), returnType, error))
             {
@@ -2472,6 +2511,7 @@ namespace BraneScript
              * the script context */
 
             std::string document;
+            _rawText = &document;
 
             if(_extractOnlyIdentifiers)
             {
@@ -2483,13 +2523,15 @@ namespace BraneScript
             {
                 // Import template text into document so that we can read it
                 for(auto& lib : _result.scriptContext->imports)
-                    _analyzer.appendTemplateHeaders(lib.library, _result.source, document);
+                    _analyzer.appendTemplateHeaders(lib.second->library, _result.scriptContext.get(), document);
                 // TODO figure out a clean way to associate sections of the header with external files, instead of
                 // returning negative line numbers in errors
                 document += '\n';
                 for(char c : document)
                     _headerSize += c == '\n';
             }
+
+            std::cout << "template headers:\n" << document << std::endl;
 
             document += _result.document;
 
@@ -2513,7 +2555,6 @@ namespace BraneScript
             pruneNodes(_result.scriptContext->structs);
             pruneNodes(_result.scriptContext->functions);
             pruneNodes(_result.scriptContext->exports);
-
             _result.scriptContext->callOrder.clear();
             if(!_extractOnlyIdentifiers && !callTree.resolveCallOrder(_result.scriptContext->callOrder))
                 recordError(TextRange{}, "Unable to resolve function call order due to circular function calls");
@@ -2522,7 +2563,7 @@ namespace BraneScript
         }
     };
 
-    StaticAnalyzer::StaticAnalyzer() { addWorkspace("include"); }
+    StaticAnalyzer::StaticAnalyzer() { addWorkspace("include", true); }
 
     bool StaticAnalyzer::isLoaded(const std::string& path) { return _analyzationContexts.contains(path); }
 
@@ -2559,7 +2600,7 @@ namespace BraneScript
         context->complete = false;
         context->scriptContext->id = path;
 
-        Analyzer(*this, *context, true).analyze();
+        Analyzer(*this, *context, true, false).analyze();
 
         if(!cacheDocument)
             context->document.clear();
@@ -2575,20 +2616,19 @@ namespace BraneScript
         if(!cacheDocument)
             context->document = readDocument(path);
 
-        Analyzer(*this, *context, true).analyze();
+        Analyzer(*this, *context, true, false).analyze();
         context->complete = false;
 
         if(!cacheDocument)
             context->document.clear();
     }
 
-    bool StaticAnalyzer::validate(const std::string& path)
+    bool StaticAnalyzer::validate(const std::string& path, bool allowUnsafe)
     {
         assert(_analyzationContexts.contains(path));
         auto& context = _analyzationContexts.at(path);
         std::scoped_lock lock(context->lock);
-        if(!context->complete)
-            Analyzer(*this, *context, false).analyze();
+        Analyzer(*this, *context, false, allowUnsafe).analyze();
         context->complete = true;
         return context->errors.empty();
     }
@@ -2598,7 +2638,7 @@ namespace BraneScript
         return _analyzationContexts.at(path).get();
     }
 
-    void StaticAnalyzer::addWorkspace(const std::string& path)
+    void StaticAnalyzer::addWorkspace(const std::string& path, bool allowUnsafe)
     {
         std::cout << "Loading workspace " << path << std::endl;
         assert(std::filesystem::exists(path));
@@ -2645,17 +2685,23 @@ namespace BraneScript
     }
 
     void StaticAnalyzer::appendTemplateHeaders(const std::string& lib,
-                                               const std::string& currentDocument,
+                                               const ScriptContext* currentDocument,
                                                std::string& stream)
     {
-        if(!exportedTemplateText.contains(lib))
+        auto libSet = _libraries.find(lib);
+        if(libSet == _libraries.end())
             return;
 
-        for(auto& temp : exportedTemplateText.at(lib))
+        for(auto& lib : libSet->second->exports)
         {
-            if(temp.first == currentDocument)
+            if(lib->getParent<ScriptContext>() == currentDocument)
                 continue;
-            stream += temp.second;
+            if(lib->templateDefinitions.empty())
+                continue;
+            stream += "export as \"" + lib->identifier.text + "\"{";
+            for(auto& t : lib->templateDefinitions)
+                stream += t.second;
+            stream += "}\n";
         }
     }
 

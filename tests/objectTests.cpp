@@ -249,8 +249,8 @@ TEST(BraneScript, Objects)
     EXPECT_EQ(createdStruct.c, false);
 
     EXPECT_EQ(constructorCalled, 2);
-    EXPECT_EQ(moveConstructorCalled, 1);
-    EXPECT_EQ(copyConstructorCalled, 1);
+    EXPECT_EQ(moveConstructorCalled, 0);
+    EXPECT_EQ(copyConstructorCalled, 2);
     EXPECT_EQ(destructorCalled, 2);
     resetTestCounters();
 
@@ -263,8 +263,8 @@ TEST(BraneScript, Objects)
     EXPECT_EQ(createdStruct.c, false);
 
     EXPECT_EQ(constructorCalled, 1);
-    EXPECT_EQ(moveConstructorCalled, 1);
-    EXPECT_EQ(copyConstructorCalled, 0);
+    EXPECT_EQ(moveConstructorCalled, 0);
+    EXPECT_EQ(copyConstructorCalled, 1);
     EXPECT_EQ(destructorCalled, 1);
     resetTestCounters();
 

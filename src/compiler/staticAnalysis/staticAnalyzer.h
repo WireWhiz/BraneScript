@@ -45,10 +45,6 @@ namespace BraneScript
         robin_hood::unordered_map<std::string, std::unique_ptr<LibrarySet>> _libraries;
         robin_hood::unordered_map<std::string, std::unique_ptr<AnalyzationContext>> _analyzationContexts;
 
-        // First key is library/export name, second is the document that the section of text was exported from
-        robin_hood::unordered_map<std::string, robin_hood::unordered_map<std::string, std::string>> exportedTemplateText;
-
-
         ConstexprEvaluator* _evaluator = nullptr;
 
       public:
@@ -58,7 +54,7 @@ namespace BraneScript
          * This folder and it's children will be searched for brane script related files and scanned so that references
          * can be made correctly
          */
-        void addWorkspace(const std::string& path);
+        void addWorkspace(const std::string& path, bool allowUnsafe = false);
 
         bool isLoaded(const std::string& path);
         void load(const std::string& path, bool cacheDocument = false);
@@ -74,7 +70,7 @@ namespace BraneScript
         void deregisterLibrary(LibraryContext* lib);
         LibrarySet* getLibrary(const std::string& id);
 
-        void appendTemplateHeaders(const std::string& lib, const std::string& currentDocument, std::string& stream);
+        void appendTemplateHeaders(const std::string& lib, const ScriptContext* currentDocument, std::string& stream);
 
         void setConstexprEvaluator(ConstexprEvaluator* evaluator);
         ConstexprEvaluator* constexprEvaluator() const;
@@ -83,7 +79,7 @@ namespace BraneScript
          * @brief Validates a document will successfully compile, and populates all the fields of AnalyzationResult
          * @return Document will compile
          * */
-        bool validate(const std::string& path);
+        bool validate(const std::string& path, bool allowUnsafe = false);
 
     };
 

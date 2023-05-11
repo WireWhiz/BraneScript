@@ -64,7 +64,7 @@ namespace lsp
             request.deserialize(value);
 
             for(auto& folder : request.params["workspaceFolders"])
-                session->analyzer.addWorkspace(folder["uri"].asString().substr(7));
+                session->analyzer.addWorkspace(folder["uri"].asString().substr(7), false);
 
             readMessage(session, [session](auto message) {
                 Json::CharReaderBuilder builder;

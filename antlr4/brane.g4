@@ -68,6 +68,7 @@ structMember  : var=declaration ';' #memberVariable
 
 statement   : expression ';'                                                              #exprStatement
             | lValue=expression '=' rValue=expression ';'                                 #assignment
+            | lValue=expression '<-' rValue=expression ';'                                 #refAssignment
             | '{' statement* '}'                                                          #scope
             | 'return' expression? ';'                                                    #return
             | 'if' '(' cond=expression ')' operation=statement ('else' elseOp=statement)? #if
@@ -82,7 +83,6 @@ expression  : INT                                                           #con
             | CHAR                                                          #constChar
             | STRING                                                        #constString
             | BOOL                                                          #constBool
-            | 'sizeof' '(' expr=expression ')'                              #sizeOfExpr
             | 'sizeof' '(' t=type ')'                                       #sizeOfType
             | 'sizeof' '...' '(' id=ID ')'                                  #sizeOfPack
             | declaration                                                   #decl

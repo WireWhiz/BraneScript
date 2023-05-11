@@ -45,6 +45,8 @@ namespace BraneScript
         std::unique_ptr<llvm::orc::IRCompileLayer> _compileLayer;
         std::unique_ptr<llvm::orc::IRTransformLayer> _transformLayer;
 
+        static int64_t _scriptMallocDiff;
+
       public:
         ScriptRuntime();
         ~ScriptRuntime();
@@ -53,6 +55,8 @@ namespace BraneScript
 
         Script* loadScript(const IRScript& irScript);
         void unloadScript(const std::string& id);
+        int64_t mallocDiff() const;
+        void resetMallocDiff();
     };
 } // namespace BraneScript
 

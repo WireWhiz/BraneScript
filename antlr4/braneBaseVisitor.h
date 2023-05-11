@@ -127,6 +127,10 @@ public:
     return visitChildren(ctx);
   }
 
+  virtual std::any visitRefAssignment(braneParser::RefAssignmentContext *ctx) override {
+    return visitChildren(ctx);
+  }
+
   virtual std::any visitScope(braneParser::ScopeContext *ctx) override {
     return visitChildren(ctx);
   }
@@ -172,10 +176,6 @@ public:
   }
 
   virtual std::any visitConstBool(braneParser::ConstBoolContext *ctx) override {
-    return visitChildren(ctx);
-  }
-
-  virtual std::any visitSizeOfExpr(braneParser::SizeOfExprContext *ctx) override {
     return visitChildren(ctx);
   }
 

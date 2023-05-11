@@ -75,6 +75,8 @@ public:
 
     virtual std::any visitAssignment(braneParser::AssignmentContext *context) = 0;
 
+    virtual std::any visitRefAssignment(braneParser::RefAssignmentContext *context) = 0;
+
     virtual std::any visitScope(braneParser::ScopeContext *context) = 0;
 
     virtual std::any visitReturn(braneParser::ReturnContext *context) = 0;
@@ -98,8 +100,6 @@ public:
     virtual std::any visitConstInt(braneParser::ConstIntContext *context) = 0;
 
     virtual std::any visitConstBool(braneParser::ConstBoolContext *context) = 0;
-
-    virtual std::any visitSizeOfExpr(braneParser::SizeOfExprContext *context) = 0;
 
     virtual std::any visitMuldiv(braneParser::MuldivContext *context) = 0;
 

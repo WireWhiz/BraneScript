@@ -382,6 +382,31 @@ namespace BraneScript
         DocumentContext* deepCopy(const std::function<DocumentContext*(DocumentContext*)>& callback) const override;
     };
 
+    struct RefAssignmentContext : public StatementContext
+    {
+        std::unique_ptr<ExpressionContext> lValue;
+        std::unique_ptr<ExpressionContext> rValue;
+        bool isConstexpr() const override;
+
+        RefAssignmentContext() = default;
+        RefAssignmentContext(ExpressionContext* lValue, ExpressionContext* rValue);
+        void setArgs(ExpressionContext* lValue, ExpressionContext* rValue);
+        llvm::Value* createAST(ASTContext& ctx) const override;
+        DocumentContext* deepCopy(const std::function<DocumentContext*(DocumentContext*)>& callback) const override;
+    };
+
+    struct TypeSizeContext : public ExpressionContext
+    {
+        ValueContext value;
+
+        TypeSizeContext(ValueContext);
+        llvm::Value* createAST(ASTContext& ctx) const override;
+
+        bool isConstexpr() const override;
+        DocumentContext* deepCopy(const std::function<DocumentContext*(DocumentContext*)>& callback) const override;
+
+    };
+
     struct ConstValueContext : public ExpressionContext
     {
         virtual std::string toString() const = 0;
@@ -625,6 +650,7 @@ namespace BraneScript
         LabeledNodeList<LabeledValueContext> globals;
         LabeledNodeList<StructContext> structs;
         LabeledNodeList<FunctionContext> functions;
+        robin_hood::unordered_map<std::string, std::string> templateDefinitions;
 
         DocumentContext* getNodeAtChar(TextPos pos) override;
         DocumentContext* findIdentifier(const std::string& identifier, uint8_t searchOptions) override;
@@ -666,7 +692,7 @@ namespace BraneScript
         LabeledNodeList<StructContext> structs;
         LabeledNodeList<FunctionContext> functions;
         LabeledNodeMap<LibraryContext> exports;
-        std::vector<ImportContext> imports;
+        LabeledNodeMap<ImportContext> imports;
 
         std::vector<FunctionContext*> callOrder;
 

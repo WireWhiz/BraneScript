@@ -16,6 +16,7 @@ add_executable(bs_tests
         globalVariableTests.cpp
         #lambdaTests.cpp
         refTests.cpp
+        unsafeTests.cpp
         )
 target_link_libraries(bs_tests PUBLIC GTest::gtest_main BraneScriptCompiler)
 target_compile_definitions(bs_tests PUBLIC TESTS)

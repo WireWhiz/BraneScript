@@ -14,8 +14,8 @@
         {\
             for(auto& error : analyzer.getCtx("test")->errors)\
             {\
-                auto bounds = error.range.getBoundsForText(testString);\
-                std::cerr << "(" << bounds.first << ", " << bounds.second << ") " << error.message << std::endl;\
+                auto bounds = error.range;\
+                std::cerr << "(" << bounds.start.line << ", " << bounds.start.charPos << ") " << error.message << std::endl;\
             }\
             ASSERT_TRUE(false);\
         }\

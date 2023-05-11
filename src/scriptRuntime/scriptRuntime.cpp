@@ -26,21 +26,17 @@
 #include "llvm/IR/Verifier.h"
 #include "llvm/Support/DynamicLibrary.h"
 #include "llvm/Support/TargetSelect.h"
-#include "llvm/Transforms/InstCombine/InstCombine.h"
 #include "llvm/Transforms/Scalar.h"
 #include "llvm/Transforms/Scalar/GVN.h"
-#include "llvm/Transforms/Scalar/Reassociate.h"
-#include "llvm/Transforms/Scalar/SimplifyCFG.h"
 
-#include <cassert>
 #include <cstdio>
 #include <stdexcept>
-#include <llvm/ExecutionEngine/SectionMemoryManager.h>
 #include <llvm/Passes/PassBuilder.h>
 
 namespace BraneScript
 {
 
+    int64_t ScriptRuntime::_scriptMallocDiff = 0;
     bool llvmInitialized = false;
 
     ScriptRuntime::ScriptRuntime()
@@ -105,9 +101,9 @@ namespace BraneScript
                 PB.crossRegisterProxies(lam, fam, cgam, mam);
 
                 // Create the pass manager.
-                auto mpm = PB.buildPerModuleDefaultPipeline(llvm::PassBuilder::OptimizationLevel::O2);
                 auto fpm = PB.buildFunctionSimplificationPipeline(llvm::PassBuilder::OptimizationLevel::O2,
                                                                   llvm::ThinOrFullLTOPhase::FullLTOPostLink);
+
 
                 // Run the optimizations over all functions in the module being added to
                 // the JIT.
@@ -117,9 +113,27 @@ namespace BraneScript
                         continue;
                     fpm.run(f, fam);
                 }
-                mpm.run(*m.getModuleUnlocked(), mam);
+
+                std::string moduleText;
+                llvm::raw_string_ostream modStr(moduleText);
+                m.getModuleUnlocked()->print(modStr, nullptr);
+                printf("Loaded Optimized IR:\n%s", moduleText.c_str());
+
                 return std::move(m);
             });
+
+
+        NativeLibrary unsafeLib;
+        unsafeLib.identifier = "unsafe";
+        unsafeLib.addFunction("unsafe::malloc(uint)", (FunctionHandle<void*, int>)[](int size){
+            _scriptMallocDiff++;
+            return ::operator new(size);
+        });
+        unsafeLib.addFunction("unsafe::free(ref void)", (FunctionHandle<void, void*>)[](void* ptr){
+            _scriptMallocDiff--;
+            ::operator delete(ptr);
+        });
+        loadLibrary(unsafeLib);
     }
 
     Script* ScriptRuntime::loadScript(const IRScript& irScript)
@@ -218,5 +232,9 @@ namespace BraneScript
             throw std::runtime_error("Unable to load native library: " + toString(std::move(err)));
         _modules[lib.identifier].insert(&newLib);
     }
+
+    int64_t ScriptRuntime::mallocDiff() const { return _scriptMallocDiff; }
+
+    void ScriptRuntime::resetMallocDiff() { _scriptMallocDiff = 0; }
 
 } // namespace BraneScript
