@@ -34,8 +34,7 @@ TEST(BraneScript, API)
     }
 )";
 
-    NativeLibrary testLib;
-    testLib.identifier = "testLib";
+    NativeLibrary testLib("testLib");
     testLib.addFunction("testLib::setRef(int)", setRef);
 
     StaticAnalyzer analyzer;

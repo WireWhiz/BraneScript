@@ -95,6 +95,8 @@ namespace BraneScript
     {
         if(type != o.type)
             return false;
+        if(isConst != o.isConst)
+            return false;
         if(isRef != o.isRef)
             return false;
         return true;
@@ -103,6 +105,8 @@ namespace BraneScript
     bool ValueContext::operator!=(const ValueContext& o) const
     {
         if(type != o.type)
+            return true;
+        if(isConst != o.isConst)
             return true;
         if(isRef != o.isRef)
             return true;
@@ -259,7 +263,7 @@ namespace BraneScript
 
     void ASTContext::addValue(std::string id, llvm::Value* value, ValueContext context)
     {
-        scopes.back().values.insert({std::move(id),  {value, std::move(context)}});
+        scopes.back().values.insert({std::move(id), {value, std::move(context)}});
     }
 
     void ASTContext::setInsertPoint(llvm::BasicBlock* block)
@@ -285,7 +289,8 @@ namespace BraneScript
             assert(valueType->getContainedType(0) == targetType);
             return builder.CreateLoad(targetType, value);
         }
-        if(valueType->isPointerTy() && valueCtx.isRef && !valueType->isOpaquePointerTy() && valueType->getContainedType(0)->isPointerTy())
+        if(valueType->isPointerTy() && valueCtx.isRef && !valueType->isOpaquePointerTy() &&
+           valueType->getContainedType(0)->isPointerTy())
             return builder.CreateLoad(getLLVMType(valueCtx), value);
         if(!valueType->isPointerTy() && valueCtx.isRef)
             throw std::runtime_error("Unable to create ref from lValue");
@@ -370,6 +375,13 @@ namespace BraneScript
         type = o.type;
         isConst = o.isConst;
         isRef = o.isRef;
+    }
+
+    bool ValueContext::sameBaseType(const ValueContext& o) const
+    {
+        if(type.identifier != o.type.identifier)
+            return false;
+        return isRef == o.isRef;
     }
 
     std::string LabeledValueContext::signature() const { return ValueContext::signature() + " " + identifier.text; }
@@ -533,7 +545,7 @@ namespace BraneScript
             auto copy = ctx.functions.find(parentFunc->returnType.type.structCtx->copyConstructorSig());
             assert(copy != ctx.functions.end());
 
-            std::vector<llvm::Value*> args = {retRef,retValue};
+            std::vector<llvm::Value*> args = {retRef, retValue};
             ctx.builder.CreateCall(copy->second, args);
             ctx.destructStack();
             ctx.builder.CreateRetVoid();
@@ -662,7 +674,8 @@ namespace BraneScript
         auto structPointerType = lValue->returnType;
         structPointerType.isRef = true;
 
-        std::vector<llvm::Value*> args = {ctx.convertToType(l, structPointerType), ctx.convertToType(r, structPointerType)};
+        std::vector<llvm::Value*> args = {ctx.convertToType(l, structPointerType),
+                                          ctx.convertToType(r, structPointerType)};
         ctx.builder.CreateCall(cc->second, args);
         return nullptr;
     }
@@ -693,15 +706,14 @@ namespace BraneScript
         this->rValue.reset(rValue);
     }
 
-    bool RefAssignmentContext::isConstexpr() const
-    {
-        return false;
-    }
+    bool RefAssignmentContext::isConstexpr() const { return false; }
 
-    RefAssignmentContext::RefAssignmentContext(ExpressionContext* lValue, ExpressionContext* rValue) : lValue(lValue), rValue(rValue)
+    RefAssignmentContext::RefAssignmentContext(ExpressionContext* lValue, ExpressionContext* rValue)
+        : lValue(lValue), rValue(rValue)
     {
         assert(lValue->returnType.isRef && (rValue->returnType.isLValue || rValue->returnType.isRef));
     }
+
     void RefAssignmentContext::setArgs(ExpressionContext* lValue, ExpressionContext* rValue)
     {
         assert(lValue->returnType.isRef && (rValue->returnType.isLValue || rValue->returnType.isRef));
@@ -721,7 +733,8 @@ namespace BraneScript
         return nullptr;
     }
 
-    DocumentContext* RefAssignmentContext::deepCopy(const std::function<DocumentContext*(DocumentContext*)>& callback) const
+    DocumentContext*
+    RefAssignmentContext::deepCopy(const std::function<DocumentContext*(DocumentContext*)>& callback) const
     {
         auto* copy = new RefAssignmentContext{};
         copyBase(this, copy);
@@ -746,10 +759,7 @@ namespace BraneScript
         return ctx.builder.CreatePtrToInt(offset, ctx.getLLVMType(returnType), "typeSize");
     }
 
-    bool TypeSizeContext::isConstexpr() const
-    {
-        return !value.isRef;
-    }
+    bool TypeSizeContext::isConstexpr() const { return !value.isRef; }
 
     DocumentContext* TypeSizeContext::deepCopy(const std::function<DocumentContext*(DocumentContext*)>& callback) const
     {
@@ -841,8 +851,8 @@ namespace BraneScript
 
     ConstStringContext::ConstStringContext()
     {
-        returnType.type = {"BraneScript::string", ValueType::Struct};
-        returnType.isConst = true;
+        returnType.type = {"string::string", ValueType::Struct};
+        returnType.isLValue = true;
     }
 
     DocumentContext*
@@ -855,8 +865,18 @@ namespace BraneScript
 
     llvm::Value* ConstStringContext::createAST(ASTContext& ctx) const
     {
-        assert(false);
-        return nullptr;
+        auto* str = ctx.builder.CreateGlobalStringPtr(value);
+        auto* stringType = ctx.getLLVMType(returnType);
+        if(!stringType)
+            throw std::runtime_error("String library must be linked to use strings!");
+        auto* tempString = ctx.builder.CreateAlloca(stringType);
+        auto hiddenConstructor = ctx.module->getOrInsertFunction("string::stringFromCharArr(ref string::string, const ref char)",
+                                            llvm::Type::getVoidTy(*ctx.llvmCtx),
+                                            llvm::PointerType::get(stringType, 0),
+                                            llvm::Type::getInt8PtrTy(*ctx.llvmCtx));
+
+        ctx.builder.CreateCall(hiddenConstructor, {tempString, str});
+        return tempString;
     }
 
     LabeledValueConstructionContext::LabeledValueConstructionContext(const LabeledValueContext& value)
@@ -1220,8 +1240,7 @@ namespace BraneScript
                                                      ExpressionContext* rValue)
         : op(op), lValue(lValue), rValue(rValue)
     {
-        if(lValue->returnType != rValue->returnType)
-            assert(lValue->returnType == rValue->returnType);
+        assert(lValue->returnType.sameBaseType(rValue->returnType));
         returnType = lValue->returnType;
     }
 
@@ -1289,7 +1308,7 @@ namespace BraneScript
     NativeCompareContext::NativeCompareContext(Operation op, ExpressionContext* lValue, ExpressionContext* rValue)
         : op(op), lValue(lValue), rValue(rValue)
     {
-        assert(lValue->returnType == rValue->returnType);
+        assert(lValue->returnType.sameBaseType(rValue->returnType));
         returnType.type = {"bool", ValueType::Bool, nullptr};
     }
 
@@ -1403,7 +1422,7 @@ namespace BraneScript
         if(argRet)
         {
             // Avoid copy and construction operations by just returning the argument
-            if(parent->is<ReturnContext>() && getParent<FunctionContext>()->returnType == returnType)
+            if(parent->is<ReturnContext>() && getParent<FunctionContext>()->returnType.sameBaseType(returnType))
                 args.push_back(ctx.findValue("-retRef"));
             else
             {
@@ -1733,7 +1752,8 @@ namespace BraneScript
         return DocumentContext::findIdentifier(id, searchOptions);
     }
 
-    void LibraryContext::getFunction(const std::string& id, std::list<FunctionContext*>& overrides, uint8_t searchOptions)
+    void
+    LibraryContext::getFunction(const std::string& id, std::list<FunctionContext*>& overrides, uint8_t searchOptions)
     {
         DocumentContext::getFunction(id, overrides, searchOptions);
         for(auto& f : functions)
@@ -1741,6 +1761,10 @@ namespace BraneScript
             if(f->identifier.text == id)
                 overrides.push_back(f.get());
         }
+        if(searchOptions & IDSearchOptions_ParentsOnly)
+            return;
+        for(auto& s : structs)
+            s->getFunction(id, overrides, searchOptions);
     }
 
     std::string LibraryContext::longId() const
@@ -1973,7 +1997,7 @@ namespace BraneScript
     {
         for(auto& lib : exports)
         {
-            auto* ident = lib->findIdentifier(identifier, 0);
+            auto* ident = lib->findIdentifier(identifier, searchOptions);
             if(ident)
                 return ident;
         }

@@ -80,6 +80,9 @@ namespace BraneScript
         bool operator==(const ValueContext& o) const;
         bool operator!=(const ValueContext& o) const;
 
+        // SameBaseType compares everything but isConst and isLValue
+        bool sameBaseType(const ValueContext& o) const;
+
         void operator=(const LabeledValueContext& o);
         ValueContext() = default;
         ValueContext(const LabeledValueContext& o);
@@ -218,7 +221,8 @@ namespace BraneScript
         T* as()
         {
             static_assert(std::is_base_of<DocumentContext, T>::value, "T must be a subclass of DocumentContext");
-            return dynamic_cast<T*>(this);
+            auto* r = dynamic_cast<T*>(this);
+            return r;
         }
 
         template<typename T>

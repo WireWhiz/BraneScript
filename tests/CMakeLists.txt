@@ -11,7 +11,7 @@ add_executable(bs_tests
         apiTests.cpp
         objectTests.cpp
         speedTests.cpp
-        #stringTests.cpp
+        stringTests.cpp
         templateTests.cpp
         globalVariableTests.cpp
         #lambdaTests.cpp

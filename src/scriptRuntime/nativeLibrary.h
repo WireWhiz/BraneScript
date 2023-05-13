@@ -19,12 +19,15 @@ namespace BraneScript
     {
         std::string identifier;
         std::vector<std::pair<std::string, void*>> functions;
+
         void addFunction(std::string signature, void* f);
         template<typename Ret, typename... Args>
         void addFunction(std::string signature, FunctionHandle<Ret, Args...> f)
         {
             addFunction(std::move(signature), (void*)f);
         }
+
+        explicit NativeLibrary(std::string identifier);
     };
 }
 

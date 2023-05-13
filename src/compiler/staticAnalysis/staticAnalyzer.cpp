@@ -164,7 +164,11 @@ namespace BraneScript
 
             std::vector<Arg> args;
 
-            void addArg(ValueContext typeDef) { assert(typeDef.type.storageType != ValueType::Struct || typeDef.type.structCtx); args.emplace_back(std::move(typeDef)); }
+            void addArg(ValueContext typeDef)
+            {
+                assert(typeDef.type.storageType != ValueType::Struct || typeDef.type.structCtx);
+                args.emplace_back(std::move(typeDef));
+            }
 
             void addArg(ConstValueContext* value) { args.emplace_back(value); }
         };
@@ -239,6 +243,7 @@ namespace BraneScript
             doc->version = _result.version;
             _documentContext.push(doc);
         }
+
         void initDoc(DocumentContext* doc) { initDoc(doc, _documentContext.top()->range); }
 
         void initDoc(DocumentContext* doc, antlr4::Token* token) { initDoc(doc, toRange(token)); }
@@ -489,7 +494,10 @@ namespace BraneScript
                 return output;
             }
 
-            if(auto* sCtx = dynamic_cast<StructContext*>(getIdentifierContext(ctx)))
+            auto sCtx = dynamic_cast<StructContext*>(getIdentifierContext(ctx));
+            if(!sCtx)
+                sCtx = dynamic_cast<StructContext*>(getIdentifierContextFromLibs(output.identifier));
+            if(sCtx)
             {
                 output.identifier = sCtx->longId();
                 output.structCtx = sCtx;
@@ -512,7 +520,8 @@ namespace BraneScript
 
         bool implicitCastViable(const ValueContext& current, const ValueContext& target)
         {
-            if(current.isRef && target.isRef && (current.type.storageType == ValueType::Void || target.type.storageType == ValueType::Void))
+            if(current.isRef && target.isRef &&
+               (current.type.storageType == ValueType::Void || target.type.storageType == ValueType::Void))
                 return true;
             return current.type.isScalar() && target.type.isScalar();
         }
@@ -547,15 +556,17 @@ namespace BraneScript
             return cost;
         }
 
-        bool castSame(std::unique_ptr<ExpressionContext>& left, std::unique_ptr<ExpressionContext>& right, std::string& err)
+        bool
+        castSame(std::unique_ptr<ExpressionContext>& left, std::unique_ptr<ExpressionContext>& right, std::string& err)
         {
             left.reset(asRValue(left.release()));
             right.reset(asRValue(right.release()));
 
-            if(left->returnType == right->returnType)
+            if(left->returnType.sameBaseType(right->returnType))
                 return true;
 
-            if(calculateCastCost(left->returnType, right->returnType) < calculateCastCost(right->returnType, left->returnType))
+            if(calculateCastCost(left->returnType, right->returnType) <
+               calculateCastCost(right->returnType, left->returnType))
             {
                 auto* oldLeft = left.release();
                 auto* newLeft = resolveCast(oldLeft, right->returnType, err);
@@ -668,11 +679,13 @@ namespace BraneScript
 
                 TemplateArgs tempArgs = std::any_cast<TemplateArgs>(visitTemplateArgs(tempArgsCtx));
 
-                auto tempFunction = dynamic_cast<FunctionContext*>(getTemplateInstance(name, tempArgs, TemplateHandle::Function));
+                auto tempFunction =
+                    dynamic_cast<FunctionContext*>(getTemplateInstance(name, tempArgs, TemplateHandle::Function));
                 for(auto& e : _result.scriptContext->exports)
                 {
                     std::string longID = e.first + "::" + name;
-                    tempFunction = dynamic_cast<FunctionContext*>(getTemplateInstance(longID, tempArgs, TemplateHandle::Function));
+                    tempFunction =
+                        dynamic_cast<FunctionContext*>(getTemplateInstance(longID, tempArgs, TemplateHandle::Function));
                     if(tempFunction)
                         break;
                 }
@@ -835,8 +848,12 @@ namespace BraneScript
         }
 
       public:
-        Analyzer(StaticAnalyzer& analyzer, StaticAnalyzer::AnalyzationContext& result, bool extractOnlyIdentifiers, bool allowUnsafe)
-            : _analyzer(analyzer), _result(result), _extractOnlyIdentifiers(extractOnlyIdentifiers), _allowUnsafe(allowUnsafe) {};
+        Analyzer(StaticAnalyzer& analyzer,
+                 StaticAnalyzer::AnalyzationContext& result,
+                 bool extractOnlyIdentifiers,
+                 bool allowUnsafe)
+            : _analyzer(analyzer), _result(result), _extractOnlyIdentifiers(extractOnlyIdentifiers),
+              _allowUnsafe(allowUnsafe){};
 
         std::any visitExprStatement(braneParser::ExprStatementContext* ctx) override
         {
@@ -1322,7 +1339,8 @@ namespace BraneScript
                     if(auto parentLib = getLast<LibraryContext>())
                     {
                         auto textRange = toRange(ctx).getBoundsForText(*_rawText);
-                        std::string templateText = _rawText->substr(textRange.first, textRange.second - textRange.first);
+                        std::string templateText =
+                            _rawText->substr(textRange.first, textRange.second - textRange.first);
                         parentLib->templateDefinitions[id] = templateText;
                     }
                 }
@@ -1450,7 +1468,7 @@ namespace BraneScript
             if(!_extractOnlyIdentifiers && !_allowUnsafe && i.library == "unsafe")
                 recordError(ctx->library, "Unsafe code is not allowed for this script");
 
-            lastNode()->as<ScriptContext>()->imports[i.library] =  std::make_unique<ImportContext>(std::move(i));
+            lastNode()->as<ScriptContext>()->imports[i.library] = std::make_unique<ImportContext>(std::move(i));
             return {};
         }
 
@@ -1790,7 +1808,7 @@ namespace BraneScript
                 retCtx->value = asExpr(visit(ctx->expression()));
 
             auto& functionType = lastNode()->getParent<FunctionContext>()->returnType;
-            if(retCtx->value && retCtx->value->returnType != functionType)
+            if(retCtx->value && !retCtx->value->returnType.sameBaseType(functionType))
             {
                 std::string castError;
                 if(auto castCtx = resolveCast(retCtx->value.release(), functionType, castError))
@@ -1906,8 +1924,7 @@ namespace BraneScript
             if(lValue->returnType.type != rValue->returnType.type)
             {
                 std::string error;
-                if(auto castCtx =
-                       resolveCast(rValue.release(), lValue->returnType, error))
+                if(auto castCtx = resolveCast(rValue.release(), lValue->returnType, error))
                     rValue.reset(castCtx);
                 else
                     recordError(ctx->rValue, error);
@@ -1989,7 +2006,8 @@ namespace BraneScript
             auto constCtx = new ConstStringContext{};
             initDoc(constCtx, ctx);
             constCtx->returnType.type.structCtx =
-                dynamic_cast<StructContext*>(getIdentifierContext("BraneScript")->findIdentifier("string"));
+                dynamic_cast<StructContext*>(getIdentifierContext("string")->as<LibrarySet>()->findIdentifier(
+                    "string", IDSearchOptions_ChildrenOnly));
             if(!constCtx->returnType.type.structCtx)
                 recordError(ctx, "To use the string type, the BraneScript library must be imported.");
             constCtx->value = ctx->getText();
@@ -2077,9 +2095,9 @@ namespace BraneScript
                 std::string err;
                 castSame(left, right, err);
                 RETURN_EXPR(new NativeArithmeticContext((op == "+") ? NativeArithmeticContext::ADD
-                                                               : NativeArithmeticContext::SUB,
-                                                   left.release(),
-                                                   right.release()));
+                                                                    : NativeArithmeticContext::SUB,
+                                                        left.release(),
+                                                        right.release()));
             }
 
             auto callCtx = new FunctionCallContext{};
@@ -2108,9 +2126,9 @@ namespace BraneScript
                 std::string err;
                 castSame(left, right, err);
                 RETURN_EXPR(new NativeArithmeticContext((op == "*") ? NativeArithmeticContext::MUL
-                                                               : NativeArithmeticContext::DIV,
-                                                   left.release(),
-                                                   right.release()));
+                                                                    : NativeArithmeticContext::DIV,
+                                                        left.release(),
+                                                        right.release()));
             }
 
             auto callCtx = new FunctionCallContext{};
@@ -2651,6 +2669,13 @@ namespace BraneScript
             if(entry.path().extension() != ".bs")
                 continue;
             load(entry.path().generic_string(), false);
+            auto& context = _analyzationContexts.at(entry.path().generic_string());
+            if(!context->errors.empty())
+            {
+                std::cout << "Errors in loaded file " << entry.path().generic_string() << std::endl;
+                for(auto& err : context->errors)
+                    std::cout << "(" << err.range.start.line << ", " << err.range.start.charPos << ") " << err.message << std::endl;
+            }
         }
         _workspaceRoots.push_back(path);
     }

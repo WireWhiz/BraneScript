@@ -123,8 +123,7 @@ namespace BraneScript
             });
 
 
-        NativeLibrary unsafeLib;
-        unsafeLib.identifier = "unsafe";
+        NativeLibrary unsafeLib("unsafe");
         unsafeLib.addFunction("unsafe::malloc(uint)", (FunctionHandle<void*, int>)[](int size){
             _scriptMallocDiff++;
             return ::operator new(size);

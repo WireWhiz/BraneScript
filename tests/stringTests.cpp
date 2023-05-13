@@ -4,13 +4,14 @@
 #include "script.h"
 #include "scriptRuntime.h"
 #include "staticAnalysis/staticAnalyzer.h"
+#include "nativeTypes/BSString.h"
 
 using namespace BraneScript;
 
 TEST(BraneScript, Strings)
 {
     std::string testString = R"(
-    link "BraneScript";
+    link "string";
     export as "tests"
     {
         string testConst()
@@ -42,37 +43,38 @@ TEST(BraneScript, Strings)
     checkCompileErrors(analyzer, testString);
 
     llvm::LLVMContext ctx;
-    auto ir = analyzer.getCtx("test")->scriptContext->compile(&ctx, false, true);
+    auto ir = analyzer.getCtx("test")->scriptContext->compile(&ctx, false);
 
     ScriptRuntime rt;
+    rt.loadLibrary(BSString::library());
     Script* testScript = rt.loadScript(ir);
     ASSERT_TRUE(testScript);
 
-    std::string argA = "a";
-    std::string argB = "b";
+    BSString argA = "a";
+    BSString argB = "b";
 
-    std::string str;
-    auto constStr = testScript->getFunction<void, std::string*>("tests::testConst(ref BraneScript::string)");
+    BSString str;
+    auto constStr = testScript->getFunction<void, BSString&>("tests::testConst(ref string::string)");
     ASSERT_TRUE(constStr);
-    constStr(&str);
-    EXPECT_STREQ(str.c_str(), "Hello World!");
+    constStr(str);
+    EXPECT_STREQ(str.data(), "Hello World!");
 
     auto returnE = testScript->getFunction<char>("tests::returnE()");
     ASSERT_TRUE(returnE);
     EXPECT_EQ('E', returnE());
 
-    auto concat = testScript->getFunction<void, std::string*, std::string*, std::string*>("tests::concat(ref BraneScript::string,ref BraneScript::string,ref BraneScript::string)");
+    auto concat = testScript->getFunction<void, BSString&, BSString&, BSString&>("tests::concat(ref string::string,ref string::string,ref string::string)");
     ASSERT_TRUE(concat);
-    concat(&str, &argA, &argB);
-    EXPECT_STREQ(str.c_str(), "ab");
+    concat(str, argA, argB);
+    EXPECT_STREQ(str.data(), "ab");
 
-    auto strEQ = testScript->getFunction<bool, std::string*, std::string*>("tests::strEQ(ref BraneScript::string,ref BraneScript::string)");
+    auto strEQ = testScript->getFunction<bool, BSString&, BSString&>("tests::strEQ(ref string::string,ref string::string)");
     ASSERT_TRUE(strEQ);
-    EXPECT_TRUE(strEQ(&argA, &argA));
-    EXPECT_FALSE(strEQ(&argA, &argB));
+    EXPECT_TRUE(strEQ(argA, argA));
+    EXPECT_FALSE(strEQ(argA, argB));
 
-    auto strNEQ = testScript->getFunction<bool, std::string*, std::string*>("tests::strNEQ(ref BraneScript::string,ref BraneScript::string)");
+    auto strNEQ = testScript->getFunction<bool, BSString&, BSString&>("tests::strNEQ(ref string::string,ref string::string)");
     ASSERT_TRUE(strNEQ);
-    EXPECT_FALSE(strNEQ(&argA, &argA));
-    EXPECT_TRUE(strNEQ(&argA, &argB));
+    EXPECT_FALSE(strNEQ(argA, argA));
+    EXPECT_TRUE(strNEQ(argA, argB));
 }

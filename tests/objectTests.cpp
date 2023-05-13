@@ -187,8 +187,7 @@ TEST(BraneScript, Objects)
     EXPECT_EQ(testStruct1Def.memberVars()[1].offset, offsetof(TestStruct1, a));
     EXPECT_EQ(testStruct1Def.memberVars()[2].offset, offsetof(TestStruct1, b));
 
-    NativeLibrary constructors;
-    constructors.identifier = "BraneScript";
+    NativeLibrary constructors("BraneScript");
     constructors.addFunction("BraneScript::TestStruct1::_construct(ref BraneScript::TestStruct1)",  (void*)(FunctionHandle<void, void*>)[](void* data) {
         new(data) TestStruct1();
         constructorCalled++;
