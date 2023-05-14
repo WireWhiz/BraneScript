@@ -91,14 +91,16 @@ namespace BraneScript
 
         std::vector<LabeledValueContext*> globals;
         robin_hood::unordered_map<std::string, LibraryContext*> _linkedLibraries;
-        robin_hood::unordered_map<std::string, TypeContext> _nativeTypes = {{"bool", {"bool", ValueType::Bool}},
-                                                                            {"char", {"char", ValueType::Char}},
-                                                                            {"uint", {"uint", ValueType::UInt32}},
-                                                                            {"uint64", {"uint64", ValueType::UInt64}},
-                                                                            {"int", {"int", ValueType::Int32}},
-                                                                            {"int64", {"int64", ValueType::Int64}},
-                                                                            {"float", {"float", ValueType::Float32}},
-                                                                            {"double", {"double", ValueType::Float64}}};
+        robin_hood::unordered_map<std::string, TypeContext> _nativeTypes = {
+            {"bool", {"bool", ValueType::Bool}},
+            {"char", {"char", ValueType::Char}},
+            {"uint", {"uint", ValueType::UInt32}},
+            {"uint64", {"uint64", ValueType::UInt64}},
+            {"int", {"int", ValueType::Int32}},
+            {"int64", {"int64", ValueType::Int64}},
+            {"float", {"float", ValueType::Float32}},
+            {"double", {"double", ValueType::Float64}},
+            {"FuncRef", {"FuncRef", ValueType::FuncRef}}};
 
         FunctionCallTree callTree;
 
@@ -178,6 +180,8 @@ namespace BraneScript
         robin_hood::unordered_map<std::string, std::vector<std::unique_ptr<TemplateHandle>>> _registeredTemplates;
         std::list<MappedTemplateArgs> _templateArgs;
         bool _instantiatingTemplate = false;
+
+        robin_hood::unordered_map<std::string, std::vector<ValueContext>> _funcRefArgTypes;
 
         TemplateArgContext* getTemplateArg(const std::string& id)
         {
@@ -507,7 +511,32 @@ namespace BraneScript
             {
                 output.storageType = _nativeTypes.at(output.identifier).storageType;
                 if(ctx->template_)
-                    recordError(ctx->child, "Native type " + output.identifier + " is not a template");
+                {
+                    if(output.storageType != ValueType::FuncRef)
+                    {
+                        recordError(ctx->child, "Native type " + output.identifier + " is not a template");
+                        return output;
+                    }
+                    auto args = std::any_cast<TemplateArgs>(visitTemplateArgs(ctx->template_));
+                    if(args.args.empty())
+                    {
+                        recordError(ctx->child, output.identifier + " expects at least 1 template argument");
+                        return output;
+                    }
+                    output.identifier = output.identifier + templateArgsToString(args);
+
+                    std::vector<ValueContext> argTypes;
+                    for(auto& arg : args.args)
+                    {
+                        if(arg.type != TemplateArgs::Type::Typedef)
+                        {
+                            recordError(ctx, output.identifier + " expects only typedef arguments");
+                            return output;
+                        }
+                        argTypes.push_back(arg.typeDef);
+                    }
+                    _funcRefArgTypes[output.identifier] = std::move(argTypes);
+                }
                 if(ctx->child)
                     recordError(ctx->child, "Native type " + output.identifier + " has no members");
                 return output;
@@ -720,7 +749,10 @@ namespace BraneScript
             return castCall;
         }
 
-        ExpressionContext* resolveOperator(const std::string opr, std::string& error, std::unique_ptr<ExpressionContext> lValue, std::unique_ptr<ExpressionContext> rValue = nullptr)
+        ExpressionContext* resolveOperator(const std::string opr,
+                                           std::string& error,
+                                           std::unique_ptr<ExpressionContext> lValue,
+                                           std::unique_ptr<ExpressionContext> rValue = nullptr)
         {
             size_t errorPos = error.size();
             auto oprCall = new FunctionCallContext{};
@@ -742,10 +774,12 @@ namespace BraneScript
             if(!oprCall->function)
             {
                 if(oprCall->arguments.size() == 1)
-                    error = "No operator \"" + opr + "\" found with argument " + oprCall->arguments[0]->returnType.signature() + "!\n";
+                    error = "No operator \"" + opr + "\" found with argument " +
+                            oprCall->arguments[0]->returnType.signature() + "!\n";
                 else
-                    error = "No operator \"" + opr + "\" found with arguments " + oprCall->arguments[0]->returnType.signature() +
-                            " and " + oprCall->arguments[1]->returnType.signature() + "!\n";
+                    error = "No operator \"" + opr + "\" found with arguments " +
+                            oprCall->arguments[0]->returnType.signature() + " and " +
+                            oprCall->arguments[1]->returnType.signature() + "!\n";
                 delete oprCall;
                 return nullptr;
             }
@@ -1838,6 +1872,8 @@ namespace BraneScript
                 recordError(ctx->lValue, "Expression is not an lValue!");
             if(lValue->returnType.isConst)
                 recordError(ctx->lValue, "Can not modify a constant value!");
+            if(lValue->returnType.type.storageType == ValueType::FuncRef)
+                recordError(ctx->lValue, "Can not assign to functions, use the <- operator if you are attempting to retarget a reference.");
 
             auto rValue = asExpr(visit(ctx->rValue));
             assert(rValue);
@@ -1862,7 +1898,7 @@ namespace BraneScript
             initDoc(assignmentCtx, ctx);
             auto lValue = asExpr(visit(ctx->lValue));
             assert(lValue);
-            if(!lValue->returnType.isRef)
+            if(!lValue->returnType.isRef && lValue->returnType.type.storageType != ValueType::FuncRef)
                 recordError(ctx->lValue, "Expression is not a reference!");
             if(!lValue->returnType.isLValue)
                 recordError(ctx->lValue, "Expression is not an lValue!");
@@ -1871,10 +1907,45 @@ namespace BraneScript
 
             auto rValue = asExpr(visit(ctx->rValue));
             assert(rValue);
-            if(!rValue->returnType.isRef || rValue->returnType.isLValue)
+
+            if(auto funcOverrides = rValue->as<FunctionOverridesContext>())
+            {
+                if(lValue->returnType.type.storageType != ValueType::FuncRef)
+                    recordError(ctx->rValue, "Can not reference a value of different type!");
+                const auto& argTypes = _funcRefArgTypes.at(lValue->returnType.type.identifier);
+                auto func = funcOverrides->bestMatch(
+                    {argTypes.begin() + 1, argTypes.end()},
+                    [](auto from, auto to) { return false; },
+                    _enforceConstexpr ? FunctionOverridesContext::Constexpr : FunctionOverridesContext::None);
+                if(!func)
+                {
+                    std::string error = "Could not find override of function \"" + funcOverrides->longId();
+                    error += "\" with arguments: ";
+                    for(auto& arg : argTypes)
+                        error += arg.signature() + ", ";
+                    if(!funcOverrides->overrides.empty())
+                    {
+                        error += "\nDid you mean to use one of these overrides?\n-----\n";
+                        for(auto o : funcOverrides->overrides)
+                            error += functionSig(o->longId(), o->arguments) + "\n";
+                        error += "-----";
+                        if(_enforceConstexpr)
+                            error += "\nVerify the functions you reference in a constexpr scope are also constexpr.";
+                    }
+                    recordError(ctx->rValue, error);
+                    popDoc(assignmentCtx);
+                    RETURN_STMT(assignmentCtx);
+                }
+                rValue.reset(new FunctionReferenceContext(func));
+                if(isLocal(func))
+                    callTree.addDependency(lastNode()->getParent<FunctionContext>(), func);
+            }
+
+            if(!(rValue->returnType.isRef || lValue->returnType.type.storageType == ValueType::FuncRef || rValue->returnType.isLValue))
                 recordError(ctx->rValue, "Can not reference a temporary value!");
             if(lValue->returnType.type != rValue->returnType.type)
                 recordError(ctx, "Can not reference a value of different type!");
+
             assignmentCtx->setArgs(lValue.release(), rValue.release());
             popDoc(assignmentCtx);
             RETURN_STMT(assignmentCtx);
@@ -2022,7 +2093,7 @@ namespace BraneScript
 
             std::string error;
             if(auto callCtx = resolveOperator(op, error, std::move(left), std::move(right)))
-               RETURN_EXPR(callCtx);
+                RETURN_EXPR(callCtx);
             recordError(ctx->opr, error);
             return NULL_EXPR;
         }
@@ -2192,7 +2263,7 @@ namespace BraneScript
                     idNode = idNode->child;
                 }
 
-                //If this function is a template, getValueContext will have already instantiated it
+                // If this function is a template, getValueContext will have already instantiated it
                 if(idNode->template_)
                 {
                     auto funcOverrides = new FunctionOverridesContext({funcContext});
@@ -2218,7 +2289,6 @@ namespace BraneScript
                     RETURN_EXPR(funcOverrides);
                 delete funcOverrides;
             }
-
 
 
             recordError(ctx, ctx->getText() + " is not an expression!");
@@ -2390,9 +2460,43 @@ namespace BraneScript
                         RETURN_EXPR(callCtx);
                     }
                 }
+
+                popDoc(callCtx);
+                RETURN_EXPR(callCtx);
             }
 
-            // TODO call function pointers here
+            if(source->returnType.type.storageType != ValueType::FuncRef)
+            {
+                recordError(ctx->expression(), "expected function or function reference");
+                popDoc(callCtx);
+                RETURN_EXPR(callCtx);
+            }
+
+            const auto& ptrArgs = _funcRefArgTypes.at(source->returnType.type.identifier);
+            if(ptrArgs.size() != callCtx->arguments.size() + 1)
+            {
+                recordError(ctx->argumentPack(), "expected " + std::to_string(ptrArgs.size() - 1) + " arguments");
+                popDoc(callCtx);
+                RETURN_EXPR(callCtx);
+            }
+            for(int i = 0; i < callCtx->arguments.size(); ++i)
+            {
+                if(callCtx->arguments[i]->returnType.sameBaseType(ptrArgs[i + 1]))
+                    continue;
+                std::string error;
+                auto castCtx = resolveCast(callCtx->arguments[i].get(), ptrArgs[i + 1], error);
+                if(!castCtx)
+                {
+                    recordError(callCtx->arguments[i]->range, error);
+                    popDoc(callCtx);
+                    RETURN_EXPR(callCtx);
+                }
+                callCtx->arguments[i].release();
+                callCtx->arguments[i].reset(castCtx);
+            }
+
+            callCtx->returnType = ptrArgs[0];
+            callCtx->functionRef = std::move(source);
 
             popDoc(callCtx);
             RETURN_EXPR(callCtx);

@@ -211,6 +211,8 @@ namespace BraneScript
                     return llvm::Type::getDoublePtrTy(*llvmCtx);
                 else
                     return llvm::Type::getDoubleTy(*llvmCtx);
+            case ValueType::FuncRef:
+                return llvm::Type::getInt32PtrTy(*llvmCtx);
             default:
                 throw std::runtime_error("Invalid type requested");
         }
@@ -283,9 +285,11 @@ namespace BraneScript
     llvm::Value* ASTContext::convertToType(llvm::Value* value, const ValueContext& valueCtx, bool forceToValue)
     {
         auto valueType = value->getType();
+        auto targetType = getLLVMType(valueCtx);
+        if(valueType == targetType)
+            return value;
         if(valueType->isPointerTy() && (!valueCtx.isRef || forceToValue) && !valueCtx.type.structCtx)
         {
-            auto targetType = getLLVMType(valueCtx);
             assert(valueType->getContainedType(0) == targetType);
             return builder.CreateLoad(targetType, value);
         }
@@ -750,7 +754,7 @@ namespace BraneScript
 
     void RefAssignmentContext::setArgs(ExpressionContext* lValue, ExpressionContext* rValue)
     {
-        assert(lValue->returnType.isRef && (rValue->returnType.isLValue || rValue->returnType.isRef));
+        assert((lValue->returnType.isRef || lValue->returnType.type.storageType == ValueType::FuncRef) && (rValue->returnType.isLValue || rValue->returnType.isRef));
         this->lValue.reset(lValue);
         this->rValue.reset(rValue);
     }
@@ -1063,45 +1067,6 @@ namespace BraneScript
          }
 
          return bestMatch;
-
-         /*if(!bestMatch)
-         {
-            error += "Could not find override of function \"" + (scope ? scope->longId() + "::" + name : name);
-            if(tempArgsCtx)
-            {
-                TemplateArgs tempArgs = std::any_cast<TemplateArgs>(visitTemplateArgs(tempArgsCtx));
-                error += templateArgsToString(tempArgs);
-            }
-            error += "\" with arguments: ";
-            for(auto& arg : args)
-                error += arg.signature() + ", ";
-            if(!overrides.empty())
-            {
-                error += "\nDid you mean to use one of these overrides?\n-----\n";
-                for(auto o : overrides)
-                    error += functionSig(o->longId(), o->arguments) + "\n";
-                error += "-----";
-                if(_enforceConstexpr)
-                    error += "\nVerify the functions you call in a constexpr scope are also constexpr.";
-            }
-            return false;
-         }*/
-
-         /*if(castCount)
-         {
-            for(size_t i = 0; i < args.size(); ++i)
-            {
-                if(bestMatch->arguments[i]->type == args[i].type)
-                    continue;
-
-                // Find the cast operator, should never return false ideally, but I can see configuration bugs
-                // triggering this in the future.
-                if(auto* castCtx = resolveCast(context->arguments[i].release(), *bestMatch->arguments[i], error))
-                    context->arguments[i].reset(castCtx);
-                else
-                    return false;
-            }
-         }*/
     }
 
     llvm::Value* FunctionOverridesContext::createAST(ASTContext& ctx) const
@@ -1116,6 +1081,44 @@ namespace BraneScript
             return "";
         return overrides[0]->identifier.text;
     }
+
+    FunctionReferenceContext::FunctionReferenceContext(FunctionContext* function) : function(function)
+    {
+        std::string tempArgs = "<";
+        tempArgs += function->returnType.signature() + (function->arguments.empty() ? "" : ",");
+        for(auto arg = function->arguments.begin(); arg != function->arguments.end(); ++arg)
+        {
+            tempArgs += ValueContext(**arg).signature();
+            if(arg + 1 != function->arguments.end())
+                tempArgs += ",";
+        }
+        tempArgs += ">";
+
+        returnType.type = {
+            "FuncRef" + tempArgs,
+            ValueType::FuncRef,
+            nullptr
+        };
+        returnType.isRef = true;
+        returnType.isConst = true;
+    }
+
+    bool FunctionReferenceContext::isConstexpr() const
+    {
+        return false;
+    }
+
+    llvm::Value* FunctionReferenceContext::createAST(ASTContext& ctx) const
+    {
+        auto func = ctx.functions.at(function->signature());
+        return llvm::ConstantExpr::getBitCast(func, ctx.getLLVMType(returnType));
+    }
+
+    DocumentContext* FunctionReferenceContext::deepCopy(const std::function<DocumentContext*(DocumentContext*)>& callback) const
+    {
+        return callback(new FunctionReferenceContext{*this});
+    }
+
 
     MemberAccessContext::MemberAccessContext(ExpressionContext* base, StructContext* baseType, size_t member)
     {
@@ -1570,9 +1573,6 @@ namespace BraneScript
 
     llvm::Value* FunctionCallContext::createAST(ASTContext& ctx) const
     {
-        auto funcItr = ctx.functions.find(function->signature());
-        assert(funcItr != ctx.functions.end());
-        llvm::Function* func = funcItr->second;
 
         bool argRet = !returnType.isRef && returnType.type.structCtx;
         std::vector<llvm::Value*> args;
@@ -1591,11 +1591,46 @@ namespace BraneScript
                 ctx.builder.CreateCall(constructor->second, args[0]);
             }
         }
-        size_t argIndex = 0;
-        for(auto& arg : arguments)
-            args.push_back(ctx.convertToType(arg->createAST(ctx), *function->arguments[argIndex++]));
 
-        auto retVal = ctx.builder.CreateCall(func, args);
+
+        llvm::Value* retVal = nullptr;
+        if(function)
+        {
+            size_t argIndex = 0;
+            for(auto& arg : arguments)
+                args.push_back(ctx.convertToType(arg->createAST(ctx), *function->arguments[argIndex++]));
+            auto funcItr = ctx.functions.find(function->signature());
+            assert(funcItr != ctx.functions.end());
+            llvm::Function* func = funcItr->second;
+            retVal = ctx.builder.CreateCall(func, args);
+        }
+        else
+        {
+            assert(functionRef);
+
+            std::vector<llvm::Type*> argTypes;
+            for(auto& arg : arguments)
+            {
+                argTypes.push_back(ctx.getLLVMType(arg->returnType));
+                args.push_back(ctx.convertToType(arg->createAST(ctx), arg->returnType));
+            }
+
+            auto retType = argRet ? ctx.getLLVMType({}) : ctx.getLLVMType(returnType);
+            llvm::FunctionType* funcType = llvm::FunctionType::get(retType, argTypes, false);
+
+            auto funcRef = functionRef->createAST(ctx);
+            if(funcRef->getType()->getContainedType(0)->isPointerTy())
+            {
+                funcRef = ctx.builder.CreateLoad(ctx.getLLVMType(functionRef->returnType), funcRef);
+                funcRef = ctx.builder.CreatePointerCast(funcRef, llvm::PointerType::get(funcType, 0));
+            }
+            else if(funcRef->getType()->getContainedType(0)->isFunctionTy())
+                funcRef = ctx.builder.CreateBitCast(funcRef, llvm::PointerType::get(funcType, 0));
+
+            retVal = ctx.builder.CreateCall(funcType,  funcRef, args);
+        }
+
+
         if(!returnType.isRef && returnType.type.structCtx)
             return args[0];
         return retVal;

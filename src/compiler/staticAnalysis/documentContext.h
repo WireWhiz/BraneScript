@@ -526,6 +526,17 @@ namespace BraneScript
 
     };
 
+    struct FunctionReferenceContext : public ExpressionContext
+    {
+        FunctionContext* function;
+        explicit FunctionReferenceContext(FunctionContext* function);
+
+        bool isConstexpr() const override;
+        llvm::Value* createAST(ASTContext& ctx) const override;
+
+        DocumentContext* deepCopy(const std::function<DocumentContext*(DocumentContext*)>& callback) const override;
+    };
+
     struct MemberAccessContext : public ExpressionContext
     {
         std::unique_ptr<ExpressionContext> baseExpression;
@@ -617,6 +628,7 @@ namespace BraneScript
     struct FunctionCallContext : public ExpressionContext
     {
         FunctionContext* function = nullptr;
+        std::unique_ptr<ExpressionContext> functionRef;
         std::vector<std::unique_ptr<ExpressionContext>> arguments;
 
         bool isConstexpr() const override;
