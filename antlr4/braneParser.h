@@ -622,8 +622,10 @@ public:
 
     braneParser::ExpressionContext *base = nullptr;
     antlr4::Token *member = nullptr;
+    braneParser::TemplateArgsContext *template_ = nullptr;
     ExpressionContext *expression();
     antlr4::tree::TerminalNode *ID();
+    TemplateArgsContext *templateArgs();
 
     virtual std::any accept(antlr4::tree::ParseTreeVisitor *visitor) override;
   };
@@ -646,16 +648,6 @@ public:
     DeclContext(ExpressionContext *ctx);
 
     DeclarationContext *declaration();
-
-    virtual std::any accept(antlr4::tree::ParseTreeVisitor *visitor) override;
-  };
-
-  class  MakeRefContext : public ExpressionContext {
-  public:
-    MakeRefContext(ExpressionContext *ctx);
-
-    braneParser::ExpressionContext *source = nullptr;
-    ExpressionContext *expression();
 
     virtual std::any accept(antlr4::tree::ParseTreeVisitor *visitor) override;
   };
@@ -748,21 +740,6 @@ public:
     virtual std::any accept(antlr4::tree::ParseTreeVisitor *visitor) override;
   };
 
-  class  MemberFunctionCallContext : public ExpressionContext {
-  public:
-    MemberFunctionCallContext(ExpressionContext *ctx);
-
-    braneParser::ExpressionContext *base = nullptr;
-    antlr4::Token *name = nullptr;
-    braneParser::TemplateArgsContext *template_ = nullptr;
-    ArgumentPackContext *argumentPack();
-    ExpressionContext *expression();
-    antlr4::tree::TerminalNode *ID();
-    TemplateArgsContext *templateArgs();
-
-    virtual std::any accept(antlr4::tree::ParseTreeVisitor *visitor) override;
-  };
-
   class  SizeOfPackContext : public ExpressionContext {
   public:
     SizeOfPackContext(ExpressionContext *ctx);
@@ -777,9 +754,9 @@ public:
   public:
     FunctionCallContext(ExpressionContext *ctx);
 
-    braneParser::ScopedIDContext *id = nullptr;
+    braneParser::ExpressionContext *overrides = nullptr;
     ArgumentPackContext *argumentPack();
-    ScopedIDContext *scopedID();
+    ExpressionContext *expression();
 
     virtual std::any accept(antlr4::tree::ParseTreeVisitor *visitor) override;
   };
@@ -807,7 +784,7 @@ public:
   public:
     IdContext(ExpressionContext *ctx);
 
-    antlr4::tree::TerminalNode *ID();
+    ScopedIDContext *scopedID();
 
     virtual std::any accept(antlr4::tree::ParseTreeVisitor *visitor) override;
   };

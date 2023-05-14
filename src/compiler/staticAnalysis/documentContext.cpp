@@ -384,6 +384,40 @@ namespace BraneScript
         return isRef == o.isRef;
     }
 
+    uint32_t ValueContext::castCost(const ValueContext& target) const
+    {
+        /* Costs subject to change, I just threw random values here. Generally I went with lower costs on things
+         * that preserve data, and much higher costs on things that have a chance of loosing data.
+         */
+
+        uint32_t cost = 0;
+        // Very minor cost to dereferencing, since we want to favor references
+        if(isRef && !target.isRef)
+            cost += 1;
+        // Prefer to keep things mutable if possible
+        if(!isConst && target.isConst)
+            cost += 1;
+
+        // Prefer up-casting to down-casting
+        if(type.size() < target.type.size())
+            cost += 2;
+        else if(type.size() > target.type.size())
+            cost += 20;
+
+        // Prefer casting from unsigned integers to signed integers over casts to floats, but prefer casting signed
+        // ints to floats
+        if(type.isUnsigned() && !target.type.isUnsigned())
+            cost += 7;
+        else if(!type.isUnsigned() && target.type.isUnsigned())
+            cost += 15;
+        if(type.isInt() && target.type.isFloat())
+            cost += 7;
+        // Avoid casts from floats to ints like the plague (when implicit)
+        if(type.isFloat() && target.type.isInt())
+            cost += 30;
+        return cost;
+    }
+
     std::string LabeledValueContext::signature() const { return ValueContext::signature() + " " + identifier.text; }
 
     std::string LabeledValueContext::longId() const
@@ -960,6 +994,129 @@ namespace BraneScript
 
     llvm::Value* LabeledValueReferenceContext::createAST(ASTContext& ctx) const { return ctx.findValue(identifier); }
 
+    FunctionOverridesContext::FunctionOverridesContext(std::vector<FunctionContext*> overrides) : overrides(std::move(overrides))
+    {
+    }
+
+    bool FunctionOverridesContext::isConstexpr() const { return false; }
+
+    DocumentContext*
+    FunctionOverridesContext::deepCopy(const std::function<DocumentContext*(DocumentContext*)>& callback) const
+    {
+         return callback(new FunctionOverridesContext{overrides});
+    }
+
+    FunctionContext* FunctionOverridesContext::bestMatch(const std::vector<ValueContext>& args,
+                                                         const CastCallback& canImplicitCast,
+                                                         MatchFlags flags) const
+    {
+        if(overrides.empty())
+            return nullptr;
+         /* We want to find the best match with the lowest amount of implicit casts. So we store the cast count for
+          * each candidate function and try to find the closest one. Cast cost is a measure of the desirability of
+          * casts the casts. For instance a cast from uint32 to uint64 is more desirable than a cast from uint32_t to
+          * a float.
+          * */
+         uint16_t bestCastCount = -1;
+         uint32_t bestCastCost = -1;
+         FunctionContext* bestMatch = nullptr;
+         for(auto f : overrides)
+         {
+            if((flags & MatchFlags::Constexpr) && !f->isConstexpr)
+                continue;
+
+            uint8_t castCount = 0;
+            uint16_t castCost = 0;
+
+            if(f->arguments.size() != args.size())
+                    continue;
+
+            bool argsMatch = true;
+            for(size_t i = 0; i < args.size(); ++i)
+            {
+                if(f->arguments[i]->type != args[i].type)
+                {
+                    if(!canImplicitCast(*f->arguments[i], args[i]))
+                    {
+                        argsMatch = false;
+                        break;
+                    }
+                    castCount++;
+                    castCost += args[i].castCost(*f->arguments[i]);
+                }
+                // Honor constness
+                if(args[i].isConst && f->arguments[i]->isRef && !f->arguments[i]->isConst)
+                {
+                    argsMatch = false;
+                    break;
+                }
+            }
+            if(!argsMatch)
+                continue;
+            // This is the best match if it requires fewer casts or has the same amount and just costs lest
+            if(castCount < bestCastCount || (castCount == bestCastCount && bestCastCost < castCost))
+            {
+                bestMatch = f;
+                bestCastCount = castCount;
+                bestCastCost = castCost;
+            }
+         }
+
+         return bestMatch;
+
+         /*if(!bestMatch)
+         {
+            error += "Could not find override of function \"" + (scope ? scope->longId() + "::" + name : name);
+            if(tempArgsCtx)
+            {
+                TemplateArgs tempArgs = std::any_cast<TemplateArgs>(visitTemplateArgs(tempArgsCtx));
+                error += templateArgsToString(tempArgs);
+            }
+            error += "\" with arguments: ";
+            for(auto& arg : args)
+                error += arg.signature() + ", ";
+            if(!overrides.empty())
+            {
+                error += "\nDid you mean to use one of these overrides?\n-----\n";
+                for(auto o : overrides)
+                    error += functionSig(o->longId(), o->arguments) + "\n";
+                error += "-----";
+                if(_enforceConstexpr)
+                    error += "\nVerify the functions you call in a constexpr scope are also constexpr.";
+            }
+            return false;
+         }*/
+
+         /*if(castCount)
+         {
+            for(size_t i = 0; i < args.size(); ++i)
+            {
+                if(bestMatch->arguments[i]->type == args[i].type)
+                    continue;
+
+                // Find the cast operator, should never return false ideally, but I can see configuration bugs
+                // triggering this in the future.
+                if(auto* castCtx = resolveCast(context->arguments[i].release(), *bestMatch->arguments[i], error))
+                    context->arguments[i].reset(castCtx);
+                else
+                    return false;
+            }
+         }*/
+    }
+
+    llvm::Value* FunctionOverridesContext::createAST(ASTContext& ctx) const
+    {
+         assert(false);
+         return nullptr;
+    }
+
+    std::string FunctionOverridesContext::longId() const
+    {
+         if(overrides.empty())
+            return "";
+        return overrides[0]->identifier.text;
+    }
+
     MemberAccessContext::MemberAccessContext(ExpressionContext* base, StructContext* baseType, size_t member)
     {
         baseExpression.reset(base);
@@ -1465,11 +1622,9 @@ namespace BraneScript
         return prefix + "::" + identifier.text;
     }
 
-    std::string FunctionContext::signature() const
+    std::string FunctionContext::argSig() const
     {
-        std::string sig = longId();
-        sig += "(";
-
+        std::string sig = "(";
         if(returnType.type.structCtx && !returnType.isRef)
         {
             auto resType = returnType;
@@ -1494,6 +1649,11 @@ namespace BraneScript
         }
         sig += ")";
         return sig;
+    }
+
+    std::string FunctionContext::signature() const
+    {
+        return longId() + argSig();
     }
 
     DocumentContext* FunctionContext::deepCopy(const std::function<DocumentContext*(DocumentContext*)>& callback) const
@@ -1752,8 +1912,7 @@ namespace BraneScript
         return DocumentContext::findIdentifier(id, searchOptions);
     }
 
-    void
-    LibraryContext::getFunction(const std::string& id, std::list<FunctionContext*>& overrides, uint8_t searchOptions)
+    void LibraryContext::getFunction(const std::string& id, std::list<FunctionContext*>& overrides, uint8_t searchOptions)
     {
         DocumentContext::getFunction(id, overrides, searchOptions);
         for(auto& f : functions)

@@ -83,6 +83,8 @@ namespace BraneScript
         // SameBaseType compares everything but isConst and isLValue
         bool sameBaseType(const ValueContext& o) const;
 
+        uint32_t castCost(const ValueContext& target) const;
+
         void operator=(const LabeledValueContext& o);
         ValueContext() = default;
         ValueContext(const LabeledValueContext& o);
@@ -499,6 +501,31 @@ namespace BraneScript
         DocumentContext* deepCopy(const std::function<DocumentContext*(DocumentContext*)>& callback) const override;
     };
 
+    struct FunctionOverridesContext : public ExpressionContext
+    {
+        std::unique_ptr<ExpressionContext> thisRef;
+        std::vector<FunctionContext*> overrides;
+        explicit FunctionOverridesContext(std::vector<FunctionContext*> overrides);
+
+        enum MatchFlags
+        {
+            None = 0,
+            Constexpr = 1
+        };
+        // CastCallback is called to check if an implicit cast is possible
+        using CastCallback = std::function<bool(const ValueContext& from, const ValueContext& to)>;
+
+        FunctionContext* bestMatch(const std::vector<ValueContext>& args,
+                                   const CastCallback& canImplicitCast,
+                                   MatchFlags flags = None) const;
+        std::string longId() const override;
+
+        bool isConstexpr() const override;
+        llvm::Value* createAST(ASTContext& ctx) const override;
+        DocumentContext* deepCopy(const std::function<DocumentContext*(DocumentContext*)>& callback) const override;
+
+    };
+
     struct MemberAccessContext : public ExpressionContext
     {
         std::unique_ptr<ExpressionContext> baseExpression;
@@ -615,6 +642,7 @@ namespace BraneScript
 
         DocumentContext* findIdentifier(const std::string& identifier, uint8_t searchOptions) override;
         std::string longId() const override;
+        std::string argSig() const;
         std::string signature() const;
 
         llvm::Value* createAST(ASTContext& ctx) const override;

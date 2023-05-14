@@ -68,7 +68,7 @@ structMember  : var=declaration ';' #memberVariable
 
 statement   : expression ';'                                                              #exprStatement
             | lValue=expression '=' rValue=expression ';'                                 #assignment
-            | lValue=expression '<-' rValue=expression ';'                                 #refAssignment
+            | lValue=expression '<-' rValue=expression ';'                                #refAssignment
             | '{' statement* '}'                                                          #scope
             | 'return' expression? ';'                                                    #return
             | 'if' '(' cond=expression ')' operation=statement ('else' elseOp=statement)? #if
@@ -86,12 +86,10 @@ expression  : INT                                                           #con
             | 'sizeof' '(' t=type ')'                                       #sizeOfType
             | 'sizeof' '...' '(' id=ID ')'                                  #sizeOfPack
             | declaration                                                   #decl
-            | id=scopedID '(' argumentPack ')'                              #functionCall
-            | base=expression '.' name=ID (template=templateArgs)? '(' argumentPack ')' #memberFunctionCall
-            | ID                                                            #id
-            | 'ref' source=expression                                       #makeRef
+            | overrides=expression '(' argumentPack ')'                     #functionCall
+            | scopedID                                                      #id
             | base=expression '[' arg=expression ']'                        #indexAccess
-            | base=expression '.' member=ID                                 #memberAccess
+            | base=expression '.' member=ID  (template=templateArgs)?       #memberAccess
             | '(' type ')' expression                                       #cast
             | left=expression opr=(MUL | DIV) right=expression              #muldiv
             | left=expression opr=(ADD | SUB) right=expression              #addsub

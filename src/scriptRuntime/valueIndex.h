@@ -27,7 +27,8 @@ namespace BraneScript
         Float64 = 8,
         Float_End      = 8,
         Scalar_End     = 8,
-        Struct  = 9
+        Struct  = 9,
+        FunctionRef = 10,
     };
     bool isValueTypeScalar(ValueType type);
     bool isValueTypeSigned(ValueType type);

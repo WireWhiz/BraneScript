@@ -163,10 +163,6 @@ public:
     return visitChildren(ctx);
   }
 
-  virtual std::any visitMakeRef(braneParser::MakeRefContext *ctx) override {
-    return visitChildren(ctx);
-  }
-
   virtual std::any visitAddsub(braneParser::AddsubContext *ctx) override {
     return visitChildren(ctx);
   }
@@ -196,10 +192,6 @@ public:
   }
 
   virtual std::any visitParen(braneParser::ParenContext *ctx) override {
-    return visitChildren(ctx);
-  }
-
-  virtual std::any visitMemberFunctionCall(braneParser::MemberFunctionCallContext *ctx) override {
     return visitChildren(ctx);
   }
 

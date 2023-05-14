@@ -453,11 +453,30 @@ namespace BraneScript
             if(ctx->template_)
             {
                 TemplateArgs args = std::any_cast<TemplateArgs>(visitTemplateArgs(ctx->template_));
-                if(auto* lib = lastNode()->as<LibraryContext>())
-                    id = lib->longId() + "::" + id;
-                else if(auto* lib = lastNode()->getParent<LibraryContext>())
-                    id = lib->longId() + "::" + id;
                 found = getTemplateInstance(id, args);
+                if(!found)
+                {
+                    std::string longId;
+                    if(auto* lib = lastNode()->as<LibraryContext>())
+                        longId = lib->longId() + "::" + id;
+                    else if(auto* lib = lastNode()->getParent<LibraryContext>())
+                        longId = lib->longId() + "::" + id;
+                    found = getTemplateInstance(longId, args);
+                }
+                if(!found)
+                {
+                    for(auto& lib : _result.scriptContext->imports)
+                    {
+                        if(!lib.second->alias.empty())
+                            continue;
+                        auto libCtx = _analyzer.getLibrary(lib.second->library);
+                        if(!libCtx)
+                            continue;
+                        found = getTemplateInstance(libCtx->longId() + "::" + id, args);
+                        if(found)
+                            break;
+                    }
+                }
                 if(!found)
                     recordError(ctx->template_, +"\"" + id + "\" is not a template!");
                 return found;
@@ -526,36 +545,6 @@ namespace BraneScript
             return current.type.isScalar() && target.type.isScalar();
         }
 
-        uint32_t calculateCastCost(const ValueContext& current, const ValueContext& target)
-        {
-            /* Costs subject to change, I just threw random values here. Generally I went with lower costs on things
-             * that preserve data, and much higher costs on things that have a chance of loosing data.
-             */
-
-            uint32_t cost = 0;
-            // Very minor cost to dereferencing, since we want to favor references
-            if(current.isRef && !target.isRef)
-                cost += 1;
-            // Prefer up-casting to down-casting
-            if(current.type.size() < target.type.size())
-                cost += 2;
-            else if(current.type.size() > target.type.size())
-                cost += 20;
-
-            // Prefer casting from unsigned integers to signed integers over casts to floats, but prefer casting signed
-            // ints to floats
-            if(current.type.isUnsigned() && !target.type.isUnsigned())
-                cost += 7;
-            else if(!current.type.isUnsigned() && target.type.isUnsigned())
-                cost += 15;
-            if(current.type.isInt() && target.type.isFloat())
-                cost += 7;
-            // Avoid casts from floats to ints like the plague (when implicit)
-            if(current.type.isFloat() && target.type.isInt())
-                cost += 30;
-            return cost;
-        }
-
         bool
         castSame(std::unique_ptr<ExpressionContext>& left, std::unique_ptr<ExpressionContext>& right, std::string& err)
         {
@@ -565,8 +554,7 @@ namespace BraneScript
             if(left->returnType.sameBaseType(right->returnType))
                 return true;
 
-            if(calculateCastCost(left->returnType, right->returnType) <
-               calculateCastCost(right->returnType, left->returnType))
+            if(left->returnType.castCost(right->returnType) < right->returnType.castCost(left->returnType))
             {
                 auto* oldLeft = left.release();
                 auto* newLeft = resolveCast(oldLeft, right->returnType, err);
@@ -589,41 +577,6 @@ namespace BraneScript
                 right.reset(newRight);
             }
             return true;
-        }
-
-        struct FunctionCompareResult
-        {
-            bool argsMatch = false;
-            uint8_t castCount = 0;
-            uint16_t castCost = 0;
-        };
-
-        FunctionCompareResult compareFunctionArgs(const FunctionContext* f, const std::vector<ValueContext>& args)
-        {
-            FunctionCompareResult result;
-            if(f->arguments.size() != args.size())
-                return result;
-            result.argsMatch = true;
-            for(size_t i = 0; i < args.size(); ++i)
-            {
-                if(f->arguments[i]->type != args[i].type)
-                {
-                    if(!implicitCastViable(*f->arguments[i], args[i]))
-                    {
-                        result.argsMatch = false;
-                        break;
-                    }
-                    result.castCount++;
-                    result.castCost += calculateCastCost(args[i], *f->arguments[i]);
-                }
-                // Honor constness
-                if(args[i].isConst && f->arguments[i]->isRef && !f->arguments[i]->isConst)
-                {
-                    result.argsMatch = false;
-                    break;
-                }
-            }
-            return result;
         }
 
         /**
@@ -650,29 +603,10 @@ namespace BraneScript
             return output;
         }
 
-        bool resolveFunctionCall(braneParser::ScopedIDContext* idCtx,
-                                 FunctionCallContext* context,
-                                 std::string& error,
-                                 bool autoCast = true)
+        FunctionOverridesContext* getFunctionOverrides(const std::string& name,
+                                                       DocumentContext* scope = nullptr,
+                                                       braneParser::TemplateArgsContext* tempArgsCtx = nullptr)
         {
-            auto functionID = getLastScopedID(idCtx);
-            std::string name = safeGetText(functionID.second->id);
-            if(idCtx->child && !functionID.first)
-            {
-                error += "Namespace could not be found";
-                return false;
-            }
-            return resolveFunctionCall(name, context, error, functionID.first, functionID.second->template_, autoCast);
-        }
-
-        bool resolveFunctionCall(const std::string& name,
-                                 FunctionCallContext* context,
-                                 std::string& error,
-                                 DocumentContext* scope = nullptr,
-                                 braneParser::TemplateArgsContext* tempArgsCtx = nullptr,
-                                 bool autoCast = true)
-        {
-
             std::list<FunctionContext*> overrides;
             if(tempArgsCtx)
             {
@@ -713,80 +647,12 @@ namespace BraneScript
                 // this is where automatically finding templates without explicit arguments would go
             }
 
-            /* We want to find the best match with the lowest amount of implicit casts. So we store the cast count for
-             * each candidate function and try to find the closest one. Cast cost is a measure of the desirability of
-             * casts the casts. For instance a cast from uint32 to uint64 is more desirable than a cast from uint32_t to
-             * a float.
-             * */
-            uint16_t castCount = -1;
-            uint32_t castCost = -1;
-            FunctionContext* bestMatch = nullptr;
-
-            std::vector<ValueContext> args;
-            for(auto& arg : context->arguments)
-            {
-                assert(arg->returnType.type.storageType != ValueType::Struct || arg->returnType.type.structCtx);
-                args.push_back(arg->returnType);
-            }
-            for(auto f : overrides)
-            {
-                if(_enforceConstexpr && !f->isConstexpr)
-                    continue;
-                auto result = compareFunctionArgs(f, args);
-                if(!result.argsMatch)
-                    continue;
-                // This is the best match if it requires fewer casts or has the same amount and just costs lest
-                if(result.castCount < castCount || (result.castCount == castCount && result.castCost < castCost))
-                {
-                    bestMatch = f;
-                    castCount = result.castCount;
-                    castCost = result.castCost;
-                }
-            }
-
-            if(!bestMatch)
-            {
-                error += "Could not find override of function \"" + (scope ? scope->longId() + "::" + name : name);
-                if(tempArgsCtx)
-                {
-                    TemplateArgs tempArgs = std::any_cast<TemplateArgs>(visitTemplateArgs(tempArgsCtx));
-                    error += templateArgsToString(tempArgs);
-                }
-                error += "\" with arguments: ";
-                for(auto& arg : args)
-                    error += arg.signature() + ", ";
-                if(!overrides.empty())
-                {
-                    error += "\nDid you mean to use one of these overrides?\n-----\n";
-                    for(auto o : overrides)
-                        error += functionSig(o->longId(), o->arguments) + "\n";
-                    error += "-----";
-                    if(_enforceConstexpr)
-                        error += "\nVerify the functions you call in a constexpr scope are also constexpr.";
-                }
-                return false;
-            }
-
-            context->function = bestMatch;
-            context->returnType = bestMatch->returnType;
-
-            if(castCount)
-            {
-                for(size_t i = 0; i < args.size(); ++i)
-                {
-                    if(bestMatch->arguments[i]->type == args[i].type)
-                        continue;
-
-                    // Find the cast operator, should never return false ideally, but I can see configuration bugs
-                    // triggering this in the future.
-                    if(auto* castCtx = resolveCast(context->arguments[i].release(), *bestMatch->arguments[i], error))
-                        context->arguments[i].reset(castCtx);
-                    else
-                        return false;
-                }
-            }
-
-            return true;
+            std::vector<FunctionContext*> output(overrides.size());
+            std::copy(overrides.begin(), overrides.end(), output.begin());
+            auto node = new FunctionOverridesContext(std::move(output));
+            initDoc(node);
+            popDoc(node);
+            return node;
         }
 
         /** Converts references to non-references */
@@ -831,20 +697,63 @@ namespace BraneScript
             size_t errorPos = error.size();
             auto castCall = new FunctionCallContext{};
             castCall->arguments.emplace_back(from);
-            bool result = resolveFunctionCall("opr " + to.signature(), castCall, error);
-            if(!result)
+
+            auto castOverrides = getFunctionOverrides("opr " + to.signature(), nullptr, nullptr);
+            castCall->function = castOverrides->bestMatch(
+                {castCall->arguments[0]->returnType},
+                [](auto from, auto to) { return false; },
+                _enforceConstexpr ? FunctionOverridesContext::Constexpr : FunctionOverridesContext::None);
+            if(!castCall->function)
             {
-                std::string castError = "Could not cast " + castCall->arguments[0]->returnType.type.identifier +
-                                        " to " + to.signature() + "!\n";
+                std::string castError =
+                    "No casting operator found for " + from->returnType.signature() + " to " + to.signature() + "!\n";
                 error.insert(error.begin() + errorPos, castError.begin(), castError.end());
                 castCall->arguments[0].release();
                 delete castCall;
                 return nullptr;
             }
+
+            castCall->returnType = to;
             initDoc(castCall);
             popDoc(castCall);
 
             return castCall;
+        }
+
+        ExpressionContext* resolveOperator(const std::string opr, std::string& error, std::unique_ptr<ExpressionContext> lValue, std::unique_ptr<ExpressionContext> rValue = nullptr)
+        {
+            size_t errorPos = error.size();
+            auto oprCall = new FunctionCallContext{};
+            oprCall->arguments.emplace_back(std::move(lValue));
+            if(rValue)
+                oprCall->arguments.emplace_back(std::move(rValue));
+
+            auto oprOverrides = getFunctionOverrides("opr " + opr, nullptr, nullptr);
+            std::vector<ValueContext> argTypes;
+            if(oprCall->arguments.size() == 2)
+                argTypes = {oprCall->arguments[0]->returnType, oprCall->arguments[1]->returnType};
+            else
+                argTypes = {oprCall->arguments[0]->returnType};
+
+            oprCall->function = oprOverrides->bestMatch(
+                argTypes,
+                [this](auto from, auto to) { return implicitCastViable(from, to); },
+                _enforceConstexpr ? FunctionOverridesContext::Constexpr : FunctionOverridesContext::None);
+            if(!oprCall->function)
+            {
+                if(oprCall->arguments.size() == 1)
+                    error = "No operator \"" + opr + "\" found with argument " + oprCall->arguments[0]->returnType.signature() + "!\n";
+                else
+                    error = "No operator \"" + opr + "\" found with arguments " + oprCall->arguments[0]->returnType.signature() +
+                            " and " + oprCall->arguments[1]->returnType.signature() + "!\n";
+                delete oprCall;
+                return nullptr;
+            }
+            initDoc(oprCall);
+            popDoc(oprCall);
+            oprCall->returnType = oprCall->function->returnType;
+
+            return oprCall;
         }
 
       public:
@@ -1581,9 +1490,11 @@ namespace BraneScript
 
                         auto constructCall = new FunctionCallContext{};
                         constructCall->arguments.emplace_back(memberAccess);
-                        std::string error;
-                        if(!resolveFunctionCall("_construct", constructCall, error, var->type.structCtx))
-                            recordError(ctx->id, error);
+                        constructCall->function = var->type.structCtx->constructor;
+                        if(!constructCall->function)
+                            recordError(ctx->start,
+                                        "Could not find constructor for struct \"" + var->type.structCtx->longId() +
+                                            "\"");
 
                         if(isLocal(constructCall->function))
                             callTree.addDependency(func, constructCall->function);
@@ -1644,8 +1555,11 @@ namespace BraneScript
                         constructCall->arguments.emplace_back(memberAccess);
                         constructCall->arguments.emplace_back(otherAccess);
                         std::string error;
-                        if(!resolveFunctionCall("_copy", constructCall, error, var->type.structCtx))
-                            recordError(ctx->id, error);
+                        constructCall->function = var->type.structCtx->copyConstructor;
+                        if(!constructCall->function)
+                            recordError(ctx->start,
+                                        "Could not find copy constructor for struct \"" +
+                                            var->type.structCtx->longId() + "\"");
                         if(isLocal(constructCall->function))
                             callTree.addDependency(func, constructCall->function);
                         func->body->expressions.emplace_back(constructCall);
@@ -1708,8 +1622,11 @@ namespace BraneScript
                         constructCall->arguments.emplace_back(memberAccess);
                         constructCall->arguments.emplace_back(otherAccess);
                         std::string error;
-                        if(!resolveFunctionCall("_move", constructCall, error, var->type.structCtx))
-                            recordError(ctx->id, error);
+                        constructCall->function = var->type.structCtx->moveConstructor;
+                        if(!constructCall->function)
+                            recordError(ctx->start,
+                                        "Could not find move constructor for struct \"" +
+                                            var->type.structCtx->longId() + "\"");
                         if(isLocal(constructCall->function))
                             callTree.addDependency(func, constructCall->function);
                         func->body->expressions.emplace_back(constructCall);
@@ -1757,8 +1674,11 @@ namespace BraneScript
                         auto constructCall = new FunctionCallContext{};
                         constructCall->arguments.emplace_back(memberAccess);
                         std::string error;
-                        if(!resolveFunctionCall("_destruct", constructCall, error, var->type.structCtx))
-                            recordError(ctx->id, error);
+                        constructCall->function = var->type.structCtx->destructor;
+                        if(!constructCall->function)
+                            recordError(ctx->start,
+                                        "Could not find destructor for struct \"" + var->type.structCtx->longId() +
+                                            "\"");
                         if(isLocal(constructCall->function))
                             callTree.addDependency(func, constructCall->function);
                         func->body->expressions.emplace_back(constructCall);
@@ -2100,15 +2020,11 @@ namespace BraneScript
                                                         right.release()));
             }
 
-            auto callCtx = new FunctionCallContext{};
-            initDoc(callCtx, ctx);
-            callCtx->arguments.push_back(std::move(left));
-            callCtx->arguments.push_back(std::move(right));
-            popDoc(callCtx);
             std::string error;
-            if(!resolveFunctionCall("opr " + op, callCtx, error))
-                recordError(ctx->opr, error);
-            RETURN_EXPR(callCtx);
+            if(auto callCtx = resolveOperator(op, error, std::move(left), std::move(right)))
+               RETURN_EXPR(callCtx);
+            recordError(ctx->opr, error);
+            return NULL_EXPR;
         }
 
         std::any visitMuldiv(braneParser::MuldivContext* ctx) override
@@ -2131,15 +2047,11 @@ namespace BraneScript
                                                         right.release()));
             }
 
-            auto callCtx = new FunctionCallContext{};
-            initDoc(callCtx, ctx);
-            callCtx->arguments.push_back(std::move(left));
-            callCtx->arguments.push_back(std::move(right));
-            popDoc(callCtx);
             std::string error;
-            if(!resolveFunctionCall("opr " + ctx->opr->getText(), callCtx, error))
-                recordError(ctx->opr, error);
-            RETURN_EXPR(callCtx);
+            if(auto callCtx = resolveOperator(op, error, std::move(left), std::move(right)))
+                RETURN_EXPR(callCtx);
+            recordError(ctx->opr, error);
+            return NULL_EXPR;
         }
 
         std::any visitLogic(braneParser::LogicContext* ctx) override
@@ -2152,15 +2064,11 @@ namespace BraneScript
             auto right = asExpr(visit(ctx->right));
             assert(false); // TODO implement this
 
-            auto callCtx = new FunctionCallContext{};
-            initDoc(callCtx, ctx);
-            callCtx->arguments.push_back(std::move(left));
-            callCtx->arguments.push_back(std::move(right));
-            popDoc(callCtx);
             std::string error;
-            if(!resolveFunctionCall("opr " + ctx->opr->getText(), callCtx, error))
-                recordError(ctx->opr, error);
-            RETURN_EXPR(callCtx);
+            if(auto callCtx = resolveOperator("&&", error, std::move(left), std::move(right)))
+                RETURN_EXPR(callCtx);
+            recordError(ctx->opr, error);
+            return NULL_EXPR;
         }
 
         std::any visitComparison(braneParser::ComparisonContext* ctx) override
@@ -2196,141 +2104,172 @@ namespace BraneScript
                 RETURN_EXPR(new NativeCompareContext(op, left.release(), right.release()));
             }
 
-            auto callCtx = new FunctionCallContext{};
-            initDoc(callCtx, ctx);
-            callCtx->arguments.push_back(asExpr(visit(ctx->left)));
-            callCtx->arguments.push_back(asExpr(visit(ctx->right)));
-            popDoc(callCtx);
             std::string error;
-            if(!resolveFunctionCall("opr " + opText, callCtx, error))
-                recordError(ctx->opr, error);
-            RETURN_EXPR(callCtx);
+            if(auto callCtx = resolveOperator(opText, error, std::move(left), std::move(right)))
+                RETURN_EXPR(callCtx);
+            recordError(ctx->opr, error);
+            return NULL_EXPR;
         }
 
         std::any visitIndexAccess(braneParser::IndexAccessContext* ctx) override
         {
             EXPR_ASSERT_EXISTS(ctx->base, "expression expected");
             EXPR_ASSERT_EXISTS(ctx->arg, "expression expected");
-            auto callCtx = new FunctionCallContext{};
-            initDoc(callCtx, ctx);
-            callCtx->arguments.push_back(asExpr(visit(ctx->base)));
-            callCtx->arguments.push_back(asExpr(visit(ctx->arg)));
-            popDoc(callCtx);
+            auto left = asExpr(visit(ctx->base));
+            auto right = asExpr(visit(ctx->arg));
+
             std::string error;
-            if(!resolveFunctionCall("opr []", callCtx, error))
-                recordError(ctx, error);
-            RETURN_EXPR(callCtx);
+            if(auto callCtx = resolveOperator("[]", error, std::move(left), std::move(right)))
+                RETURN_EXPR(callCtx);
+            recordError(ctx, error);
+            return NULL_EXPR;
         }
 
         std::any visitId(braneParser::IdContext* ctx) override
         {
-            std::string identifier = ctx->getText();
-            auto node = lastNode()->findIdentifier(identifier, 0);
+            EXPR_ASSERT_EXISTS(ctx->scopedID(), "identifier expected");
+            auto node = getIdentifierContext(ctx->scopedID());
+
             if(!node)
             {
+                std::string id = ctx->getText();
                 if(_instantiatingTemplate)
                 {
-                    auto* tempArg = getTemplateArg(identifier);
+                    auto* tempArg = getTemplateArg(id);
                     if(auto* tempValueArg = dynamic_cast<ValueArgContext*>(tempArg))
                         RETURN_EXPR(tempValueArg->value->deepCopy([](auto _) { return _; }));
                 }
-                recordError(ctx, "\"" + identifier + "\" is not a variable!");
+                recordError(ctx, "\"" + id + "\" is not an identifier!");
                 return NULL_EXPR;
             }
-            if(!node->is<LabeledValueContext>())
-            {
-                recordError(ctx, identifier + " is not a value!");
-                return NULL_EXPR;
-            }
-            // Do we implicitly need to reference this?
-            if(node->parent && node->parent->is<StructContext>())
-            {
-                auto memberAccess = new MemberAccessContext{};
-                initDoc(memberAccess, ctx);
-                auto thisRef =
-                    lastNode()->findIdentifier("this", IDSearchOptions_ParentsOnly)->as<LabeledValueContext>();
-                assert(thisRef);
-                auto valueAccess = new LabeledValueReferenceContext{*thisRef};
-                initDoc(valueAccess, ctx);
 
-                memberAccess->baseExpression.reset(valueAccess);
-
-                auto parent = node->parent->as<StructContext>();
-                memberAccess->member = 0;
-                for(auto& m : parent->variables)
+            if(auto valueContext = node->as<LabeledValueContext>())
+            {
+                // Do we implicitly need to reference this?
+                if(node->parent && node->parent->is<StructContext>())
                 {
-                    if(m->identifier.text == identifier)
-                        break;
-                    memberAccess->member++;
+                    auto memberAccess = new MemberAccessContext{};
+                    initDoc(memberAccess, ctx);
+                    auto thisRef =
+                        lastNode()->findIdentifier("this", IDSearchOptions_ParentsOnly)->as<LabeledValueContext>();
+                    assert(thisRef);
+                    auto valueAccess = new LabeledValueReferenceContext{*thisRef};
+                    initDoc(valueAccess, ctx);
+
+                    memberAccess->baseExpression.reset(valueAccess);
+
+                    auto parent = node->parent->as<StructContext>();
+                    memberAccess->member = 0;
+                    for(auto& m : parent->variables)
+                    {
+                        if(m->identifier.text == valueContext->identifier.text)
+                            break;
+                        memberAccess->member++;
+                    }
+
+                    assert(memberAccess->member < parent->variables.size());
+                    memberAccess->returnType = *parent->variables[memberAccess->member];
+
+                    popDoc(valueAccess);
+                    popDoc(memberAccess);
+                    RETURN_EXPR(memberAccess);
                 }
 
-                assert(memberAccess->member < parent->variables.size());
-                memberAccess->returnType = *parent->variables[memberAccess->member];
-
+                auto valueAccess = new LabeledValueReferenceContext{*node->as<LabeledValueContext>()};
+                initDoc(valueAccess, ctx);
                 popDoc(valueAccess);
-                popDoc(memberAccess);
-                RETURN_EXPR(memberAccess);
+                RETURN_EXPR(valueAccess);
             }
-
-            auto valueAccess = new LabeledValueReferenceContext{*node->as<LabeledValueContext>()};
-            initDoc(valueAccess, ctx);
-            popDoc(valueAccess);
-            RETURN_EXPR(valueAccess);
-        }
-
-        std::any visitMakeRef(braneParser::MakeRefContext* ctx) override
-        {
-            EXPR_ASSERT_EXISTS(ctx->source, "Expected expression")
-            auto source = asExpr(visit(ctx->source));
-            if(!source->returnType.isLValue && !source->returnType.isRef)
+            if(auto funcContext = node->as<FunctionContext>())
             {
-                recordError(ctx->source, "Cannot reference a temporary value!");
-                return NULL_EXPR;
+
+
+                braneParser::ScopedIDContext* idNode = ctx->scopedID();
+                braneParser::ScopedIDContext* scope = nullptr;
+                while(idNode->child)
+                {
+                    scope = idNode;
+                    idNode = idNode->child;
+                }
+
+                //If this function is a template, getValueContext will have already instantiated it
+                if(idNode->template_)
+                {
+                    auto funcOverrides = new FunctionOverridesContext({funcContext});
+                    initDoc(funcOverrides, ctx);
+                    popDoc(funcOverrides);
+                    RETURN_EXPR(funcOverrides);
+                }
+
+                DocumentContext* scopeContext = nullptr;
+                if(scope)
+                {
+                    scope->child = nullptr;
+                    scopeContext = getIdentifierContext(ctx->scopedID());
+                    scope->child = idNode;
+                    if(!scopeContext)
+                    {
+                        recordError(ctx, "Could not find scope \"" + scope->getText() + "\"");
+                        return NULL_EXPR;
+                    }
+                }
+                auto funcOverrides = getFunctionOverrides(idNode->id->getText(), scopeContext);
+                if(!funcOverrides->overrides.empty())
+                    RETURN_EXPR(funcOverrides);
+                delete funcOverrides;
             }
 
-            auto makeRef = new CreateReferenceContext(source.release());
-            initDoc(makeRef, ctx);
-            popDoc(makeRef);
 
-            RETURN_EXPR(makeRef);
+
+            recordError(ctx, ctx->getText() + " is not an expression!");
+            return NULL_EXPR;
         }
 
         std::any visitMemberAccess(braneParser::MemberAccessContext* ctx) override
         {
             EXPR_ASSERT_EXISTS(ctx->base, "expected base expression");
             EXPR_ASSERT_EXISTS(ctx->member, "expected member identifier");
-            auto accessCtx = new MemberAccessContext{};
-            initDoc(accessCtx, ctx);
-            accessCtx->baseExpression = asExpr(visit(ctx->base));
-            if(accessCtx->baseExpression->returnType.type.storageType != ValueType::Struct)
+
+            auto base = asExpr(visit(ctx->base));
+            if(base->returnType.type.storageType != ValueType::Struct)
+            {
                 recordError(ctx, "Cannot access members of non-struct objects");
+                return NULL_EXPR;
+            }
+
+            auto& typeName = base->returnType.type.identifier;
+            auto type = base->returnType.type.structCtx;
+            assert(type);
+
+            std::string memberName = safeGetText(ctx->member);
+            auto memberOverrides = getFunctionOverrides(memberName, type, ctx->template_);
+            if(!memberOverrides->overrides.empty())
+            {
+                memberOverrides->thisRef = std::move(base);
+                RETURN_EXPR(memberOverrides);
+            }
+
+            auto accessCtx = new MemberAccessContext{};
+            accessCtx->baseExpression = std::move(base);
+            initDoc(accessCtx, ctx);
+
+            accessCtx->member = 0;
+            for(auto& m : type->variables)
+            {
+                if(m->identifier.text == memberName)
+                    break;
+                accessCtx->member++;
+            }
+            if(accessCtx->member == type->variables.size())
+                recordError(ctx->member, "Struct " + typeName + " does not have a member " + memberName);
             else
             {
-                auto& typeName = accessCtx->baseExpression->returnType.type.identifier;
-                auto type = accessCtx->baseExpression->returnType.type.structCtx;
-                if(!type)
-                    recordError(ctx, "Type " + typeName + " is not a struct");
-                if(type)
-                {
-                    std::string memberName = safeGetText(ctx->member);
-                    accessCtx->member = 0;
-                    for(auto& m : type->variables)
-                    {
-                        if(m->identifier.text == memberName)
-                            break;
-                        accessCtx->member++;
-                    }
-                    if(accessCtx->member == type->variables.size())
-                        recordError(ctx->member, "Struct " + typeName + " does not have a member " + memberName);
-                    else
-                    {
-                        accessCtx->returnType.type = type->variables[accessCtx->member]->type;
-                        accessCtx->returnType.isRef = accessCtx->returnType.type.storageType == ValueType::Struct;
-                        accessCtx->returnType.isConst = accessCtx->baseExpression->returnType.isConst;
-                        accessCtx->returnType.isLValue = accessCtx->baseExpression->returnType.isLValue;
-                    }
-                }
+                accessCtx->returnType.type = type->variables[accessCtx->member]->type;
+                accessCtx->returnType.isRef = accessCtx->returnType.type.storageType == ValueType::Struct;
+                accessCtx->returnType.isConst = accessCtx->baseExpression->returnType.isConst;
+                accessCtx->returnType.isLValue = accessCtx->baseExpression->returnType.isLValue;
             }
+
             popDoc(accessCtx);
             RETURN_EXPR(accessCtx);
         }
@@ -2366,70 +2305,95 @@ namespace BraneScript
             return args;
         }
 
-        std::any visitMemberFunctionCall(braneParser::MemberFunctionCallContext* ctx) override
-        {
-            EXPR_ASSERT_EXISTS(ctx->base, "expected base expression");
-            EXPR_ASSERT_EXISTS(ctx->name, "expected member function call");
-            auto callCtx = new FunctionCallContext{};
-            initDoc(callCtx, ctx);
-            callCtx->arguments = populateFunctionArgs(ctx->argumentPack());
-            callCtx->arguments.insert(callCtx->arguments.begin(), asExpr(visit(ctx->base)));
-            popDoc(callCtx);
-            std::string error;
-            if(!resolveFunctionCall(ctx->name->getText(),
-                                    callCtx,
-                                    error,
-                                    callCtx->arguments[0]->returnType.type.structCtx,
-                                    ctx->template_))
-                recordError(ctx, error);
-            else
-            {
-                if(isLocal(callCtx->function))
-                    callTree.addDependency(lastNode()->getParent<FunctionContext>(), callCtx->function);
-            }
-            RETURN_EXPR(callCtx);
-        }
-
         std::any visitFunctionCall(braneParser::FunctionCallContext* ctx) override
         {
-            EXPR_ASSERT_EXISTS(ctx->id, "expected function identifier");
+            EXPR_ASSERT_EXISTS(ctx->expression(), "expected expression");
             auto callCtx = new FunctionCallContext{};
             initDoc(callCtx, ctx);
             callCtx->arguments = populateFunctionArgs(ctx->argumentPack());
 
-            std::string error;
-            if(resolveFunctionCall(ctx->id, callCtx, error))
+            auto source = asExpr(visit(ctx->expression()));
+            if(auto overridesCtx = source->as<FunctionOverridesContext>())
             {
+                bool isMember = false;
+                if(overridesCtx->thisRef)
+                {
+                    callCtx->arguments.insert(callCtx->arguments.begin(), std::move(overridesCtx->thisRef));
+                    isMember = true;
+                }
+                std::vector<ValueContext> argTypes;
+                for(auto& arg : callCtx->arguments)
+                    argTypes.push_back(arg->returnType);
+                callCtx->function = overridesCtx->bestMatch(
+                    argTypes,
+                    [this](const ValueContext& a, const ValueContext& b) { return implicitCastViable(a, b); },
+                    _enforceConstexpr ? FunctionOverridesContext::Constexpr : FunctionOverridesContext::None);
+
+                if(!callCtx->function && !isMember && getLast<StructContext>())
+                {
+                    auto& structCtx = *getLast<StructContext>();
+                    auto* thisRef =
+                        lastNode()->findIdentifier("this", IDSearchOptions_ParentsOnly)->as<LabeledValueContext>();
+                    auto valueAccess = new LabeledValueReferenceContext{*thisRef};
+                    initDoc(valueAccess, ctx);
+                    popDoc(valueAccess);
+
+                    callCtx->arguments.emplace(callCtx->arguments.begin(), valueAccess);
+                    argTypes.emplace(argTypes.begin(), valueAccess->returnType);
+
+                    callCtx->function = overridesCtx->bestMatch(
+                        argTypes,
+                        [this](const ValueContext& a, const ValueContext& b) { return implicitCastViable(a, b); },
+                        _enforceConstexpr ? FunctionOverridesContext::Constexpr : FunctionOverridesContext::None);
+                }
+
+                if(!callCtx->function)
+                {
+                    std::string error = "Could not find override of function \"" + source->longId();
+                    error += "\" with arguments: ";
+                    for(auto& arg : argTypes)
+                        error += arg.signature() + ", ";
+                    if(!overridesCtx->overrides.empty())
+                    {
+                        error += "\nDid you mean to use one of these overrides?\n-----\n";
+                        for(auto o : overridesCtx->overrides)
+                            error += functionSig(o->longId(), o->arguments) + "\n";
+                        error += "-----";
+                        if(_enforceConstexpr)
+                            error += "\nVerify the functions you call in a constexpr scope are also constexpr.";
+                    }
+                    recordError(ctx->expression(), error);
+                    popDoc(callCtx);
+                    RETURN_EXPR(callCtx);
+                }
+
+                callCtx->returnType = callCtx->function->returnType;
                 if(isLocal(callCtx->function))
                     callTree.addDependency(lastNode()->getParent<FunctionContext>(), callCtx->function);
 
-                popDoc(callCtx);
-                RETURN_EXPR(callCtx);
+                for(int i = 0; i < callCtx->arguments.size(); ++i)
+                {
+                    if(callCtx->arguments[i]->returnType.sameBaseType(*callCtx->function->arguments[i]))
+                        continue;
+
+                    // Find the cast operator, should never return false ideally, but I can see configuration bugs
+                    // triggering this in the future.
+                    std::string error;
+                    auto* arg = callCtx->arguments[i].release();
+                    if(auto* castCtx = resolveCast(arg, *callCtx->function->arguments[i], error))
+                        callCtx->arguments[i].reset(castCtx);
+                    else
+                    {
+                        callCtx->arguments[i].reset(arg);
+                        recordError(callCtx->arguments[i]->range, error);
+                        popDoc(callCtx);
+                        RETURN_EXPR(callCtx);
+                    }
+                }
             }
 
-            if(ctx->id->child || !lastNode()->getParent<StructContext>())
-            {
-                recordError(ctx->id, error);
-                popDoc(callCtx);
-                RETURN_EXPR(callCtx);
-            }
-            // If a non-member function was not found and this scope is in a member function, try to implicitly
-            // reference "this" variable
-            error += "\n";
-            auto* thisRef = lastNode()->findIdentifier("this", IDSearchOptions_ParentsOnly)->as<LabeledValueContext>();
-            auto valueAccess = new LabeledValueReferenceContext{*thisRef};
-            initDoc(valueAccess, ctx);
+            // TODO call function pointers here
 
-            callCtx->arguments.emplace(callCtx->arguments.begin(), valueAccess);
-            if(!resolveFunctionCall(
-                   ctx->id->id->getText(), callCtx, error, valueAccess->returnType.type.structCtx, ctx->id->template_))
-                recordError(ctx->id, error);
-            {
-                if(isLocal(callCtx->function))
-                    callTree.addDependency(lastNode()->getParent<FunctionContext>(), callCtx->function);
-            }
-
-            popDoc(valueAccess);
             popDoc(callCtx);
             RETURN_EXPR(callCtx);
         }
@@ -2457,9 +2421,11 @@ namespace BraneScript
 
                         auto constructCall = new FunctionCallContext{};
                         constructCall->arguments.emplace_back(globalRef);
-                        std::string error;
-                        if(!resolveFunctionCall("_construct", constructCall, error, var->type.structCtx))
-                            recordError(ctx->start, error);
+                        constructCall->function = var->type.structCtx->constructor;
+                        if(!constructCall->function)
+                            recordError(ctx->start,
+                                        "Could not find constructor for struct \"" + var->type.structCtx->longId() +
+                                            "\"");
                         if(isLocal(constructCall->function))
                             callTree.addDependency(func, constructCall->function);
                         func->body->expressions.emplace_back(constructCall);
@@ -2484,9 +2450,11 @@ namespace BraneScript
 
                         auto constructCall = new FunctionCallContext{};
                         constructCall->arguments.emplace_back(globalRef);
-                        std::string error;
-                        if(!resolveFunctionCall("_destruct", constructCall, error, var->type.structCtx))
-                            recordError(ctx->start, error);
+                        constructCall->function = var->type.structCtx->destructor;
+                        if(!constructCall->function)
+                            recordError(ctx->start,
+                                        "Could not find destructor for struct \"" + var->type.structCtx->longId() +
+                                            "\"");
                         if(isLocal(constructCall->function))
                             callTree.addDependency(func, constructCall->function);
                         func->body->expressions.emplace_back(constructCall);
@@ -2674,7 +2642,8 @@ namespace BraneScript
             {
                 std::cout << "Errors in loaded file " << entry.path().generic_string() << std::endl;
                 for(auto& err : context->errors)
-                    std::cout << "(" << err.range.start.line << ", " << err.range.start.charPos << ") " << err.message << std::endl;
+                    std::cout << "(" << err.range.start.line << ", " << err.range.start.charPos << ") " << err.message
+                              << std::endl;
             }
         }
         _workspaceRoots.push_back(path);
