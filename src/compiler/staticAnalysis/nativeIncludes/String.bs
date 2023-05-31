@@ -1,4 +1,4 @@
-export as "string"
+module "string"
 {
     struct string
     {

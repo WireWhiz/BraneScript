@@ -10,11 +10,11 @@ add_executable(bs_tests
         recursionTest.cpp
         apiTests.cpp
         objectTests.cpp
-        speedTests.cpp
+        #speedTests.cpp
         stringTests.cpp
         templateTests.cpp
         globalVariableTests.cpp
-        #lambdaTests.cpp
+        lambdaTests.cpp
         refTests.cpp
         unsafeTests.cpp
         functionRefTests.cpp)

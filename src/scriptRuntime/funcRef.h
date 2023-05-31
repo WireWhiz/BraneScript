@@ -2,8 +2,8 @@
 // Created by eli on 11/4/2022.
 //
 
-#ifndef BRANESCRIPT_FUNCTIONHANDLE_H
-#define BRANESCRIPT_FUNCTIONHANDLE_H
+#ifndef BRANESCRIPT_FUNCREF_H
+#define BRANESCRIPT_FUNCREF_H
 
 #include <string>
 #include <unordered_map>
@@ -20,7 +20,7 @@ namespace BraneScript
 #endif
 
     template<typename Ret, typename... Args>
-    using FunctionHandle = Ret (BS_API_CALL*)(Args...);
+    using FuncRef = Ret (BS_API_CALL*)(Args...);
 
     /**
      * @brief Class for extracting data about arguments from a function definition.
@@ -105,13 +105,13 @@ namespace BraneScript
         FunctionData(FunctionData&&) noexcept ;
 
         template<typename Ret, typename... Args>
-        FunctionHandle<Ret, Args...> as() const
+        FuncRef<Ret, Args...> as() const
         {
-            return (FunctionHandle<Ret, Args...>)pointer;
+            return (FuncRef<Ret, Args...>)pointer;
         }
 
     };
 }
 
 
-#endif //BRANESCRIPT_FUNCTIONHANDLE_H
+#endif // BRANESCRIPT_FUNCREF_H

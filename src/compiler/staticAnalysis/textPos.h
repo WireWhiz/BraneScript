@@ -7,8 +7,8 @@
 namespace BraneScript
 {
     struct TextPos {
-        size_t line;
-        size_t charPos;
+        size_t line = -1;
+        size_t charPos = -1;
         inline bool operator==(const TextPos& o){return line == o.line && charPos == o.charPos;};
         inline bool operator!=(const TextPos& o){return line != o.line || charPos != o.charPos;};
     };

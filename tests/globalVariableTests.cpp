@@ -11,11 +11,10 @@ using namespace BraneScript;
 TEST(BraneScript, GlobalVariables)
 {
     std::string testString = R"(
-
-    int globalInt;
-    float globalFloat;
-    export as "tests"
+    module "tests"
     {
+        int globalInt;
+        float globalFloat;
         struct GlobalStruct
         {
             int var;
@@ -53,11 +52,12 @@ TEST(BraneScript, GlobalVariables)
     analyzer.validate("test");
     checkCompileErrors(analyzer, testString);
 
-    llvm::LLVMContext ctx;
-    auto ir = analyzer.getCtx("test")->scriptContext->compile(&ctx, false);
+    auto ir = analyzer.compile("test");
+    ASSERT_TRUE(ir.modules.contains("tests"));
 
     ScriptRuntime rt;
-    Script* testScript = rt.loadScript(ir);
+    rt.resetMallocDiff();
+    Module* testScript = rt.loadModule(ir.modules.at("tests"));
     ASSERT_TRUE(testScript);
 
     auto setInt = testScript->getFunction<void, int>("tests::setInt");

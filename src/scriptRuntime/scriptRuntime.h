@@ -7,7 +7,7 @@
 
 #include <memory>
 #include <vector>
-#include "functionHandle.h"
+#include "funcRef.h"
 #include "nativeLibrary.h"
 #include "robin_hood.h"
 
@@ -28,14 +28,14 @@ namespace llvm
 
 namespace BraneScript
 {
-    class Script;
-    class IRScript;
+    class Module;
+    class IRModule;
     class StructDef;
 
     class ScriptRuntime
     {
-        robin_hood::unordered_map<std::string, std::unique_ptr<Script>> _scripts;
-        robin_hood::unordered_map<std::string, robin_hood::unordered_set<llvm::orc::JITDylib*>> _modules;
+        robin_hood::unordered_map<std::string, std::unique_ptr<Module>> _modules;
+        robin_hood::unordered_map<std::string, llvm::orc::JITDylib*> _libraries;
 
         std::unique_ptr<llvm::orc::ExecutionSession> _session;
         std::unique_ptr<llvm::DataLayout> _layout;
@@ -51,10 +51,10 @@ namespace BraneScript
         ScriptRuntime();
         ~ScriptRuntime();
 
-        void loadLibrary(const NativeLibrary& lib);
+        llvm::orc::JITDylib& loadLibrary(const NativeLibrary& lib);
 
-        Script* loadScript(const IRScript& irScript);
-        void unloadScript(const std::string& id);
+        Module* loadModule(const IRModule& irModule);
+        void unloadModule(const std::string& id);
         int64_t mallocDiff() const;
         void resetMallocDiff();
     };

@@ -17,8 +17,8 @@ TEST(BraneScript, UnsafeTests)
 {
 
     std::string testString = R"(
-    link "unsafe";
-    export as "tests"
+    module "tests"
+    link "unsafe"
     {
         struct TestStruct
         {
@@ -50,11 +50,12 @@ TEST(BraneScript, UnsafeTests)
     checkCompileErrors(analyzer, testString)
 
     llvm::LLVMContext ctx;
-    auto ir = analyzer.getCtx("test")->scriptContext->compile(&ctx, false);
+    auto ir = analyzer.getCtx("test")->scriptContext->compile(&ctx, true, true);
+    ASSERT_TRUE(ir.modules.contains("tests"));
 
     ScriptRuntime rt;
     rt.resetMallocDiff();
-    Script* testScript = rt.loadScript(ir);
+    Module* testScript = rt.loadModule(ir.modules.at("tests"));
     ASSERT_TRUE(testScript);
 
     auto allocStruct = testScript->getFunction<TestStruct*>("tests::allocStruct()");

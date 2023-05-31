@@ -7,6 +7,7 @@
 
 #include <vector>
 #include <string>
+#include <robin_hood.h>
 
 namespace llvm
 {
@@ -24,20 +25,40 @@ namespace BraneScript
         };
         std::string name;
         std::vector<Member> members;
+        std::vector<std::string> tags;
         bool packed;
+    };
+
+    struct IRFunction
+    {
+        std::string name;
+        std::string returnType;
+        std::vector<std::string> tags;
+    };
+
+    struct IRGlobal
+    {
+        std::string name;
+        std::string type;
+    };
+
+    struct IRModule
+    {
+        std::string id;
+        std::string bitcode;
+        std::vector<std::string> tags;
+
+        std::vector<IRFunction> functions;
+        std::vector<IRGlobal> globals;
+        std::vector<IRStructDef> structs;
+
+        std::vector<std::string> links;
     };
 
     struct IRScript
     {
         std::string id;
-        std::string bitcode;
-
-        std::vector<std::string> exportedFunctions;
-        std::vector<std::string> exportedGlobals;
-        std::vector<IRStructDef> exportedStructs;
-
-        std::vector<std::string> importedLibs;
-        std::vector<std::string> exportedLibs;
+        robin_hood::unordered_map<std::string, IRModule> modules;
     };
 }
 #endif //BRANESCRIPT_IRSCRIPT_H

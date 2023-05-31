@@ -45,7 +45,7 @@ void addScalarTestFunctions(const std::string& typeName, std::string& script)
 
 template<typename T>
 void runScalarTestFunctions(const std::string& typeName,
-                            const Script* testScript,
+                            const Module* testScript,
                             const std::vector<std::pair<T, T>>& testArgs)
 {
     auto add = testScript->getFunction<T, T, T>("tests::add");
@@ -67,7 +67,7 @@ void testCasts(std::vector<std::string> typenames) {}
 TEST(BraneScript, Operators)
 {
     std::string testString = R"(
-    export as "tests"
+    module "tests"
     {
         bool testBoolCast(int a, int b)
         {
@@ -96,15 +96,17 @@ TEST(BraneScript, Operators)
     testString += "}";
 
     StaticAnalyzer analyzer;
-    analyzer.load("test", testString, true);
+    analyzer.load("test", testString);
     analyzer.validate("test");
     checkCompileErrors(analyzer, testString);
 
-    llvm::LLVMContext llvmCtx;
-    auto ir = analyzer.getCtx("test")->scriptContext->compile(&llvmCtx);
+    llvm::LLVMContext ctx;
+    auto ir = analyzer.getCtx("test")->scriptContext->compile(&ctx, true, false);
+    ASSERT_TRUE(ir.modules.contains("tests"));
 
     ScriptRuntime rt;
-    Script* testScript = rt.loadScript(ir);
+    rt.resetMallocDiff();
+    Module* testScript = rt.loadModule(ir.modules.at("tests"));
     ASSERT_TRUE(testScript);
 
     // Casting

@@ -51,8 +51,8 @@ struct NestedStructBase
 TEST(BraneScript, Objects)
 {
     std::string testString = R"(
-    link "BraneScript";
-    export as "tests"
+    module "tests"
+    link "BraneScript"
     {
         float getMember1(ref TestStruct1 s)
         {
@@ -161,7 +161,7 @@ TEST(BraneScript, Objects)
 )";
 
     std::string header = R"(
-    export as "BraneScript"
+    module "BraneScript"
     {
         struct TestStruct1
         {
@@ -188,19 +188,19 @@ TEST(BraneScript, Objects)
     EXPECT_EQ(testStruct1Def.memberVars()[2].offset, offsetof(TestStruct1, b));
 
     NativeLibrary constructors("BraneScript");
-    constructors.addFunction("BraneScript::TestStruct1::_construct(ref BraneScript::TestStruct1)",  (void*)(FunctionHandle<void, void*>)[](void* data) {
+    constructors.addFunction("BraneScript::TestStruct1::_construct(ref BraneScript::TestStruct1)",  (void*)(FuncRef<void, void*>)[](void* data) {
         new(data) TestStruct1();
         constructorCalled++;
     });
-    constructors.addFunction("BraneScript::TestStruct1::_copy(ref BraneScript::TestStruct1,const ref BraneScript::TestStruct1)", (void*)(FunctionHandle<void, void*, const void*>)[](void* dest, const void* src) {
+    constructors.addFunction("BraneScript::TestStruct1::_copy(ref BraneScript::TestStruct1,const ref BraneScript::TestStruct1)", (void*)(FuncRef<void, void*, const void*>)[](void* dest, const void* src) {
         *((TestStruct1*)dest) = *((TestStruct1*)src);
         copyConstructorCalled++;
     });
-    constructors.addFunction("BraneScript::TestStruct1::_move(ref BraneScript::TestStruct1,ref BraneScript::TestStruct1)", (void*)(FunctionHandle<void, void*, void*>)[](void* dest, void* src) {
+    constructors.addFunction("BraneScript::TestStruct1::_move(ref BraneScript::TestStruct1,ref BraneScript::TestStruct1)", (void*)(FuncRef<void, void*, void*>)[](void* dest, void* src) {
         *((TestStruct1*)dest) = std::move(*((TestStruct1*)src));
         moveConstructorCalled++;
     });
-    constructors.addFunction("BraneScript::TestStruct1::_destruct(ref BraneScript::TestStruct1)", (void*)(FunctionHandle<void, void*>)[](void* data) {
+    constructors.addFunction("BraneScript::TestStruct1::_destruct(ref BraneScript::TestStruct1)", (void*)(FuncRef<void, void*>)[](void* data) {
         ((TestStruct1*)data)->~TestStruct1();
         destructorCalled++;
     });
@@ -211,12 +211,14 @@ TEST(BraneScript, Objects)
     analyzer.validate("test");
     checkCompileErrors(analyzer, testString);
 
-    llvm::LLVMContext llvmContext;
-    auto ir = analyzer.getCtx("test")->scriptContext->compile(&llvmContext, false, true);
+    llvm::LLVMContext ctx;
+    auto ir = analyzer.getCtx("test")->scriptContext->compile(&ctx, true, false);
+    ASSERT_TRUE(ir.modules.contains("tests"));
 
     ScriptRuntime rt;
+    rt.resetMallocDiff();
     rt.loadLibrary(constructors);
-    Script* testScript = rt.loadScript(ir);
+    Module* testScript = rt.loadModule(ir.modules.at("tests"));
     ASSERT_TRUE(testScript);
 
     TestStruct1 testStruct1{true, 23.3, 45};

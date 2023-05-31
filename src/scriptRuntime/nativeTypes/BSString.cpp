@@ -105,57 +105,57 @@ namespace BraneScript
     NativeLibrary BSString::library()
     {
         NativeLibrary lib("string");
-        lib.addFunction("string::string::_construct(ref string::string)", (FunctionHandle<void, void*>)[](void* ptr)
+        lib.addFunction("string::string::_construct(ref string::string)", (FuncRef<void, void*>)[](void* ptr)
         {
             new(ptr) BSString();
         });
-        lib.addFunction("string::string::_move(ref string::string,ref string::string)", (FunctionHandle<void, void*, void*>)[](void* ptr, void* other)
+        lib.addFunction("string::string::_move(ref string::string,ref string::string)", (FuncRef<void, void*, void*>)[](void* ptr, void* other)
         {
             new(ptr) BSString(std::move(*(BSString*)other));
         });
-        lib.addFunction("string::string::_copy(ref string::string,const ref string::string)", (FunctionHandle<void, void*, const void*>)[](void* ptr, const void* other)
+        lib.addFunction("string::string::_copy(ref string::string,const ref string::string)", (FuncRef<void, void*, const void*>)[](void* ptr, const void* other)
         {
             new(ptr) BSString(*(BSString*)other);
         });
-        lib.addFunction("string::string::_destruct(ref string::string)", (FunctionHandle<void, void*>)[](void* ptr)
+        lib.addFunction("string::string::_destruct(ref string::string)", (FuncRef<void, void*>)[](void* ptr)
         {
             ((BSString*)ptr)->~BSString();
         });
-        lib.addFunction("string::string opr +(ref string::string res,const ref string::string,const ref string::string)", (FunctionHandle<void, BSString&, const BSString&, const BSString&>)[](BSString& res, const BSString& a, const BSString& b)
+        lib.addFunction("string::string opr +(ref string::string res,const ref string::string,const ref string::string)", (FuncRef<void, BSString&, const BSString&, const BSString&>)[](BSString& res, const BSString& a, const BSString& b)
         {
             res = a + b;
         });
-        lib.addFunction("string::string::opr [](ref string::string,uint)", (FunctionHandle<char*, BSString&, uint32_t>)[](BSString& str, uint32_t index)
+        lib.addFunction("string::string::opr [](ref string::string,uint)", (FuncRef<char*, BSString&, uint32_t>)[](BSString& str, uint32_t index)
         {
             return &str._data[index];
         });
-        lib.addFunction("string::string::opr [](const ref string::string,uint)", (FunctionHandle<char, const BSString&, uint32_t>)[](const BSString& str, uint32_t index)
+        lib.addFunction("string::string::opr [](const ref string::string,uint)", (FuncRef<char, const BSString&, uint32_t>)[](const BSString& str, uint32_t index)
         {
             return str._data[index];
         });
-        lib.addFunction("string::string::length(const ref string::string)", (FunctionHandle<uint32_t, const BSString&>)[](const BSString& str)
+        lib.addFunction("string::string::length(const ref string::string)", (FuncRef<uint32_t, const BSString&>)[](const BSString& str)
         {
             return str._size;
         });
-        lib.addFunction("string::string::opr ==(const ref string::string,const ref string::string)", (FunctionHandle<bool, const BSString&, const BSString&>)[](const BSString& a, const BSString& b)
+        lib.addFunction("string::string::opr ==(const ref string::string,const ref string::string)", (FuncRef<bool, const BSString&, const BSString&>)[](const BSString& a, const BSString& b)
         {
             return a == b;
         });
-        lib.addFunction("string::string::opr !=(const ref string::string,const ref string::string)", (FunctionHandle<bool, const BSString&, const BSString&>)[](const BSString& a, const BSString& b)
+        lib.addFunction("string::string::opr !=(const ref string::string,const ref string::string)", (FuncRef<bool, const BSString&, const BSString&>)[](const BSString& a, const BSString& b)
         {
             return a != b;
         });
-        lib.addFunction("string::string::opr +(ref string:::string ret, char l,char r)", (FunctionHandle<void, BSString&, char, char>)[](BSString& ret, char l, char r)
+        lib.addFunction("string::string::opr +(ref string:::string ret, char l,char r)", (FuncRef<void, BSString&, char, char>)[](BSString& ret, char l, char r)
         {
             ret = BSString(l) + r;
         });
-        lib.addFunction("string::string::opr +(ref string::string,const ref string::string,const ref string::string)", (FunctionHandle<void, BSString&, const BSString&, const BSString&>)[](BSString& ret, const BSString& l, const BSString& r)
+        lib.addFunction("string::string::opr +(ref string::string,const ref string::string,const ref string::string)", (FuncRef<void, BSString&, const BSString&, const BSString&>)[](BSString& ret, const BSString& l, const BSString& r)
         {
             ret = l + r;
         });
 
         // This constructor hidden from the script api since ref string casts might go wrong, it also expects an uninitialized BSString, which goes against the BS calling convention
-        lib.addFunction("string::stringFromCharArr(ref string::string, const ref char)", (FunctionHandle<void, BSString*, const char*>)[](BSString* str, const char* cstr)
+        lib.addFunction("string::stringFromCharArr(ref string::string, const ref char)", (FuncRef<void, BSString*, const char*>)[](BSString* str, const char* cstr)
         {
             new(str) BSString(cstr);
         });

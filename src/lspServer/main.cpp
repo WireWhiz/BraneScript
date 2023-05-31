@@ -3,7 +3,6 @@
 #include "robin_hood.h"
 #include "staticAnalysis/staticAnalyzer.h"
 #include <filesystem>
-#include <fstream>
 #include <iostream>
 #include "tokenSerializer.h"
 

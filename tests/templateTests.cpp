@@ -10,7 +10,7 @@ using namespace BraneScript;
 TEST(BraneScript, Templates)
 {
     std::string testString = R"(
-    export as "tests"
+    module "tests"
     {
         template<typedef Arg1, typedef Arg2>
         Arg1 add(Arg1 a, Arg2 b)
@@ -48,16 +48,12 @@ TEST(BraneScript, Templates)
             return output;
         }
 
-        template<typedef T>
-        T sumRecursive(T value)
-        {
-            return value;
-        }
-
         template<typedef T, typedef... Args>
         T sumRecursive(T value, Args... args)
         {
-            return value + sumRecursive<Args...>(args...);
+            if(sizeof...(Args) != 0)
+                return value + sumRecursive<Args...>(args...);
+            return value;
         }
 
         int sum4(int v1, int v2, int v3, int v4)
@@ -87,17 +83,20 @@ TEST(BraneScript, Templates)
     checkCompileErrors(analyzer, testString);
 
     auto ir = analyzer.compile("test");
-
-    ScriptRuntime rt;
-    Script* testScript = rt.loadScript(ir);
-    ASSERT_TRUE(testScript);
+    ASSERT_TRUE(ir.modules.contains("tests"));
 
     /* Make sure that the amount of functions generated is what we expect (make sure there are no duplicate template instances)
      * getter functions = 4
      * global function template instances = 2
      * template struct constructors = 4
      */
-    EXPECT_EQ(ir.exportedFunctions.size(), 22);
+    EXPECT_EQ(ir.modules.at("tests").functions.size(), 24);
+
+    ScriptRuntime rt;
+    rt.resetMallocDiff();
+    Module* testScript = rt.loadModule(ir.modules.at("tests"));
+    ASSERT_TRUE(testScript);
+
 
     auto addIntExplicit = testScript->getFunction<int, int, int>("tests::addIntExplicit");
     ASSERT_TRUE(addIntExplicit);

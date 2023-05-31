@@ -21,7 +21,15 @@ public:
    */
     virtual std::any visitProgram(braneParser::ProgramContext *context) = 0;
 
-    virtual std::any visitProgSegment(braneParser::ProgSegmentContext *context) = 0;
+    virtual std::any visitLink(braneParser::LinkContext *context) = 0;
+
+    virtual std::any visitLinkList(braneParser::LinkListContext *context) = 0;
+
+    virtual std::any visitTags(braneParser::TagsContext *context) = 0;
+
+    virtual std::any visitModule(braneParser::ModuleContext *context) = 0;
+
+    virtual std::any visitModuleComponent(braneParser::ModuleComponentContext *context) = 0;
 
     virtual std::any visitGlobal(braneParser::GlobalContext *context) = 0;
 
@@ -51,17 +59,17 @@ public:
 
     virtual std::any visitArgumentPack(braneParser::ArgumentPackContext *context) = 0;
 
+    virtual std::any visitBracketOpr(braneParser::BracketOprContext *context) = 0;
+
     virtual std::any visitFunctionSig(braneParser::FunctionSigContext *context) = 0;
 
     virtual std::any visitFunctionStub(braneParser::FunctionStubContext *context) = 0;
 
     virtual std::any visitFunction(braneParser::FunctionContext *context) = 0;
 
-    virtual std::any visitLink(braneParser::LinkContext *context) = 0;
+    virtual std::any visitCapturedVar(braneParser::CapturedVarContext *context) = 0;
 
-    virtual std::any visitExport(braneParser::ExportContext *context) = 0;
-
-    virtual std::any visitExportSegment(braneParser::ExportSegmentContext *context) = 0;
+    virtual std::any visitVarCapture(braneParser::VarCaptureContext *context) = 0;
 
     virtual std::any visitStructDef(braneParser::StructDefContext *context) = 0;
 
@@ -108,6 +116,8 @@ public:
     virtual std::any visitCast(braneParser::CastContext *context) = 0;
 
     virtual std::any visitParen(braneParser::ParenContext *context) = 0;
+
+    virtual std::any visitLambda(braneParser::LambdaContext *context) = 0;
 
     virtual std::any visitSizeOfPack(braneParser::SizeOfPackContext *context) = 0;
 

@@ -5,9 +5,9 @@
 #include "script.h"
 #include "llvm/ExecutionEngine/Orc/Core.h"
 
-BraneScript::Script::Script(llvm::orc::JITDylib& lib) : lib(lib){}
+BraneScript::Module::Module(llvm::orc::JITDylib& lib) : lib(lib){}
 
-BraneScript::Script::~Script()
+BraneScript::Module::~Module()
 {
     if(globalVars.empty())
         return;

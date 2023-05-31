@@ -4,20 +4,25 @@
 
 #include <cassert>
 #include "functionCallTree.h"
+#include "documentContext.h"
 
 namespace BraneScript
 {
-
+    uint32_t indentDepth = 0;
     bool FunctionCallTree::visitNode(FunctionNode* node, std::vector<FunctionContext*>& result)
     {
+        printf("%*sVisiting %s\n", indentDepth, "", node->ctx->identifier.text.c_str());
         if(node->placed)
             return true;
         if(node->visited)
             return false;
         node->visited = true;
+        indentDepth += 2;
         for(FunctionNode* dep : node->dependencies)
             visitNode(dep, result);
+        indentDepth -= 2;
         result.push_back(node->ctx);
+        printf("%*s%s placed\n", indentDepth, "", node->ctx->identifier.text.c_str());
         node->placed = true;
         node->visited = false;
         return true;
@@ -25,12 +30,15 @@ namespace BraneScript
 
     void FunctionCallTree::addFunction(FunctionContext* func)
     {
-        nodes.insert({func, FunctionNode{func}});
+        if(!nodes.contains(func))
+            nodes.insert({func, FunctionNode{func}});
     }
 
     void FunctionCallTree::addDependency(FunctionContext* func, FunctionContext* dep)
     {
         assert(func && dep);
+        if(func == dep)
+            return;
         if(!nodes.contains(func))
             addFunction(func);
         if(!nodes.contains(dep))
@@ -43,6 +51,9 @@ namespace BraneScript
 
     bool FunctionCallTree::resolveCallOrder(std::vector<FunctionContext*>& result)
     {
+        printf("Resolving call order\n");
+        result.clear();
+        result.reserve(nodes.size());
         for(auto& node : nodes)
         {
             node.second.placed = false;
@@ -57,7 +68,13 @@ namespace BraneScript
             if(!visitNode(&node.second, result))
                 return false;
         }
+        printf("Call order resolved\n\n");
         return true;
+    }
+
+    void FunctionCallTree::clear()
+    {
+        nodes.clear();
     }
 }
 

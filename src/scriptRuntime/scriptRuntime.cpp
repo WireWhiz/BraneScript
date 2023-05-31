@@ -71,8 +71,7 @@ namespace BraneScript
         std::shared_ptr<llvm::TargetMachine> tm;
         if(auto etm = jtmb.createTargetMachine())
             tm = std::move(*etm);
-        _transformLayer =
-            std::make_unique<llvm::orc::IRTransformLayer>(*_session, *_compileLayer, [tm](llvm::orc::ThreadSafeModule m, const auto& r) {
+        _transformLayer = std::make_unique<llvm::orc::IRTransformLayer>(*_session, *_compileLayer, [tm](llvm::orc::ThreadSafeModule m, const auto& r) {
                 // Add some optimizations.
                 std::string moduleErr;
                 llvm::raw_string_ostream modErrStr(moduleErr);
@@ -114,32 +113,32 @@ namespace BraneScript
                     fpm.run(f, fam);
                 }
 
-                std::string moduleText;
-                llvm::raw_string_ostream modStr(moduleText);
-                m.getModuleUnlocked()->print(modStr, nullptr);
-                printf("Loaded Optimized IR:\n%s", moduleText.c_str());
-
                 return std::move(m);
             });
 
 
         NativeLibrary unsafeLib("unsafe");
-        unsafeLib.addFunction("unsafe::malloc(uint)", (FunctionHandle<void*, int>)[](int size){
+        unsafeLib.addFunction("unsafe::malloc(uint)", (FuncRef<void*, int>)[](int size){
             _scriptMallocDiff++;
-            return ::operator new(size);
+            auto ptr = ::operator new(size);
+            printf("Allocating %d bytes at %p\n", size, ptr);
+            return ptr;
         });
-        unsafeLib.addFunction("unsafe::free(ref void)", (FunctionHandle<void, void*>)[](void* ptr){
+        unsafeLib.addFunction("unsafe::free(ref void)", (FuncRef<void, void*>)[](void* ptr){
             _scriptMallocDiff--;
+            printf("Freeing %p\n", ptr);
             ::operator delete(ptr);
         });
         loadLibrary(unsafeLib);
     }
 
-    Script* ScriptRuntime::loadScript(const IRScript& irScript)
+    Module* ScriptRuntime::loadModule(const IRModule& irModule)
     {
+        if(_modules.contains(irModule.id))
+            throw std::runtime_error("Module with id \"" + irModule.id + "\" already loaded");
         auto ctx = std::make_unique<llvm::LLVMContext>();
 
-        auto deserializedModule = llvm::parseBitcodeFile(llvm::MemoryBufferRef(irScript.bitcode, irScript.id), *ctx);
+        auto deserializedModule = llvm::parseBitcodeFile(llvm::MemoryBufferRef(irModule.bitcode, irModule.id), *ctx);
         if(!deserializedModule)
         {
             auto errorText = toString(deserializedModule.takeError());
@@ -148,74 +147,68 @@ namespace BraneScript
         (*deserializedModule)->setDataLayout(*_layout);
         (*deserializedModule)->setTargetTriple(_session->getExecutorProcessControl().getTargetTriple().str());
 
-        auto& lib = _session->createBareJITDylib(irScript.id);
-        for(auto& importedLib : irScript.importedLibs)
+        auto& lib = _session->createBareJITDylib(irModule.id);
+        for(auto& importedModule : irModule.links)
         {
-            auto providers = _modules.find(importedLib);
-            if(providers == _modules.end())
-                throw std::runtime_error(irScript.id + " Could not link to required library: " + importedLib);
-            for(auto& lLib : providers->second)
-                lib.addToLinkOrder(*lLib);
+            auto providers = _libraries.find(importedModule);
+            if(providers == _libraries.end())
+                throw std::runtime_error(irModule.id + " Could not link to required module: " + importedModule);
+            lib.addToLinkOrder(*providers->second);
         }
 
-        auto* script = new Script(lib);
+        auto* script = new Module(lib);
         script->rt = lib.getDefaultResourceTracker();
 
         if(llvm::Error res = _transformLayer->add(
                script->rt, llvm::orc::ThreadSafeModule(std::move(*deserializedModule), std::move(ctx))))
             throw std::runtime_error("Unable to add script: " + toString(std::move(res)));
 
-        for(auto& globSig : irScript.exportedGlobals)
+        for(auto& glob : irModule.globals)
         {
-            auto globSymbol = _session->lookup({&lib}, (*_mangler)(globSig));
+            auto globSymbol = _session->lookup({&lib}, (*_mangler)(glob.name));
             if(!globSymbol)
                 throw std::runtime_error("Unable to find exported global: " + toString(globSymbol.takeError()));
-            script->globalNames.insert({globSig, script->globalVars.size()});
+            script->globalNames.insert({glob.name, script->globalVars.size()});
             script->globalVars.push_back((void*)globSymbol->getAddress());
         }
 
-        for(auto& funcSig : irScript.exportedFunctions)
+        for(auto& func : irModule.functions)
         {
-            auto functionSym = _session->lookup({&lib}, (*_mangler)(funcSig));
+            auto functionSym = _session->lookup({&lib}, (*_mangler)(func.name));
             if(!functionSym)
                 throw std::runtime_error("Unable to find exported function: " + toString(functionSym.takeError()));
-            script->functionNames.insert({funcSig, script->functions.size()});
+            script->functionNames.insert({func.name, script->functions.size()});
             script->functions.push_back((void*)functionSym->getAddress());
         }
 
         auto constructor = _session->lookup({&lib}, (*_mangler)("_construct"));
         if(constructor)
-            FunctionHandle<void>(constructor->getAddress())();
+            FuncRef<void>(constructor->getAddress())();
 
         auto destructor = _session->lookup({&lib}, (*_mangler)("_construct"));
         if(destructor)
-            script->destructor = FunctionHandle<void>(destructor->getAddress());
+            script->destructor = FuncRef<void>(destructor->getAddress());
 
         // TODO extract structs
 
-        _scripts.emplace(irScript.id, script);
-        for(auto& e : irScript.exportedLibs)
-        {
-            script->exportsModules.insert(e);
-            _modules[e].insert(&script->lib);
-        }
+        _modules.emplace(irModule.id, script);
+        _libraries.emplace(irModule.id, &script->lib);
 
         return script;
     }
 
-    void ScriptRuntime::unloadScript(const std::string& id)
+    void ScriptRuntime::unloadModule(const std::string& id)
     {
         // TODO assert that no scripts depend on this one
-        auto& script = _scripts.at(id);
-        for(auto& mod : script->exportsModules)
-            _modules.at(mod).erase(&script->lib);
+        assert(_modules.contains(id));
 
-        _scripts.erase(id);
+        _libraries.erase(id);
+        _modules.erase(id);
     }
 
-    ScriptRuntime::~ScriptRuntime() { _scripts.clear(); }
+    ScriptRuntime::~ScriptRuntime() { _modules.clear(); }
 
-    void ScriptRuntime::loadLibrary(const NativeLibrary& lib)
+    llvm::orc::JITDylib& ScriptRuntime::loadLibrary(const NativeLibrary& lib)
     {
         auto& newLib = _session->createBareJITDylib(lib.identifier);
         llvm::orc::SymbolMap symbols;
@@ -229,7 +222,8 @@ namespace BraneScript
         }
         if(auto err = newLib.define(llvm::orc::absoluteSymbols(symbols)))
             throw std::runtime_error("Unable to load native library: " + toString(std::move(err)));
-        _modules[lib.identifier].insert(&newLib);
+        _libraries.emplace(lib.identifier, &newLib);
+        return newLib;
     }
 
     int64_t ScriptRuntime::mallocDiff() const { return _scriptMallocDiff; }

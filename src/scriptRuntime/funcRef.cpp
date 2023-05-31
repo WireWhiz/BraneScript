@@ -2,7 +2,7 @@
 // Created by eli on 11/4/2022.
 //
 
-#include "functionHandle.h"
+#include "funcRef.h"
 #include <string_view>
 
 namespace BraneScript

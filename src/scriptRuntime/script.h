@@ -8,7 +8,7 @@
 #include <memory>
 #include <string>
 #include <vector>
-#include "functionHandle.h"
+#include "funcRef.h"
 #include "robin_hood.h"
 #include <llvm/ADT/IntrusiveRefCntPtr.h>
 #include <unordered_map>
@@ -21,13 +21,12 @@ namespace llvm::orc
 
 namespace BraneScript
 {
-    class Script
+    class Module
     {
         friend class ScriptRuntime;
-        FunctionHandle<void> destructor = nullptr;
+        FuncRef<void> destructor = nullptr;
     public:
-        std::string source;
-        robin_hood::unordered_set<std::string> exportsModules;
+        std::string id;
 
         llvm::orc::JITDylib& lib;
         llvm::IntrusiveRefCntPtr<llvm::orc::ResourceTracker> rt;
@@ -39,7 +38,7 @@ namespace BraneScript
         robin_hood::unordered_map<std::string, size_t> globalNames;
 
         template<typename Ret, typename... Args>
-        FunctionHandle<Ret, Args...> getFunction(const std::string& name) const
+        FuncRef<Ret, Args...> getFunction(const std::string& name) const
         {
             std::string arguments;
             //Check to see if arguments already have been filled in
@@ -54,7 +53,7 @@ namespace BraneScript
             auto f = functionNames.find(name + arguments);
             if (f == functionNames.end())
                 return nullptr;
-            return (FunctionHandle<Ret, Args...>)functions[f->second];
+            return (FuncRef<Ret, Args...>)functions[f->second];
         }
 
         template<typename T>
@@ -66,8 +65,8 @@ namespace BraneScript
             return (T*)globalVars[g->second];
         }
 
-        Script(llvm::orc::JITDylib& lib);
-        ~Script();
+        Module(llvm::orc::JITDylib& lib);
+        ~Module();
     };
 }
 

@@ -21,13 +21,13 @@ TEST(BraneScript, FunctionRefs)
 
     std::string testString = R"(
 
-    export as "tests"
+    module "tests"
     {
         FuncRef<int, int> globalFunc;
 
         void setGlobalFuncExt(FuncRef<int, int> func)
         {
-            globalFunc <- func;
+            globalFunc = func;
         }
 
         FuncRef<int, int> getGlobalFunc()
@@ -53,7 +53,7 @@ TEST(BraneScript, FunctionRefs)
 
         void setGlobalFuncLoc()
         {
-            globalFunc <- addOne;
+            globalFunc = addOne;
         }
     }
 )";
@@ -64,9 +64,11 @@ TEST(BraneScript, FunctionRefs)
 
     llvm::LLVMContext ctx;
     auto ir = analyzer.getCtx("test")->scriptContext->compile(&ctx, false, true);
+    ASSERT_TRUE(ir.modules.contains("tests"));
 
     ScriptRuntime rt;
-    Script* testScript = rt.loadScript(ir);
+    rt.resetMallocDiff();
+    Module* testScript = rt.loadModule(ir.modules.at("tests"));
     ASSERT_TRUE(testScript);
 
     auto setGlobalFunctionExt = testScript->getFunction<void, int(*)(int)>("tests::setGlobalFuncExt(FuncRef<int,int>)");

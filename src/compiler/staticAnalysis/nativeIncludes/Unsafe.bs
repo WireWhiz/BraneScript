@@ -1,4 +1,4 @@
-export as "unsafe"
+module "unsafe"
 {
     ref void malloc(uint size) ext;
     void free(ref void ptr) ext;

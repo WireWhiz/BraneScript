@@ -5,9 +5,9 @@
 #ifndef BRANESCRIPT_STRUCTDEFINITION_H
 #define BRANESCRIPT_STRUCTDEFINITION_H
 
-#include "typeDef.h"
 #include <vector>
-#include "functionHandle.h"
+#include "funcRef.h"
+#include "typeDef.h"
 
 namespace BraneScript
 {

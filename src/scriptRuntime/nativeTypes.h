@@ -5,11 +5,11 @@
 #ifndef BRANESCRIPT_NATIVETYPES_H
 #define BRANESCRIPT_NATIVETYPES_H
 
+#include <cstdarg>
+#include <vector>
+#include "funcRef.h"
 #include "typeDef.h"
 #include <robin_hood.h>
-#include <vector>
-#include <cstdarg>
-#include "functionHandle.h"
 
 namespace BraneScript
 {

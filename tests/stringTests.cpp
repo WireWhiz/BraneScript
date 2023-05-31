@@ -11,8 +11,8 @@ using namespace BraneScript;
 TEST(BraneScript, Strings)
 {
     std::string testString = R"(
-    link "string";
-    export as "tests"
+    module "tests"
+    link "string"
     {
         string testConst()
         {
@@ -42,12 +42,13 @@ TEST(BraneScript, Strings)
     analyzer.validate("test");
     checkCompileErrors(analyzer, testString);
 
-    llvm::LLVMContext ctx;
-    auto ir = analyzer.getCtx("test")->scriptContext->compile(&ctx, false);
+    auto ir = analyzer.compile("test");
+    ASSERT_TRUE(ir.modules.contains("tests"));
 
     ScriptRuntime rt;
+    rt.resetMallocDiff();
     rt.loadLibrary(BSString::library());
-    Script* testScript = rt.loadScript(ir);
+    Module* testScript = rt.loadModule(ir.modules.at("tests"));
     ASSERT_TRUE(testScript);
 
     BSString argA = "a";

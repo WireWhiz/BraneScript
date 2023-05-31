@@ -18,9 +18,9 @@ public:
     T__20 = 21, T__21 = 22, T__22 = 23, T__23 = 24, T__24 = 25, T__25 = 26, 
     T__26 = 27, T__27 = 28, T__28 = 29, T__29 = 30, T__30 = 31, T__31 = 32, 
     T__32 = 33, T__33 = 34, T__34 = 35, T__35 = 36, T__36 = 37, T__37 = 38, 
-    NEWLINE = 39, COMMENT = 40, BLOCK_COMMENT = 41, SPACE = 42, BOOL = 43, 
-    INT = 44, FLOAT = 45, CHAR = 46, STRING = 47, ID = 48, MUL = 49, DIV = 50, 
-    ADD = 51, SUB = 52, LOGIC = 53
+    T__38 = 39, COMMENT = 40, NEWLINE = 41, BLOCK_COMMENT = 42, SPACE = 43, 
+    BOOL = 44, INT = 45, FLOAT = 46, CHAR = 47, STRING = 48, ID = 49, MUL = 50, 
+    DIV = 51, ADD = 52, SUB = 53, LOGIC = 54
   };
 
   explicit braneLexer(antlr4::CharStream *input);

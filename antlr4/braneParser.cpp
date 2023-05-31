@@ -43,154 +43,182 @@ void braneParserInitialize() {
   assert(braneParserStaticData == nullptr);
   auto staticData = std::make_unique<BraneParserStaticData>(
     std::vector<std::string>{
-      "program", "progSegment", "global", "templateDefArgument", "templateDef", 
-      "templateArg", "templateArgs", "scopedID", "type", "declaration", 
-      "argumentListItem", "argumentList", "argumentPackItem", "argumentPack", 
-      "functionSig", "functionStub", "function", "link", "export", "exportSegment", 
-      "structDef", "structMember", "statement", "expression"
+      "program", "link", "linkList", "tags", "module", "moduleComponent", 
+      "global", "templateDefArgument", "templateDef", "templateArg", "templateArgs", 
+      "scopedID", "type", "declaration", "argumentListItem", "argumentList", 
+      "argumentPackItem", "argumentPack", "bracketOpr", "functionSig", "functionStub", 
+      "function", "capturedVar", "varCapture", "structDef", "structMember", 
+      "statement", "expression"
     },
     std::vector<std::string>{
-      "", "';'", "'typedef'", "'...'", "'template'", "'<'", "','", "'>'", 
-      "'::'", "'const'", "'ref'", "'constexpr'", "'opr'", "'=='", "'!='", 
-      "'<='", "'>='", "'[]'", "'('", "')'", "'ext'", "'{'", "'}'", "'link'", 
-      "'as'", "'export as'", "'packed'", "'struct'", "'='", "'<-'", "'return'", 
-      "'if'", "'else'", "'while'", "'unroll'", "'sizeof'", "'['", "']'", 
-      "'.'", "", "", "", "", "", "", "", "", "", "", "'*'", "'/'", "'+'", 
-      "'-'"
+      "", "'public'", "'link'", "'as'", "'['", "','", "']'", "'module'", 
+      "'{'", "'}'", "';'", "'typedef'", "'...'", "'template'", "'<'", "'>'", 
+      "'Lambda'", "'::'", "'const'", "'ref'", "'('", "')'", "'constexpr'", 
+      "'opr'", "'=='", "'!='", "'<='", "'>='", "'ext'", "'packed'", "'struct'", 
+      "'='", "'<-'", "'return'", "'if'", "'else'", "'while'", "'unroll'", 
+      "'sizeof'", "'.'", "", "", "", "", "", "", "", "", "", "", "'*'", 
+      "'/'", "'+'", "'-'"
     },
     std::vector<std::string>{
       "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", 
       "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", 
-      "", "", "", "", "", "NEWLINE", "COMMENT", "BLOCK_COMMENT", "SPACE", 
+      "", "", "", "", "", "", "COMMENT", "NEWLINE", "BLOCK_COMMENT", "SPACE", 
       "BOOL", "INT", "FLOAT", "CHAR", "STRING", "ID", "MUL", "DIV", "ADD", 
       "SUB", "LOGIC"
     }
   );
   static const int32_t serializedATNSegment[] = {
-  	4,1,53,360,2,0,7,0,2,1,7,1,2,2,7,2,2,3,7,3,2,4,7,4,2,5,7,5,2,6,7,6,2,
+  	4,1,54,435,2,0,7,0,2,1,7,1,2,2,7,2,2,3,7,3,2,4,7,4,2,5,7,5,2,6,7,6,2,
   	7,7,7,2,8,7,8,2,9,7,9,2,10,7,10,2,11,7,11,2,12,7,12,2,13,7,13,2,14,7,
   	14,2,15,7,15,2,16,7,16,2,17,7,17,2,18,7,18,2,19,7,19,2,20,7,20,2,21,7,
-  	21,2,22,7,22,2,23,7,23,1,0,4,0,50,8,0,11,0,12,0,51,1,0,1,0,1,0,3,0,57,
-  	8,0,1,1,1,1,1,1,1,1,1,1,1,1,3,1,65,8,1,1,2,1,2,1,2,1,2,1,3,1,3,3,3,73,
-  	8,3,1,3,3,3,76,8,3,1,3,1,3,1,4,1,4,1,4,1,4,1,4,5,4,85,8,4,10,4,12,4,88,
-  	9,4,1,4,1,4,1,5,1,5,1,5,1,5,3,5,96,8,5,1,6,1,6,1,6,1,6,5,6,102,8,6,10,
-  	6,12,6,105,9,6,1,6,1,6,1,7,1,7,3,7,111,8,7,1,7,1,7,3,7,115,8,7,1,8,3,
-  	8,118,8,8,1,8,3,8,121,8,8,1,8,1,8,1,9,1,9,1,9,1,10,1,10,1,10,1,10,3,10,
-  	132,8,10,1,11,1,11,1,11,5,11,137,8,11,10,11,12,11,140,9,11,3,11,142,8,
-  	11,1,12,1,12,1,12,3,12,147,8,12,1,13,1,13,1,13,5,13,152,8,13,10,13,12,
-  	13,155,9,13,3,13,157,8,13,1,14,3,14,160,8,14,1,14,3,14,163,8,14,1,14,
-  	1,14,1,14,1,14,3,14,169,8,14,1,14,1,14,3,14,173,8,14,1,15,1,15,1,15,1,
-  	15,1,15,3,15,180,8,15,1,15,1,15,1,15,1,16,1,16,1,16,1,16,1,16,3,16,190,
-  	8,16,1,16,1,16,5,16,194,8,16,10,16,12,16,197,9,16,1,16,1,16,1,17,1,17,
-  	1,17,1,17,3,17,205,8,17,1,17,1,17,1,18,1,18,1,18,1,18,5,18,213,8,18,10,
-  	18,12,18,216,9,18,1,18,1,18,1,19,1,19,1,19,1,19,3,19,224,8,19,1,20,3,
-  	20,227,8,20,1,20,3,20,230,8,20,1,20,1,20,1,20,1,20,5,20,236,8,20,10,20,
-  	12,20,239,9,20,1,20,1,20,1,21,1,21,1,21,1,21,1,21,3,21,248,8,21,1,22,
-  	1,22,1,22,1,22,1,22,1,22,1,22,1,22,1,22,1,22,1,22,1,22,1,22,1,22,1,22,
-  	5,22,265,8,22,10,22,12,22,268,9,22,1,22,1,22,1,22,3,22,273,8,22,1,22,
-  	1,22,1,22,1,22,1,22,1,22,1,22,1,22,3,22,283,8,22,1,22,1,22,1,22,1,22,
-  	1,22,1,22,1,22,1,22,1,22,1,22,1,22,3,22,296,8,22,1,23,1,23,1,23,1,23,
-  	1,23,1,23,1,23,1,23,1,23,1,23,1,23,1,23,1,23,1,23,1,23,1,23,1,23,1,23,
-  	1,23,1,23,1,23,1,23,1,23,1,23,1,23,1,23,1,23,3,23,325,8,23,1,23,1,23,
-  	1,23,1,23,1,23,1,23,1,23,1,23,1,23,1,23,1,23,1,23,1,23,1,23,1,23,1,23,
-  	1,23,1,23,1,23,1,23,1,23,1,23,1,23,1,23,1,23,1,23,3,23,353,8,23,5,23,
-  	355,8,23,10,23,12,23,358,9,23,1,23,0,1,46,24,0,2,4,6,8,10,12,14,16,18,
-  	20,22,24,26,28,30,32,34,36,38,40,42,44,46,0,4,4,0,5,5,7,7,13,17,49,53,
-  	1,0,49,50,1,0,51,52,3,0,5,5,7,7,13,16,403,0,56,1,0,0,0,2,64,1,0,0,0,4,
-  	66,1,0,0,0,6,72,1,0,0,0,8,79,1,0,0,0,10,95,1,0,0,0,12,97,1,0,0,0,14,108,
-  	1,0,0,0,16,117,1,0,0,0,18,124,1,0,0,0,20,131,1,0,0,0,22,141,1,0,0,0,24,
-  	146,1,0,0,0,26,156,1,0,0,0,28,159,1,0,0,0,30,174,1,0,0,0,32,184,1,0,0,
-  	0,34,200,1,0,0,0,36,208,1,0,0,0,38,223,1,0,0,0,40,226,1,0,0,0,42,247,
-  	1,0,0,0,44,295,1,0,0,0,46,324,1,0,0,0,48,50,3,2,1,0,49,48,1,0,0,0,50,
-  	51,1,0,0,0,51,49,1,0,0,0,51,52,1,0,0,0,52,53,1,0,0,0,53,54,5,0,0,1,54,
-  	57,1,0,0,0,55,57,5,0,0,1,56,49,1,0,0,0,56,55,1,0,0,0,57,1,1,0,0,0,58,
-  	65,3,32,16,0,59,65,3,30,15,0,60,65,3,40,20,0,61,65,3,4,2,0,62,65,3,34,
-  	17,0,63,65,3,36,18,0,64,58,1,0,0,0,64,59,1,0,0,0,64,60,1,0,0,0,64,61,
-  	1,0,0,0,64,62,1,0,0,0,64,63,1,0,0,0,65,3,1,0,0,0,66,67,3,16,8,0,67,68,
-  	5,48,0,0,68,69,5,1,0,0,69,5,1,0,0,0,70,73,3,16,8,0,71,73,5,2,0,0,72,70,
-  	1,0,0,0,72,71,1,0,0,0,73,75,1,0,0,0,74,76,5,3,0,0,75,74,1,0,0,0,75,76,
-  	1,0,0,0,76,77,1,0,0,0,77,78,5,48,0,0,78,7,1,0,0,0,79,80,5,4,0,0,80,81,
-  	5,5,0,0,81,86,3,6,3,0,82,83,5,6,0,0,83,85,3,6,3,0,84,82,1,0,0,0,85,88,
-  	1,0,0,0,86,84,1,0,0,0,86,87,1,0,0,0,87,89,1,0,0,0,88,86,1,0,0,0,89,90,
-  	5,7,0,0,90,9,1,0,0,0,91,96,3,16,8,0,92,96,3,46,23,0,93,94,5,48,0,0,94,
-  	96,5,3,0,0,95,91,1,0,0,0,95,92,1,0,0,0,95,93,1,0,0,0,96,11,1,0,0,0,97,
-  	98,5,5,0,0,98,103,3,10,5,0,99,100,5,6,0,0,100,102,3,10,5,0,101,99,1,0,
-  	0,0,102,105,1,0,0,0,103,101,1,0,0,0,103,104,1,0,0,0,104,106,1,0,0,0,105,
-  	103,1,0,0,0,106,107,5,7,0,0,107,13,1,0,0,0,108,110,5,48,0,0,109,111,3,
-  	12,6,0,110,109,1,0,0,0,110,111,1,0,0,0,111,114,1,0,0,0,112,113,5,8,0,
-  	0,113,115,3,14,7,0,114,112,1,0,0,0,114,115,1,0,0,0,115,15,1,0,0,0,116,
-  	118,5,9,0,0,117,116,1,0,0,0,117,118,1,0,0,0,118,120,1,0,0,0,119,121,5,
-  	10,0,0,120,119,1,0,0,0,120,121,1,0,0,0,121,122,1,0,0,0,122,123,3,14,7,
-  	0,123,17,1,0,0,0,124,125,3,16,8,0,125,126,5,48,0,0,126,19,1,0,0,0,127,
-  	132,3,18,9,0,128,129,5,48,0,0,129,130,5,3,0,0,130,132,5,48,0,0,131,127,
-  	1,0,0,0,131,128,1,0,0,0,132,21,1,0,0,0,133,138,3,20,10,0,134,135,5,6,
-  	0,0,135,137,3,20,10,0,136,134,1,0,0,0,137,140,1,0,0,0,138,136,1,0,0,0,
-  	138,139,1,0,0,0,139,142,1,0,0,0,140,138,1,0,0,0,141,133,1,0,0,0,141,142,
-  	1,0,0,0,142,23,1,0,0,0,143,147,3,46,23,0,144,145,5,48,0,0,145,147,5,3,
-  	0,0,146,143,1,0,0,0,146,144,1,0,0,0,147,25,1,0,0,0,148,153,3,24,12,0,
-  	149,150,5,6,0,0,150,152,3,24,12,0,151,149,1,0,0,0,152,155,1,0,0,0,153,
-  	151,1,0,0,0,153,154,1,0,0,0,154,157,1,0,0,0,155,153,1,0,0,0,156,148,1,
-  	0,0,0,156,157,1,0,0,0,157,27,1,0,0,0,158,160,3,8,4,0,159,158,1,0,0,0,
-  	159,160,1,0,0,0,160,162,1,0,0,0,161,163,5,11,0,0,162,161,1,0,0,0,162,
-  	163,1,0,0,0,163,172,1,0,0,0,164,168,3,16,8,0,165,169,5,48,0,0,166,167,
-  	5,12,0,0,167,169,7,0,0,0,168,165,1,0,0,0,168,166,1,0,0,0,169,173,1,0,
-  	0,0,170,171,5,12,0,0,171,173,3,16,8,0,172,164,1,0,0,0,172,170,1,0,0,0,
-  	173,29,1,0,0,0,174,175,3,28,14,0,175,176,5,18,0,0,176,177,3,22,11,0,177,
-  	179,5,19,0,0,178,180,5,9,0,0,179,178,1,0,0,0,179,180,1,0,0,0,180,181,
-  	1,0,0,0,181,182,5,20,0,0,182,183,5,1,0,0,183,31,1,0,0,0,184,185,3,28,
-  	14,0,185,186,5,18,0,0,186,187,3,22,11,0,187,189,5,19,0,0,188,190,5,9,
-  	0,0,189,188,1,0,0,0,189,190,1,0,0,0,190,191,1,0,0,0,191,195,5,21,0,0,
-  	192,194,3,44,22,0,193,192,1,0,0,0,194,197,1,0,0,0,195,193,1,0,0,0,195,
-  	196,1,0,0,0,196,198,1,0,0,0,197,195,1,0,0,0,198,199,5,22,0,0,199,33,1,
-  	0,0,0,200,201,5,23,0,0,201,204,5,47,0,0,202,203,5,24,0,0,203,205,5,47,
-  	0,0,204,202,1,0,0,0,204,205,1,0,0,0,205,206,1,0,0,0,206,207,5,1,0,0,207,
-  	35,1,0,0,0,208,209,5,25,0,0,209,210,5,47,0,0,210,214,5,21,0,0,211,213,
-  	3,38,19,0,212,211,1,0,0,0,213,216,1,0,0,0,214,212,1,0,0,0,214,215,1,0,
-  	0,0,215,217,1,0,0,0,216,214,1,0,0,0,217,218,5,22,0,0,218,37,1,0,0,0,219,
-  	224,3,32,16,0,220,224,3,30,15,0,221,224,3,40,20,0,222,224,3,4,2,0,223,
-  	219,1,0,0,0,223,220,1,0,0,0,223,221,1,0,0,0,223,222,1,0,0,0,224,39,1,
-  	0,0,0,225,227,3,8,4,0,226,225,1,0,0,0,226,227,1,0,0,0,227,229,1,0,0,0,
-  	228,230,5,26,0,0,229,228,1,0,0,0,229,230,1,0,0,0,230,231,1,0,0,0,231,
-  	232,5,27,0,0,232,233,5,48,0,0,233,237,5,21,0,0,234,236,3,42,21,0,235,
-  	234,1,0,0,0,236,239,1,0,0,0,237,235,1,0,0,0,237,238,1,0,0,0,238,240,1,
-  	0,0,0,239,237,1,0,0,0,240,241,5,22,0,0,241,41,1,0,0,0,242,243,3,18,9,
-  	0,243,244,5,1,0,0,244,248,1,0,0,0,245,248,3,32,16,0,246,248,3,30,15,0,
-  	247,242,1,0,0,0,247,245,1,0,0,0,247,246,1,0,0,0,248,43,1,0,0,0,249,250,
-  	3,46,23,0,250,251,5,1,0,0,251,296,1,0,0,0,252,253,3,46,23,0,253,254,5,
-  	28,0,0,254,255,3,46,23,0,255,256,5,1,0,0,256,296,1,0,0,0,257,258,3,46,
-  	23,0,258,259,5,29,0,0,259,260,3,46,23,0,260,261,5,1,0,0,261,296,1,0,0,
-  	0,262,266,5,21,0,0,263,265,3,44,22,0,264,263,1,0,0,0,265,268,1,0,0,0,
-  	266,264,1,0,0,0,266,267,1,0,0,0,267,269,1,0,0,0,268,266,1,0,0,0,269,296,
-  	5,22,0,0,270,272,5,30,0,0,271,273,3,46,23,0,272,271,1,0,0,0,272,273,1,
-  	0,0,0,273,274,1,0,0,0,274,296,5,1,0,0,275,276,5,31,0,0,276,277,5,18,0,
-  	0,277,278,3,46,23,0,278,279,5,19,0,0,279,282,3,44,22,0,280,281,5,32,0,
-  	0,281,283,3,44,22,0,282,280,1,0,0,0,282,283,1,0,0,0,283,296,1,0,0,0,284,
-  	285,5,33,0,0,285,286,5,18,0,0,286,287,3,46,23,0,287,288,5,19,0,0,288,
-  	289,3,44,22,0,289,296,1,0,0,0,290,291,5,34,0,0,291,292,5,18,0,0,292,293,
-  	5,48,0,0,293,294,5,19,0,0,294,296,3,44,22,0,295,249,1,0,0,0,295,252,1,
-  	0,0,0,295,257,1,0,0,0,295,262,1,0,0,0,295,270,1,0,0,0,295,275,1,0,0,0,
-  	295,284,1,0,0,0,295,290,1,0,0,0,296,45,1,0,0,0,297,298,6,23,-1,0,298,
-  	325,5,44,0,0,299,325,5,45,0,0,300,325,5,46,0,0,301,325,5,47,0,0,302,325,
-  	5,43,0,0,303,304,5,35,0,0,304,305,5,18,0,0,305,306,3,16,8,0,306,307,5,
-  	19,0,0,307,325,1,0,0,0,308,309,5,35,0,0,309,310,5,3,0,0,310,311,5,18,
-  	0,0,311,312,5,48,0,0,312,325,5,19,0,0,313,325,3,18,9,0,314,325,3,14,7,
-  	0,315,316,5,18,0,0,316,317,3,16,8,0,317,318,5,19,0,0,318,319,3,46,23,
-  	6,319,325,1,0,0,0,320,321,5,18,0,0,321,322,3,46,23,0,322,323,5,19,0,0,
-  	323,325,1,0,0,0,324,297,1,0,0,0,324,299,1,0,0,0,324,300,1,0,0,0,324,301,
-  	1,0,0,0,324,302,1,0,0,0,324,303,1,0,0,0,324,308,1,0,0,0,324,313,1,0,0,
-  	0,324,314,1,0,0,0,324,315,1,0,0,0,324,320,1,0,0,0,325,356,1,0,0,0,326,
-  	327,10,5,0,0,327,328,7,1,0,0,328,355,3,46,23,6,329,330,10,4,0,0,330,331,
-  	7,2,0,0,331,355,3,46,23,5,332,333,10,3,0,0,333,334,5,53,0,0,334,355,3,
-  	46,23,4,335,336,10,2,0,0,336,337,7,3,0,0,337,355,3,46,23,3,338,339,10,
-  	10,0,0,339,340,5,18,0,0,340,341,3,26,13,0,341,342,5,19,0,0,342,355,1,
-  	0,0,0,343,344,10,8,0,0,344,345,5,36,0,0,345,346,3,46,23,0,346,347,5,37,
-  	0,0,347,355,1,0,0,0,348,349,10,7,0,0,349,350,5,38,0,0,350,352,5,48,0,
-  	0,351,353,3,12,6,0,352,351,1,0,0,0,352,353,1,0,0,0,353,355,1,0,0,0,354,
-  	326,1,0,0,0,354,329,1,0,0,0,354,332,1,0,0,0,354,335,1,0,0,0,354,338,1,
-  	0,0,0,354,343,1,0,0,0,354,348,1,0,0,0,355,358,1,0,0,0,356,354,1,0,0,0,
-  	356,357,1,0,0,0,357,47,1,0,0,0,358,356,1,0,0,0,40,51,56,64,72,75,86,95,
-  	103,110,114,117,120,131,138,141,146,153,156,159,162,168,172,179,189,195,
-  	204,214,223,226,229,237,247,266,272,282,295,324,352,354,356
+  	21,2,22,7,22,2,23,7,23,2,24,7,24,2,25,7,25,2,26,7,26,2,27,7,27,1,0,4,
+  	0,58,8,0,11,0,12,0,59,1,0,3,0,63,8,0,1,0,3,0,66,8,0,3,0,68,8,0,1,1,3,
+  	1,71,8,1,1,1,1,1,1,1,1,1,3,1,77,8,1,1,2,5,2,80,8,2,10,2,12,2,83,9,2,1,
+  	3,1,3,1,3,1,3,5,3,89,8,3,10,3,12,3,92,9,3,3,3,94,8,3,1,3,1,3,1,4,3,4,
+  	99,8,4,1,4,1,4,1,4,1,4,1,4,5,4,106,8,4,10,4,12,4,109,9,4,1,4,1,4,1,5,
+  	1,5,1,5,1,5,3,5,117,8,5,1,6,1,6,1,6,1,6,1,7,1,7,3,7,125,8,7,1,7,3,7,128,
+  	8,7,1,7,1,7,1,8,1,8,1,8,1,8,1,8,5,8,137,8,8,10,8,12,8,140,9,8,1,8,1,8,
+  	1,9,1,9,1,9,1,9,3,9,148,8,9,1,10,1,10,1,10,1,10,5,10,154,8,10,10,10,12,
+  	10,157,9,10,1,10,1,10,1,11,1,11,3,11,163,8,11,1,11,1,11,3,11,167,8,11,
+  	1,12,3,12,170,8,12,1,12,3,12,173,8,12,1,12,1,12,1,13,1,13,1,13,1,14,1,
+  	14,1,14,1,14,3,14,184,8,14,1,15,1,15,1,15,5,15,189,8,15,10,15,12,15,192,
+  	9,15,3,15,194,8,15,1,16,1,16,1,16,3,16,199,8,16,1,17,1,17,1,17,5,17,204,
+  	8,17,10,17,12,17,207,9,17,3,17,209,8,17,1,18,1,18,1,18,1,18,3,18,215,
+  	8,18,1,19,3,19,218,8,19,1,19,3,19,221,8,19,1,19,3,19,224,8,19,1,19,1,
+  	19,1,19,1,19,1,19,3,19,231,8,19,3,19,233,8,19,1,19,1,19,3,19,237,8,19,
+  	1,20,1,20,1,20,1,20,1,20,3,20,244,8,20,1,20,1,20,1,20,1,21,1,21,1,21,
+  	1,21,1,21,3,21,254,8,21,1,21,1,21,5,21,258,8,21,10,21,12,21,261,9,21,
+  	1,21,1,21,1,22,3,22,266,8,22,1,22,1,22,1,23,1,23,1,23,5,23,273,8,23,10,
+  	23,12,23,276,9,23,1,24,3,24,279,8,24,1,24,3,24,282,8,24,1,24,3,24,285,
+  	8,24,1,24,1,24,1,24,1,24,5,24,291,8,24,10,24,12,24,294,9,24,1,24,1,24,
+  	1,25,1,25,1,25,1,25,1,25,3,25,303,8,25,1,26,1,26,1,26,1,26,1,26,1,26,
+  	1,26,1,26,1,26,1,26,1,26,1,26,1,26,1,26,1,26,5,26,320,8,26,10,26,12,26,
+  	323,9,26,1,26,1,26,1,26,3,26,328,8,26,1,26,1,26,1,26,1,26,1,26,1,26,1,
+  	26,1,26,3,26,338,8,26,1,26,1,26,1,26,1,26,1,26,1,26,1,26,1,26,1,26,1,
+  	26,1,26,3,26,351,8,26,1,27,1,27,1,27,1,27,1,27,1,27,1,27,1,27,1,27,1,
+  	27,1,27,1,27,1,27,1,27,1,27,1,27,1,27,1,27,1,27,1,27,1,27,1,27,1,27,1,
+  	27,1,27,1,27,1,27,1,27,1,27,1,27,1,27,1,27,1,27,3,27,386,8,27,1,27,1,
+  	27,1,27,1,27,1,27,5,27,393,8,27,10,27,12,27,396,9,27,1,27,1,27,3,27,400,
+  	8,27,1,27,1,27,1,27,1,27,1,27,1,27,1,27,1,27,1,27,1,27,1,27,1,27,1,27,
+  	1,27,1,27,1,27,1,27,1,27,1,27,1,27,1,27,1,27,1,27,1,27,1,27,1,27,3,27,
+  	428,8,27,5,27,430,8,27,10,27,12,27,433,9,27,1,27,0,1,54,28,0,2,4,6,8,
+  	10,12,14,16,18,20,22,24,26,28,30,32,34,36,38,40,42,44,46,48,50,52,54,
+  	0,5,2,0,16,16,49,49,3,0,14,15,24,27,50,54,1,0,50,51,1,0,52,53,2,0,14,
+  	15,24,27,485,0,67,1,0,0,0,2,70,1,0,0,0,4,81,1,0,0,0,6,84,1,0,0,0,8,98,
+  	1,0,0,0,10,116,1,0,0,0,12,118,1,0,0,0,14,124,1,0,0,0,16,131,1,0,0,0,18,
+  	147,1,0,0,0,20,149,1,0,0,0,22,160,1,0,0,0,24,169,1,0,0,0,26,176,1,0,0,
+  	0,28,183,1,0,0,0,30,193,1,0,0,0,32,198,1,0,0,0,34,208,1,0,0,0,36,214,
+  	1,0,0,0,38,217,1,0,0,0,40,238,1,0,0,0,42,248,1,0,0,0,44,265,1,0,0,0,46,
+  	269,1,0,0,0,48,278,1,0,0,0,50,302,1,0,0,0,52,350,1,0,0,0,54,399,1,0,0,
+  	0,56,58,3,8,4,0,57,56,1,0,0,0,58,59,1,0,0,0,59,57,1,0,0,0,59,60,1,0,0,
+  	0,60,62,1,0,0,0,61,63,5,0,0,1,62,61,1,0,0,0,62,63,1,0,0,0,63,68,1,0,0,
+  	0,64,66,5,0,0,1,65,64,1,0,0,0,65,66,1,0,0,0,66,68,1,0,0,0,67,57,1,0,0,
+  	0,67,65,1,0,0,0,68,1,1,0,0,0,69,71,5,1,0,0,70,69,1,0,0,0,70,71,1,0,0,
+  	0,71,72,1,0,0,0,72,73,5,2,0,0,73,76,5,48,0,0,74,75,5,3,0,0,75,77,5,48,
+  	0,0,76,74,1,0,0,0,76,77,1,0,0,0,77,3,1,0,0,0,78,80,3,2,1,0,79,78,1,0,
+  	0,0,80,83,1,0,0,0,81,79,1,0,0,0,81,82,1,0,0,0,82,5,1,0,0,0,83,81,1,0,
+  	0,0,84,93,5,4,0,0,85,90,5,48,0,0,86,87,5,5,0,0,87,89,5,48,0,0,88,86,1,
+  	0,0,0,89,92,1,0,0,0,90,88,1,0,0,0,90,91,1,0,0,0,91,94,1,0,0,0,92,90,1,
+  	0,0,0,93,85,1,0,0,0,93,94,1,0,0,0,94,95,1,0,0,0,95,96,5,6,0,0,96,7,1,
+  	0,0,0,97,99,3,6,3,0,98,97,1,0,0,0,98,99,1,0,0,0,99,100,1,0,0,0,100,101,
+  	5,7,0,0,101,102,5,48,0,0,102,103,3,4,2,0,103,107,5,8,0,0,104,106,3,10,
+  	5,0,105,104,1,0,0,0,106,109,1,0,0,0,107,105,1,0,0,0,107,108,1,0,0,0,108,
+  	110,1,0,0,0,109,107,1,0,0,0,110,111,5,9,0,0,111,9,1,0,0,0,112,117,3,42,
+  	21,0,113,117,3,40,20,0,114,117,3,48,24,0,115,117,3,12,6,0,116,112,1,0,
+  	0,0,116,113,1,0,0,0,116,114,1,0,0,0,116,115,1,0,0,0,117,11,1,0,0,0,118,
+  	119,3,24,12,0,119,120,5,49,0,0,120,121,5,10,0,0,121,13,1,0,0,0,122,125,
+  	3,24,12,0,123,125,5,11,0,0,124,122,1,0,0,0,124,123,1,0,0,0,125,127,1,
+  	0,0,0,126,128,5,12,0,0,127,126,1,0,0,0,127,128,1,0,0,0,128,129,1,0,0,
+  	0,129,130,5,49,0,0,130,15,1,0,0,0,131,132,5,13,0,0,132,133,5,14,0,0,133,
+  	138,3,14,7,0,134,135,5,5,0,0,135,137,3,14,7,0,136,134,1,0,0,0,137,140,
+  	1,0,0,0,138,136,1,0,0,0,138,139,1,0,0,0,139,141,1,0,0,0,140,138,1,0,0,
+  	0,141,142,5,15,0,0,142,17,1,0,0,0,143,148,3,24,12,0,144,148,3,54,27,0,
+  	145,146,5,49,0,0,146,148,5,12,0,0,147,143,1,0,0,0,147,144,1,0,0,0,147,
+  	145,1,0,0,0,148,19,1,0,0,0,149,150,5,14,0,0,150,155,3,18,9,0,151,152,
+  	5,5,0,0,152,154,3,18,9,0,153,151,1,0,0,0,154,157,1,0,0,0,155,153,1,0,
+  	0,0,155,156,1,0,0,0,156,158,1,0,0,0,157,155,1,0,0,0,158,159,5,15,0,0,
+  	159,21,1,0,0,0,160,162,7,0,0,0,161,163,3,20,10,0,162,161,1,0,0,0,162,
+  	163,1,0,0,0,163,166,1,0,0,0,164,165,5,17,0,0,165,167,3,22,11,0,166,164,
+  	1,0,0,0,166,167,1,0,0,0,167,23,1,0,0,0,168,170,5,18,0,0,169,168,1,0,0,
+  	0,169,170,1,0,0,0,170,172,1,0,0,0,171,173,5,19,0,0,172,171,1,0,0,0,172,
+  	173,1,0,0,0,173,174,1,0,0,0,174,175,3,22,11,0,175,25,1,0,0,0,176,177,
+  	3,24,12,0,177,178,5,49,0,0,178,27,1,0,0,0,179,184,3,26,13,0,180,181,5,
+  	49,0,0,181,182,5,12,0,0,182,184,5,49,0,0,183,179,1,0,0,0,183,180,1,0,
+  	0,0,184,29,1,0,0,0,185,190,3,28,14,0,186,187,5,5,0,0,187,189,3,28,14,
+  	0,188,186,1,0,0,0,189,192,1,0,0,0,190,188,1,0,0,0,190,191,1,0,0,0,191,
+  	194,1,0,0,0,192,190,1,0,0,0,193,185,1,0,0,0,193,194,1,0,0,0,194,31,1,
+  	0,0,0,195,199,3,54,27,0,196,197,5,49,0,0,197,199,5,12,0,0,198,195,1,0,
+  	0,0,198,196,1,0,0,0,199,33,1,0,0,0,200,205,3,32,16,0,201,202,5,5,0,0,
+  	202,204,3,32,16,0,203,201,1,0,0,0,204,207,1,0,0,0,205,203,1,0,0,0,205,
+  	206,1,0,0,0,206,209,1,0,0,0,207,205,1,0,0,0,208,200,1,0,0,0,208,209,1,
+  	0,0,0,209,35,1,0,0,0,210,211,5,20,0,0,211,215,5,21,0,0,212,213,5,4,0,
+  	0,213,215,5,6,0,0,214,210,1,0,0,0,214,212,1,0,0,0,215,37,1,0,0,0,216,
+  	218,3,6,3,0,217,216,1,0,0,0,217,218,1,0,0,0,218,220,1,0,0,0,219,221,3,
+  	16,8,0,220,219,1,0,0,0,220,221,1,0,0,0,221,223,1,0,0,0,222,224,5,22,0,
+  	0,223,222,1,0,0,0,223,224,1,0,0,0,224,236,1,0,0,0,225,232,3,24,12,0,226,
+  	233,5,49,0,0,227,230,5,23,0,0,228,231,7,1,0,0,229,231,3,36,18,0,230,228,
+  	1,0,0,0,230,229,1,0,0,0,231,233,1,0,0,0,232,226,1,0,0,0,232,227,1,0,0,
+  	0,233,237,1,0,0,0,234,235,5,23,0,0,235,237,3,24,12,0,236,225,1,0,0,0,
+  	236,234,1,0,0,0,237,39,1,0,0,0,238,239,3,38,19,0,239,240,5,20,0,0,240,
+  	241,3,30,15,0,241,243,5,21,0,0,242,244,5,18,0,0,243,242,1,0,0,0,243,244,
+  	1,0,0,0,244,245,1,0,0,0,245,246,5,28,0,0,246,247,5,10,0,0,247,41,1,0,
+  	0,0,248,249,3,38,19,0,249,250,5,20,0,0,250,251,3,30,15,0,251,253,5,21,
+  	0,0,252,254,5,18,0,0,253,252,1,0,0,0,253,254,1,0,0,0,254,255,1,0,0,0,
+  	255,259,5,8,0,0,256,258,3,52,26,0,257,256,1,0,0,0,258,261,1,0,0,0,259,
+  	257,1,0,0,0,259,260,1,0,0,0,260,262,1,0,0,0,261,259,1,0,0,0,262,263,5,
+  	9,0,0,263,43,1,0,0,0,264,266,5,19,0,0,265,264,1,0,0,0,265,266,1,0,0,0,
+  	266,267,1,0,0,0,267,268,3,22,11,0,268,45,1,0,0,0,269,274,3,44,22,0,270,
+  	271,5,5,0,0,271,273,3,44,22,0,272,270,1,0,0,0,273,276,1,0,0,0,274,272,
+  	1,0,0,0,274,275,1,0,0,0,275,47,1,0,0,0,276,274,1,0,0,0,277,279,3,6,3,
+  	0,278,277,1,0,0,0,278,279,1,0,0,0,279,281,1,0,0,0,280,282,3,16,8,0,281,
+  	280,1,0,0,0,281,282,1,0,0,0,282,284,1,0,0,0,283,285,5,29,0,0,284,283,
+  	1,0,0,0,284,285,1,0,0,0,285,286,1,0,0,0,286,287,5,30,0,0,287,288,7,0,
+  	0,0,288,292,5,8,0,0,289,291,3,50,25,0,290,289,1,0,0,0,291,294,1,0,0,0,
+  	292,290,1,0,0,0,292,293,1,0,0,0,293,295,1,0,0,0,294,292,1,0,0,0,295,296,
+  	5,9,0,0,296,49,1,0,0,0,297,298,3,26,13,0,298,299,5,10,0,0,299,303,1,0,
+  	0,0,300,303,3,42,21,0,301,303,3,40,20,0,302,297,1,0,0,0,302,300,1,0,0,
+  	0,302,301,1,0,0,0,303,51,1,0,0,0,304,305,3,54,27,0,305,306,5,10,0,0,306,
+  	351,1,0,0,0,307,308,3,54,27,0,308,309,5,31,0,0,309,310,3,54,27,0,310,
+  	311,5,10,0,0,311,351,1,0,0,0,312,313,3,54,27,0,313,314,5,32,0,0,314,315,
+  	3,54,27,0,315,316,5,10,0,0,316,351,1,0,0,0,317,321,5,8,0,0,318,320,3,
+  	52,26,0,319,318,1,0,0,0,320,323,1,0,0,0,321,319,1,0,0,0,321,322,1,0,0,
+  	0,322,324,1,0,0,0,323,321,1,0,0,0,324,351,5,9,0,0,325,327,5,33,0,0,326,
+  	328,3,54,27,0,327,326,1,0,0,0,327,328,1,0,0,0,328,329,1,0,0,0,329,351,
+  	5,10,0,0,330,331,5,34,0,0,331,332,5,20,0,0,332,333,3,54,27,0,333,334,
+  	5,21,0,0,334,337,3,52,26,0,335,336,5,35,0,0,336,338,3,52,26,0,337,335,
+  	1,0,0,0,337,338,1,0,0,0,338,351,1,0,0,0,339,340,5,36,0,0,340,341,5,20,
+  	0,0,341,342,3,54,27,0,342,343,5,21,0,0,343,344,3,52,26,0,344,351,1,0,
+  	0,0,345,346,5,37,0,0,346,347,5,20,0,0,347,348,5,49,0,0,348,349,5,21,0,
+  	0,349,351,3,52,26,0,350,304,1,0,0,0,350,307,1,0,0,0,350,312,1,0,0,0,350,
+  	317,1,0,0,0,350,325,1,0,0,0,350,330,1,0,0,0,350,339,1,0,0,0,350,345,1,
+  	0,0,0,351,53,1,0,0,0,352,353,6,27,-1,0,353,400,5,45,0,0,354,400,5,46,
+  	0,0,355,400,5,47,0,0,356,400,5,48,0,0,357,400,5,44,0,0,358,359,5,38,0,
+  	0,359,360,5,20,0,0,360,361,3,24,12,0,361,362,5,21,0,0,362,400,1,0,0,0,
+  	363,364,5,38,0,0,364,365,5,12,0,0,365,366,5,20,0,0,366,367,5,49,0,0,367,
+  	400,5,21,0,0,368,400,3,26,13,0,369,400,3,22,11,0,370,371,5,20,0,0,371,
+  	372,3,24,12,0,372,373,5,21,0,0,373,374,3,54,27,7,374,400,1,0,0,0,375,
+  	376,5,20,0,0,376,377,3,54,27,0,377,378,5,21,0,0,378,400,1,0,0,0,379,380,
+  	3,24,12,0,380,385,5,16,0,0,381,382,5,4,0,0,382,383,3,46,23,0,383,384,
+  	5,6,0,0,384,386,1,0,0,0,385,381,1,0,0,0,385,386,1,0,0,0,386,387,1,0,0,
+  	0,387,388,5,20,0,0,388,389,3,30,15,0,389,390,5,21,0,0,390,394,5,8,0,0,
+  	391,393,3,52,26,0,392,391,1,0,0,0,393,396,1,0,0,0,394,392,1,0,0,0,394,
+  	395,1,0,0,0,395,397,1,0,0,0,396,394,1,0,0,0,397,398,5,9,0,0,398,400,1,
+  	0,0,0,399,352,1,0,0,0,399,354,1,0,0,0,399,355,1,0,0,0,399,356,1,0,0,0,
+  	399,357,1,0,0,0,399,358,1,0,0,0,399,363,1,0,0,0,399,368,1,0,0,0,399,369,
+  	1,0,0,0,399,370,1,0,0,0,399,375,1,0,0,0,399,379,1,0,0,0,400,431,1,0,0,
+  	0,401,402,10,6,0,0,402,403,7,2,0,0,403,430,3,54,27,7,404,405,10,5,0,0,
+  	405,406,7,3,0,0,406,430,3,54,27,6,407,408,10,4,0,0,408,409,5,54,0,0,409,
+  	430,3,54,27,5,410,411,10,3,0,0,411,412,7,4,0,0,412,430,3,54,27,4,413,
+  	414,10,11,0,0,414,415,5,20,0,0,415,416,3,34,17,0,416,417,5,21,0,0,417,
+  	430,1,0,0,0,418,419,10,9,0,0,419,420,5,4,0,0,420,421,3,54,27,0,421,422,
+  	5,6,0,0,422,430,1,0,0,0,423,424,10,8,0,0,424,425,5,39,0,0,425,427,5,49,
+  	0,0,426,428,3,20,10,0,427,426,1,0,0,0,427,428,1,0,0,0,428,430,1,0,0,0,
+  	429,401,1,0,0,0,429,404,1,0,0,0,429,407,1,0,0,0,429,410,1,0,0,0,429,413,
+  	1,0,0,0,429,418,1,0,0,0,429,423,1,0,0,0,430,433,1,0,0,0,431,429,1,0,0,
+  	0,431,432,1,0,0,0,432,55,1,0,0,0,433,431,1,0,0,0,54,59,62,65,67,70,76,
+  	81,90,93,98,107,116,124,127,138,147,155,162,166,169,172,183,190,193,198,
+  	205,208,214,217,220,223,230,232,236,243,253,259,265,274,278,281,284,292,
+  	302,321,327,337,350,385,394,399,427,429,431
   };
   staticData->serializedATN = antlr4::atn::SerializedATNView(serializedATNSegment, sizeof(serializedATNSegment) / sizeof(serializedATNSegment[0]));
 
@@ -245,16 +273,16 @@ braneParser::ProgramContext::ProgramContext(ParserRuleContext *parent, size_t in
   : ParserRuleContext(parent, invokingState) {
 }
 
+std::vector<braneParser::ModuleContext *> braneParser::ProgramContext::module() {
+  return getRuleContexts<braneParser::ModuleContext>();
+}
+
+braneParser::ModuleContext* braneParser::ProgramContext::module(size_t i) {
+  return getRuleContext<braneParser::ModuleContext>(i);
+}
+
 tree::TerminalNode* braneParser::ProgramContext::EOF() {
   return getToken(braneParser::EOF, 0);
-}
-
-std::vector<braneParser::ProgSegmentContext *> braneParser::ProgramContext::progSegment() {
-  return getRuleContexts<braneParser::ProgSegmentContext>();
-}
-
-braneParser::ProgSegmentContext* braneParser::ProgramContext::progSegment(size_t i) {
-  return getRuleContext<braneParser::ProgSegmentContext>(i);
 }
 
 
@@ -284,38 +312,53 @@ braneParser::ProgramContext* braneParser::program() {
   });
   try {
     enterOuterAlt(_localctx, 1);
-    setState(56);
+    setState(67);
     _errHandler->sync(this);
     switch (_input->LA(1)) {
       case braneParser::T__3:
-      case braneParser::T__8:
-      case braneParser::T__9:
-      case braneParser::T__10:
-      case braneParser::T__11:
-      case braneParser::T__22:
-      case braneParser::T__24:
-      case braneParser::T__25:
-      case braneParser::T__26:
-      case braneParser::ID: {
-        setState(49); 
+      case braneParser::T__6: {
+        setState(57); 
         _errHandler->sync(this);
         _la = _input->LA(1);
         do {
-          setState(48);
-          progSegment();
-          setState(51); 
+          setState(56);
+          module();
+          setState(59); 
           _errHandler->sync(this);
           _la = _input->LA(1);
-        } while ((((_la & ~ 0x3fULL) == 0) &&
-          ((1ULL << _la) & 281475219987984) != 0));
-        setState(53);
-        match(braneParser::EOF);
+        } while (_la == braneParser::T__3
+
+        || _la == braneParser::T__6);
+        setState(62);
+        _errHandler->sync(this);
+
+        switch (getInterpreter<atn::ParserATNSimulator>()->adaptivePredict(_input, 1, _ctx)) {
+        case 1: {
+          setState(61);
+          match(braneParser::EOF);
+          break;
+        }
+
+        default:
+          break;
+        }
         break;
       }
 
       case braneParser::EOF: {
-        setState(55);
-        match(braneParser::EOF);
+        setState(65);
+        _errHandler->sync(this);
+
+        switch (getInterpreter<atn::ParserATNSimulator>()->adaptivePredict(_input, 2, _ctx)) {
+        case 1: {
+          setState(64);
+          match(braneParser::EOF);
+          break;
+        }
+
+        default:
+          break;
+        }
         break;
       }
 
@@ -333,52 +376,37 @@ braneParser::ProgramContext* braneParser::program() {
   return _localctx;
 }
 
-//----------------- ProgSegmentContext ------------------------------------------------------------------
+//----------------- LinkContext ------------------------------------------------------------------
 
-braneParser::ProgSegmentContext::ProgSegmentContext(ParserRuleContext *parent, size_t invokingState)
+braneParser::LinkContext::LinkContext(ParserRuleContext *parent, size_t invokingState)
   : ParserRuleContext(parent, invokingState) {
 }
 
-braneParser::FunctionContext* braneParser::ProgSegmentContext::function() {
-  return getRuleContext<braneParser::FunctionContext>(0);
+std::vector<tree::TerminalNode *> braneParser::LinkContext::STRING() {
+  return getTokens(braneParser::STRING);
 }
 
-braneParser::FunctionStubContext* braneParser::ProgSegmentContext::functionStub() {
-  return getRuleContext<braneParser::FunctionStubContext>(0);
-}
-
-braneParser::StructDefContext* braneParser::ProgSegmentContext::structDef() {
-  return getRuleContext<braneParser::StructDefContext>(0);
-}
-
-braneParser::GlobalContext* braneParser::ProgSegmentContext::global() {
-  return getRuleContext<braneParser::GlobalContext>(0);
-}
-
-braneParser::LinkContext* braneParser::ProgSegmentContext::link() {
-  return getRuleContext<braneParser::LinkContext>(0);
-}
-
-braneParser::ExportContext* braneParser::ProgSegmentContext::export_() {
-  return getRuleContext<braneParser::ExportContext>(0);
+tree::TerminalNode* braneParser::LinkContext::STRING(size_t i) {
+  return getToken(braneParser::STRING, i);
 }
 
 
-size_t braneParser::ProgSegmentContext::getRuleIndex() const {
-  return braneParser::RuleProgSegment;
+size_t braneParser::LinkContext::getRuleIndex() const {
+  return braneParser::RuleLink;
 }
 
 
-std::any braneParser::ProgSegmentContext::accept(tree::ParseTreeVisitor *visitor) {
+std::any braneParser::LinkContext::accept(tree::ParseTreeVisitor *visitor) {
   if (auto parserVisitor = dynamic_cast<braneVisitor*>(visitor))
-    return parserVisitor->visitProgSegment(this);
+    return parserVisitor->visitLink(this);
   else
     return visitor->visitChildren(this);
 }
 
-braneParser::ProgSegmentContext* braneParser::progSegment() {
-  ProgSegmentContext *_localctx = _tracker.createInstance<ProgSegmentContext>(_ctx, getState());
-  enterRule(_localctx, 2, braneParser::RuleProgSegment);
+braneParser::LinkContext* braneParser::link() {
+  LinkContext *_localctx = _tracker.createInstance<LinkContext>(_ctx, getState());
+  enterRule(_localctx, 2, braneParser::RuleLink);
+  size_t _la = 0;
 
 #if __cplusplus > 201703L
   auto onExit = finally([=, this] {
@@ -388,48 +416,348 @@ braneParser::ProgSegmentContext* braneParser::progSegment() {
     exitRule();
   });
   try {
-    setState(64);
+    enterOuterAlt(_localctx, 1);
+    setState(70);
     _errHandler->sync(this);
-    switch (getInterpreter<atn::ParserATNSimulator>()->adaptivePredict(_input, 2, _ctx)) {
+
+    _la = _input->LA(1);
+    if (_la == braneParser::T__0) {
+      setState(69);
+      antlrcpp::downCast<LinkContext *>(_localctx)->isPublic = match(braneParser::T__0);
+    }
+    setState(72);
+    match(braneParser::T__1);
+    setState(73);
+    antlrcpp::downCast<LinkContext *>(_localctx)->library = match(braneParser::STRING);
+    setState(76);
+    _errHandler->sync(this);
+
+    _la = _input->LA(1);
+    if (_la == braneParser::T__2) {
+      setState(74);
+      match(braneParser::T__2);
+      setState(75);
+      antlrcpp::downCast<LinkContext *>(_localctx)->alias = match(braneParser::STRING);
+    }
+   
+  }
+  catch (RecognitionException &e) {
+    _errHandler->reportError(this, e);
+    _localctx->exception = std::current_exception();
+    _errHandler->recover(this, _localctx->exception);
+  }
+
+  return _localctx;
+}
+
+//----------------- LinkListContext ------------------------------------------------------------------
+
+braneParser::LinkListContext::LinkListContext(ParserRuleContext *parent, size_t invokingState)
+  : ParserRuleContext(parent, invokingState) {
+}
+
+std::vector<braneParser::LinkContext *> braneParser::LinkListContext::link() {
+  return getRuleContexts<braneParser::LinkContext>();
+}
+
+braneParser::LinkContext* braneParser::LinkListContext::link(size_t i) {
+  return getRuleContext<braneParser::LinkContext>(i);
+}
+
+
+size_t braneParser::LinkListContext::getRuleIndex() const {
+  return braneParser::RuleLinkList;
+}
+
+
+std::any braneParser::LinkListContext::accept(tree::ParseTreeVisitor *visitor) {
+  if (auto parserVisitor = dynamic_cast<braneVisitor*>(visitor))
+    return parserVisitor->visitLinkList(this);
+  else
+    return visitor->visitChildren(this);
+}
+
+braneParser::LinkListContext* braneParser::linkList() {
+  LinkListContext *_localctx = _tracker.createInstance<LinkListContext>(_ctx, getState());
+  enterRule(_localctx, 4, braneParser::RuleLinkList);
+  size_t _la = 0;
+
+#if __cplusplus > 201703L
+  auto onExit = finally([=, this] {
+#else
+  auto onExit = finally([=] {
+#endif
+    exitRule();
+  });
+  try {
+    enterOuterAlt(_localctx, 1);
+    setState(81);
+    _errHandler->sync(this);
+    _la = _input->LA(1);
+    while (_la == braneParser::T__0
+
+    || _la == braneParser::T__1) {
+      setState(78);
+      link();
+      setState(83);
+      _errHandler->sync(this);
+      _la = _input->LA(1);
+    }
+   
+  }
+  catch (RecognitionException &e) {
+    _errHandler->reportError(this, e);
+    _localctx->exception = std::current_exception();
+    _errHandler->recover(this, _localctx->exception);
+  }
+
+  return _localctx;
+}
+
+//----------------- TagsContext ------------------------------------------------------------------
+
+braneParser::TagsContext::TagsContext(ParserRuleContext *parent, size_t invokingState)
+  : ParserRuleContext(parent, invokingState) {
+}
+
+std::vector<tree::TerminalNode *> braneParser::TagsContext::STRING() {
+  return getTokens(braneParser::STRING);
+}
+
+tree::TerminalNode* braneParser::TagsContext::STRING(size_t i) {
+  return getToken(braneParser::STRING, i);
+}
+
+
+size_t braneParser::TagsContext::getRuleIndex() const {
+  return braneParser::RuleTags;
+}
+
+
+std::any braneParser::TagsContext::accept(tree::ParseTreeVisitor *visitor) {
+  if (auto parserVisitor = dynamic_cast<braneVisitor*>(visitor))
+    return parserVisitor->visitTags(this);
+  else
+    return visitor->visitChildren(this);
+}
+
+braneParser::TagsContext* braneParser::tags() {
+  TagsContext *_localctx = _tracker.createInstance<TagsContext>(_ctx, getState());
+  enterRule(_localctx, 6, braneParser::RuleTags);
+  size_t _la = 0;
+
+#if __cplusplus > 201703L
+  auto onExit = finally([=, this] {
+#else
+  auto onExit = finally([=] {
+#endif
+    exitRule();
+  });
+  try {
+    enterOuterAlt(_localctx, 1);
+    setState(84);
+    match(braneParser::T__3);
+    setState(93);
+    _errHandler->sync(this);
+
+    _la = _input->LA(1);
+    if (_la == braneParser::STRING) {
+      setState(85);
+      antlrcpp::downCast<TagsContext *>(_localctx)->tag = match(braneParser::STRING);
+      setState(90);
+      _errHandler->sync(this);
+      _la = _input->LA(1);
+      while (_la == braneParser::T__4) {
+        setState(86);
+        match(braneParser::T__4);
+        setState(87);
+        antlrcpp::downCast<TagsContext *>(_localctx)->tag = match(braneParser::STRING);
+        setState(92);
+        _errHandler->sync(this);
+        _la = _input->LA(1);
+      }
+    }
+    setState(95);
+    match(braneParser::T__5);
+   
+  }
+  catch (RecognitionException &e) {
+    _errHandler->reportError(this, e);
+    _localctx->exception = std::current_exception();
+    _errHandler->recover(this, _localctx->exception);
+  }
+
+  return _localctx;
+}
+
+//----------------- ModuleContext ------------------------------------------------------------------
+
+braneParser::ModuleContext::ModuleContext(ParserRuleContext *parent, size_t invokingState)
+  : ParserRuleContext(parent, invokingState) {
+}
+
+braneParser::LinkListContext* braneParser::ModuleContext::linkList() {
+  return getRuleContext<braneParser::LinkListContext>(0);
+}
+
+tree::TerminalNode* braneParser::ModuleContext::STRING() {
+  return getToken(braneParser::STRING, 0);
+}
+
+std::vector<braneParser::ModuleComponentContext *> braneParser::ModuleContext::moduleComponent() {
+  return getRuleContexts<braneParser::ModuleComponentContext>();
+}
+
+braneParser::ModuleComponentContext* braneParser::ModuleContext::moduleComponent(size_t i) {
+  return getRuleContext<braneParser::ModuleComponentContext>(i);
+}
+
+braneParser::TagsContext* braneParser::ModuleContext::tags() {
+  return getRuleContext<braneParser::TagsContext>(0);
+}
+
+
+size_t braneParser::ModuleContext::getRuleIndex() const {
+  return braneParser::RuleModule;
+}
+
+
+std::any braneParser::ModuleContext::accept(tree::ParseTreeVisitor *visitor) {
+  if (auto parserVisitor = dynamic_cast<braneVisitor*>(visitor))
+    return parserVisitor->visitModule(this);
+  else
+    return visitor->visitChildren(this);
+}
+
+braneParser::ModuleContext* braneParser::module() {
+  ModuleContext *_localctx = _tracker.createInstance<ModuleContext>(_ctx, getState());
+  enterRule(_localctx, 8, braneParser::RuleModule);
+  size_t _la = 0;
+
+#if __cplusplus > 201703L
+  auto onExit = finally([=, this] {
+#else
+  auto onExit = finally([=] {
+#endif
+    exitRule();
+  });
+  try {
+    enterOuterAlt(_localctx, 1);
+    setState(98);
+    _errHandler->sync(this);
+
+    _la = _input->LA(1);
+    if (_la == braneParser::T__3) {
+      setState(97);
+      antlrcpp::downCast<ModuleContext *>(_localctx)->modTags = tags();
+    }
+    setState(100);
+    match(braneParser::T__6);
+    setState(101);
+    antlrcpp::downCast<ModuleContext *>(_localctx)->id = match(braneParser::STRING);
+    setState(102);
+    linkList();
+    setState(103);
+    match(braneParser::T__7);
+    setState(107);
+    _errHandler->sync(this);
+    _la = _input->LA(1);
+    while ((((_la & ~ 0x3fULL) == 0) &&
+      ((1ULL << _la) & 562951577477136) != 0)) {
+      setState(104);
+      moduleComponent();
+      setState(109);
+      _errHandler->sync(this);
+      _la = _input->LA(1);
+    }
+    setState(110);
+    match(braneParser::T__8);
+   
+  }
+  catch (RecognitionException &e) {
+    _errHandler->reportError(this, e);
+    _localctx->exception = std::current_exception();
+    _errHandler->recover(this, _localctx->exception);
+  }
+
+  return _localctx;
+}
+
+//----------------- ModuleComponentContext ------------------------------------------------------------------
+
+braneParser::ModuleComponentContext::ModuleComponentContext(ParserRuleContext *parent, size_t invokingState)
+  : ParserRuleContext(parent, invokingState) {
+}
+
+braneParser::FunctionContext* braneParser::ModuleComponentContext::function() {
+  return getRuleContext<braneParser::FunctionContext>(0);
+}
+
+braneParser::FunctionStubContext* braneParser::ModuleComponentContext::functionStub() {
+  return getRuleContext<braneParser::FunctionStubContext>(0);
+}
+
+braneParser::StructDefContext* braneParser::ModuleComponentContext::structDef() {
+  return getRuleContext<braneParser::StructDefContext>(0);
+}
+
+braneParser::GlobalContext* braneParser::ModuleComponentContext::global() {
+  return getRuleContext<braneParser::GlobalContext>(0);
+}
+
+
+size_t braneParser::ModuleComponentContext::getRuleIndex() const {
+  return braneParser::RuleModuleComponent;
+}
+
+
+std::any braneParser::ModuleComponentContext::accept(tree::ParseTreeVisitor *visitor) {
+  if (auto parserVisitor = dynamic_cast<braneVisitor*>(visitor))
+    return parserVisitor->visitModuleComponent(this);
+  else
+    return visitor->visitChildren(this);
+}
+
+braneParser::ModuleComponentContext* braneParser::moduleComponent() {
+  ModuleComponentContext *_localctx = _tracker.createInstance<ModuleComponentContext>(_ctx, getState());
+  enterRule(_localctx, 10, braneParser::RuleModuleComponent);
+
+#if __cplusplus > 201703L
+  auto onExit = finally([=, this] {
+#else
+  auto onExit = finally([=] {
+#endif
+    exitRule();
+  });
+  try {
+    setState(116);
+    _errHandler->sync(this);
+    switch (getInterpreter<atn::ParserATNSimulator>()->adaptivePredict(_input, 11, _ctx)) {
     case 1: {
       enterOuterAlt(_localctx, 1);
-      setState(58);
+      setState(112);
       function();
       break;
     }
 
     case 2: {
       enterOuterAlt(_localctx, 2);
-      setState(59);
+      setState(113);
       functionStub();
       break;
     }
 
     case 3: {
       enterOuterAlt(_localctx, 3);
-      setState(60);
+      setState(114);
       structDef();
       break;
     }
 
     case 4: {
       enterOuterAlt(_localctx, 4);
-      setState(61);
+      setState(115);
       global();
-      break;
-    }
-
-    case 5: {
-      enterOuterAlt(_localctx, 5);
-      setState(62);
-      link();
-      break;
-    }
-
-    case 6: {
-      enterOuterAlt(_localctx, 6);
-      setState(63);
-      export_();
       break;
     }
 
@@ -476,7 +804,7 @@ std::any braneParser::GlobalContext::accept(tree::ParseTreeVisitor *visitor) {
 
 braneParser::GlobalContext* braneParser::global() {
   GlobalContext *_localctx = _tracker.createInstance<GlobalContext>(_ctx, getState());
-  enterRule(_localctx, 4, braneParser::RuleGlobal);
+  enterRule(_localctx, 12, braneParser::RuleGlobal);
 
 #if __cplusplus > 201703L
   auto onExit = finally([=, this] {
@@ -487,12 +815,12 @@ braneParser::GlobalContext* braneParser::global() {
   });
   try {
     enterOuterAlt(_localctx, 1);
-    setState(66);
+    setState(118);
     type();
-    setState(67);
+    setState(119);
     antlrcpp::downCast<GlobalContext *>(_localctx)->id = match(braneParser::ID);
-    setState(68);
-    match(braneParser::T__0);
+    setState(120);
+    match(braneParser::T__9);
    
   }
   catch (RecognitionException &e) {
@@ -533,7 +861,7 @@ std::any braneParser::TemplateDefArgumentContext::accept(tree::ParseTreeVisitor 
 
 braneParser::TemplateDefArgumentContext* braneParser::templateDefArgument() {
   TemplateDefArgumentContext *_localctx = _tracker.createInstance<TemplateDefArgumentContext>(_ctx, getState());
-  enterRule(_localctx, 6, braneParser::RuleTemplateDefArgument);
+  enterRule(_localctx, 14, braneParser::RuleTemplateDefArgument);
   size_t _la = 0;
 
 #if __cplusplus > 201703L
@@ -545,35 +873,36 @@ braneParser::TemplateDefArgumentContext* braneParser::templateDefArgument() {
   });
   try {
     enterOuterAlt(_localctx, 1);
-    setState(72);
+    setState(124);
     _errHandler->sync(this);
     switch (_input->LA(1)) {
-      case braneParser::T__8:
-      case braneParser::T__9:
+      case braneParser::T__15:
+      case braneParser::T__17:
+      case braneParser::T__18:
       case braneParser::ID: {
-        setState(70);
+        setState(122);
         antlrcpp::downCast<TemplateDefArgumentContext *>(_localctx)->exprType = type();
         break;
       }
 
-      case braneParser::T__1: {
-        setState(71);
-        antlrcpp::downCast<TemplateDefArgumentContext *>(_localctx)->isTypedef = match(braneParser::T__1);
+      case braneParser::T__10: {
+        setState(123);
+        antlrcpp::downCast<TemplateDefArgumentContext *>(_localctx)->isTypedef = match(braneParser::T__10);
         break;
       }
 
     default:
       throw NoViableAltException(this);
     }
-    setState(75);
+    setState(127);
     _errHandler->sync(this);
 
     _la = _input->LA(1);
-    if (_la == braneParser::T__2) {
-      setState(74);
-      antlrcpp::downCast<TemplateDefArgumentContext *>(_localctx)->isPack = match(braneParser::T__2);
+    if (_la == braneParser::T__11) {
+      setState(126);
+      antlrcpp::downCast<TemplateDefArgumentContext *>(_localctx)->isPack = match(braneParser::T__11);
     }
-    setState(77);
+    setState(129);
     antlrcpp::downCast<TemplateDefArgumentContext *>(_localctx)->id = match(braneParser::ID);
    
   }
@@ -615,7 +944,7 @@ std::any braneParser::TemplateDefContext::accept(tree::ParseTreeVisitor *visitor
 
 braneParser::TemplateDefContext* braneParser::templateDef() {
   TemplateDefContext *_localctx = _tracker.createInstance<TemplateDefContext>(_ctx, getState());
-  enterRule(_localctx, 8, braneParser::RuleTemplateDef);
+  enterRule(_localctx, 16, braneParser::RuleTemplateDef);
   size_t _la = 0;
 
 #if __cplusplus > 201703L
@@ -627,26 +956,26 @@ braneParser::TemplateDefContext* braneParser::templateDef() {
   });
   try {
     enterOuterAlt(_localctx, 1);
-    setState(79);
-    match(braneParser::T__3);
-    setState(80);
-    match(braneParser::T__4);
-    setState(81);
+    setState(131);
+    match(braneParser::T__12);
+    setState(132);
+    match(braneParser::T__13);
+    setState(133);
     templateDefArgument();
-    setState(86);
+    setState(138);
     _errHandler->sync(this);
     _la = _input->LA(1);
-    while (_la == braneParser::T__5) {
-      setState(82);
-      match(braneParser::T__5);
-      setState(83);
+    while (_la == braneParser::T__4) {
+      setState(134);
+      match(braneParser::T__4);
+      setState(135);
       templateDefArgument();
-      setState(88);
+      setState(140);
       _errHandler->sync(this);
       _la = _input->LA(1);
     }
-    setState(89);
-    match(braneParser::T__6);
+    setState(141);
+    match(braneParser::T__14);
    
   }
   catch (RecognitionException &e) {
@@ -720,7 +1049,7 @@ std::any braneParser::TemplateExprArgContext::accept(tree::ParseTreeVisitor *vis
 }
 braneParser::TemplateArgContext* braneParser::templateArg() {
   TemplateArgContext *_localctx = _tracker.createInstance<TemplateArgContext>(_ctx, getState());
-  enterRule(_localctx, 10, braneParser::RuleTemplateArg);
+  enterRule(_localctx, 18, braneParser::RuleTemplateArg);
 
 #if __cplusplus > 201703L
   auto onExit = finally([=, this] {
@@ -730,13 +1059,13 @@ braneParser::TemplateArgContext* braneParser::templateArg() {
     exitRule();
   });
   try {
-    setState(95);
+    setState(147);
     _errHandler->sync(this);
-    switch (getInterpreter<atn::ParserATNSimulator>()->adaptivePredict(_input, 6, _ctx)) {
+    switch (getInterpreter<atn::ParserATNSimulator>()->adaptivePredict(_input, 15, _ctx)) {
     case 1: {
       _localctx = _tracker.createInstance<braneParser::TemplateTypeArgContext>(_localctx);
       enterOuterAlt(_localctx, 1);
-      setState(91);
+      setState(143);
       antlrcpp::downCast<TemplateTypeArgContext *>(_localctx)->t = type();
       break;
     }
@@ -744,7 +1073,7 @@ braneParser::TemplateArgContext* braneParser::templateArg() {
     case 2: {
       _localctx = _tracker.createInstance<braneParser::TemplateExprArgContext>(_localctx);
       enterOuterAlt(_localctx, 2);
-      setState(92);
+      setState(144);
       antlrcpp::downCast<TemplateExprArgContext *>(_localctx)->expr = expression(0);
       break;
     }
@@ -752,10 +1081,10 @@ braneParser::TemplateArgContext* braneParser::templateArg() {
     case 3: {
       _localctx = _tracker.createInstance<braneParser::PackExpansionArgContext>(_localctx);
       enterOuterAlt(_localctx, 3);
-      setState(93);
+      setState(145);
       antlrcpp::downCast<PackExpansionArgContext *>(_localctx)->packID = match(braneParser::ID);
-      setState(94);
-      match(braneParser::T__2);
+      setState(146);
+      match(braneParser::T__11);
       break;
     }
 
@@ -802,7 +1131,7 @@ std::any braneParser::TemplateArgsContext::accept(tree::ParseTreeVisitor *visito
 
 braneParser::TemplateArgsContext* braneParser::templateArgs() {
   TemplateArgsContext *_localctx = _tracker.createInstance<TemplateArgsContext>(_ctx, getState());
-  enterRule(_localctx, 12, braneParser::RuleTemplateArgs);
+  enterRule(_localctx, 20, braneParser::RuleTemplateArgs);
   size_t _la = 0;
 
 #if __cplusplus > 201703L
@@ -814,24 +1143,24 @@ braneParser::TemplateArgsContext* braneParser::templateArgs() {
   });
   try {
     enterOuterAlt(_localctx, 1);
-    setState(97);
-    match(braneParser::T__4);
-    setState(98);
+    setState(149);
+    match(braneParser::T__13);
+    setState(150);
     templateArg();
-    setState(103);
+    setState(155);
     _errHandler->sync(this);
     _la = _input->LA(1);
-    while (_la == braneParser::T__5) {
-      setState(99);
-      match(braneParser::T__5);
-      setState(100);
+    while (_la == braneParser::T__4) {
+      setState(151);
+      match(braneParser::T__4);
+      setState(152);
       templateArg();
-      setState(105);
+      setState(157);
       _errHandler->sync(this);
       _la = _input->LA(1);
     }
-    setState(106);
-    match(braneParser::T__6);
+    setState(158);
+    match(braneParser::T__14);
    
   }
   catch (RecognitionException &e) {
@@ -876,7 +1205,8 @@ std::any braneParser::ScopedIDContext::accept(tree::ParseTreeVisitor *visitor) {
 
 braneParser::ScopedIDContext* braneParser::scopedID() {
   ScopedIDContext *_localctx = _tracker.createInstance<ScopedIDContext>(_ctx, getState());
-  enterRule(_localctx, 14, braneParser::RuleScopedID);
+  enterRule(_localctx, 22, braneParser::RuleScopedID);
+  size_t _la = 0;
 
 #if __cplusplus > 201703L
   auto onExit = finally([=, this] {
@@ -887,14 +1217,24 @@ braneParser::ScopedIDContext* braneParser::scopedID() {
   });
   try {
     enterOuterAlt(_localctx, 1);
-    setState(108);
-    antlrcpp::downCast<ScopedIDContext *>(_localctx)->id = match(braneParser::ID);
-    setState(110);
+    setState(160);
+    antlrcpp::downCast<ScopedIDContext *>(_localctx)->id = _input->LT(1);
+    _la = _input->LA(1);
+    if (!(_la == braneParser::T__15
+
+    || _la == braneParser::ID)) {
+      antlrcpp::downCast<ScopedIDContext *>(_localctx)->id = _errHandler->recoverInline(this);
+    }
+    else {
+      _errHandler->reportMatch(this);
+      consume();
+    }
+    setState(162);
     _errHandler->sync(this);
 
-    switch (getInterpreter<atn::ParserATNSimulator>()->adaptivePredict(_input, 8, _ctx)) {
+    switch (getInterpreter<atn::ParserATNSimulator>()->adaptivePredict(_input, 17, _ctx)) {
     case 1: {
-      setState(109);
+      setState(161);
       antlrcpp::downCast<ScopedIDContext *>(_localctx)->template_ = templateArgs();
       break;
     }
@@ -902,14 +1242,14 @@ braneParser::ScopedIDContext* braneParser::scopedID() {
     default:
       break;
     }
-    setState(114);
+    setState(166);
     _errHandler->sync(this);
 
-    switch (getInterpreter<atn::ParserATNSimulator>()->adaptivePredict(_input, 9, _ctx)) {
+    switch (getInterpreter<atn::ParserATNSimulator>()->adaptivePredict(_input, 18, _ctx)) {
     case 1: {
-      setState(112);
-      match(braneParser::T__7);
-      setState(113);
+      setState(164);
+      match(braneParser::T__16);
+      setState(165);
       antlrcpp::downCast<ScopedIDContext *>(_localctx)->child = scopedID();
       break;
     }
@@ -953,7 +1293,7 @@ std::any braneParser::TypeContext::accept(tree::ParseTreeVisitor *visitor) {
 
 braneParser::TypeContext* braneParser::type() {
   TypeContext *_localctx = _tracker.createInstance<TypeContext>(_ctx, getState());
-  enterRule(_localctx, 16, braneParser::RuleType);
+  enterRule(_localctx, 24, braneParser::RuleType);
   size_t _la = 0;
 
 #if __cplusplus > 201703L
@@ -965,23 +1305,23 @@ braneParser::TypeContext* braneParser::type() {
   });
   try {
     enterOuterAlt(_localctx, 1);
-    setState(117);
+    setState(169);
     _errHandler->sync(this);
 
     _la = _input->LA(1);
-    if (_la == braneParser::T__8) {
-      setState(116);
-      antlrcpp::downCast<TypeContext *>(_localctx)->isConst = match(braneParser::T__8);
+    if (_la == braneParser::T__17) {
+      setState(168);
+      antlrcpp::downCast<TypeContext *>(_localctx)->isConst = match(braneParser::T__17);
     }
-    setState(120);
+    setState(172);
     _errHandler->sync(this);
 
     _la = _input->LA(1);
-    if (_la == braneParser::T__9) {
-      setState(119);
-      antlrcpp::downCast<TypeContext *>(_localctx)->isRef = match(braneParser::T__9);
+    if (_la == braneParser::T__18) {
+      setState(171);
+      antlrcpp::downCast<TypeContext *>(_localctx)->isRef = match(braneParser::T__18);
     }
-    setState(122);
+    setState(174);
     antlrcpp::downCast<TypeContext *>(_localctx)->name = scopedID();
    
   }
@@ -1023,7 +1363,7 @@ std::any braneParser::DeclarationContext::accept(tree::ParseTreeVisitor *visitor
 
 braneParser::DeclarationContext* braneParser::declaration() {
   DeclarationContext *_localctx = _tracker.createInstance<DeclarationContext>(_ctx, getState());
-  enterRule(_localctx, 18, braneParser::RuleDeclaration);
+  enterRule(_localctx, 26, braneParser::RuleDeclaration);
 
 #if __cplusplus > 201703L
   auto onExit = finally([=, this] {
@@ -1034,9 +1374,9 @@ braneParser::DeclarationContext* braneParser::declaration() {
   });
   try {
     enterOuterAlt(_localctx, 1);
-    setState(124);
+    setState(176);
     type();
-    setState(125);
+    setState(177);
     antlrcpp::downCast<DeclarationContext *>(_localctx)->id = match(braneParser::ID);
    
   }
@@ -1082,7 +1422,7 @@ std::any braneParser::ArgumentListItemContext::accept(tree::ParseTreeVisitor *vi
 
 braneParser::ArgumentListItemContext* braneParser::argumentListItem() {
   ArgumentListItemContext *_localctx = _tracker.createInstance<ArgumentListItemContext>(_ctx, getState());
-  enterRule(_localctx, 20, braneParser::RuleArgumentListItem);
+  enterRule(_localctx, 28, braneParser::RuleArgumentListItem);
 
 #if __cplusplus > 201703L
   auto onExit = finally([=, this] {
@@ -1092,23 +1432,23 @@ braneParser::ArgumentListItemContext* braneParser::argumentListItem() {
     exitRule();
   });
   try {
-    setState(131);
+    setState(183);
     _errHandler->sync(this);
-    switch (getInterpreter<atn::ParserATNSimulator>()->adaptivePredict(_input, 12, _ctx)) {
+    switch (getInterpreter<atn::ParserATNSimulator>()->adaptivePredict(_input, 21, _ctx)) {
     case 1: {
       enterOuterAlt(_localctx, 1);
-      setState(127);
+      setState(179);
       declaration();
       break;
     }
 
     case 2: {
       enterOuterAlt(_localctx, 2);
-      setState(128);
+      setState(180);
       antlrcpp::downCast<ArgumentListItemContext *>(_localctx)->pack = match(braneParser::ID);
-      setState(129);
-      match(braneParser::T__2);
-      setState(130);
+      setState(181);
+      match(braneParser::T__11);
+      setState(182);
       antlrcpp::downCast<ArgumentListItemContext *>(_localctx)->id = match(braneParser::ID);
       break;
     }
@@ -1156,7 +1496,7 @@ std::any braneParser::ArgumentListContext::accept(tree::ParseTreeVisitor *visito
 
 braneParser::ArgumentListContext* braneParser::argumentList() {
   ArgumentListContext *_localctx = _tracker.createInstance<ArgumentListContext>(_ctx, getState());
-  enterRule(_localctx, 22, braneParser::RuleArgumentList);
+  enterRule(_localctx, 30, braneParser::RuleArgumentList);
   size_t _la = 0;
 
 #if __cplusplus > 201703L
@@ -1168,23 +1508,23 @@ braneParser::ArgumentListContext* braneParser::argumentList() {
   });
   try {
     enterOuterAlt(_localctx, 1);
-    setState(141);
+    setState(193);
     _errHandler->sync(this);
 
     _la = _input->LA(1);
     if ((((_la & ~ 0x3fULL) == 0) &&
-      ((1ULL << _la) & 281474976712192) != 0)) {
-      setState(133);
+      ((1ULL << _la) & 562949954273280) != 0)) {
+      setState(185);
       argumentListItem();
-      setState(138);
+      setState(190);
       _errHandler->sync(this);
       _la = _input->LA(1);
-      while (_la == braneParser::T__5) {
-        setState(134);
-        match(braneParser::T__5);
-        setState(135);
+      while (_la == braneParser::T__4) {
+        setState(186);
+        match(braneParser::T__4);
+        setState(187);
         argumentListItem();
-        setState(140);
+        setState(192);
         _errHandler->sync(this);
         _la = _input->LA(1);
       }
@@ -1229,7 +1569,7 @@ std::any braneParser::ArgumentPackItemContext::accept(tree::ParseTreeVisitor *vi
 
 braneParser::ArgumentPackItemContext* braneParser::argumentPackItem() {
   ArgumentPackItemContext *_localctx = _tracker.createInstance<ArgumentPackItemContext>(_ctx, getState());
-  enterRule(_localctx, 24, braneParser::RuleArgumentPackItem);
+  enterRule(_localctx, 32, braneParser::RuleArgumentPackItem);
 
 #if __cplusplus > 201703L
   auto onExit = finally([=, this] {
@@ -1239,22 +1579,22 @@ braneParser::ArgumentPackItemContext* braneParser::argumentPackItem() {
     exitRule();
   });
   try {
-    setState(146);
+    setState(198);
     _errHandler->sync(this);
-    switch (getInterpreter<atn::ParserATNSimulator>()->adaptivePredict(_input, 15, _ctx)) {
+    switch (getInterpreter<atn::ParserATNSimulator>()->adaptivePredict(_input, 24, _ctx)) {
     case 1: {
       enterOuterAlt(_localctx, 1);
-      setState(143);
+      setState(195);
       antlrcpp::downCast<ArgumentPackItemContext *>(_localctx)->expr = expression(0);
       break;
     }
 
     case 2: {
       enterOuterAlt(_localctx, 2);
-      setState(144);
+      setState(196);
       antlrcpp::downCast<ArgumentPackItemContext *>(_localctx)->packID = match(braneParser::ID);
-      setState(145);
-      match(braneParser::T__2);
+      setState(197);
+      match(braneParser::T__11);
       break;
     }
 
@@ -1301,7 +1641,7 @@ std::any braneParser::ArgumentPackContext::accept(tree::ParseTreeVisitor *visito
 
 braneParser::ArgumentPackContext* braneParser::argumentPack() {
   ArgumentPackContext *_localctx = _tracker.createInstance<ArgumentPackContext>(_ctx, getState());
-  enterRule(_localctx, 26, braneParser::RuleArgumentPack);
+  enterRule(_localctx, 34, braneParser::RuleArgumentPack);
   size_t _la = 0;
 
 #if __cplusplus > 201703L
@@ -1313,26 +1653,92 @@ braneParser::ArgumentPackContext* braneParser::argumentPack() {
   });
   try {
     enterOuterAlt(_localctx, 1);
-    setState(156);
+    setState(208);
     _errHandler->sync(this);
 
     _la = _input->LA(1);
     if ((((_la & ~ 0x3fULL) == 0) &&
-      ((1ULL << _la) & 554188220401152) != 0)) {
-      setState(148);
+      ((1ULL << _la) & 1108582600605696) != 0)) {
+      setState(200);
       argumentPackItem();
-      setState(153);
+      setState(205);
       _errHandler->sync(this);
       _la = _input->LA(1);
-      while (_la == braneParser::T__5) {
-        setState(149);
-        match(braneParser::T__5);
-        setState(150);
+      while (_la == braneParser::T__4) {
+        setState(201);
+        match(braneParser::T__4);
+        setState(202);
         argumentPackItem();
-        setState(155);
+        setState(207);
         _errHandler->sync(this);
         _la = _input->LA(1);
       }
+    }
+   
+  }
+  catch (RecognitionException &e) {
+    _errHandler->reportError(this, e);
+    _localctx->exception = std::current_exception();
+    _errHandler->recover(this, _localctx->exception);
+  }
+
+  return _localctx;
+}
+
+//----------------- BracketOprContext ------------------------------------------------------------------
+
+braneParser::BracketOprContext::BracketOprContext(ParserRuleContext *parent, size_t invokingState)
+  : ParserRuleContext(parent, invokingState) {
+}
+
+
+size_t braneParser::BracketOprContext::getRuleIndex() const {
+  return braneParser::RuleBracketOpr;
+}
+
+
+std::any braneParser::BracketOprContext::accept(tree::ParseTreeVisitor *visitor) {
+  if (auto parserVisitor = dynamic_cast<braneVisitor*>(visitor))
+    return parserVisitor->visitBracketOpr(this);
+  else
+    return visitor->visitChildren(this);
+}
+
+braneParser::BracketOprContext* braneParser::bracketOpr() {
+  BracketOprContext *_localctx = _tracker.createInstance<BracketOprContext>(_ctx, getState());
+  enterRule(_localctx, 36, braneParser::RuleBracketOpr);
+
+#if __cplusplus > 201703L
+  auto onExit = finally([=, this] {
+#else
+  auto onExit = finally([=] {
+#endif
+    exitRule();
+  });
+  try {
+    setState(214);
+    _errHandler->sync(this);
+    switch (_input->LA(1)) {
+      case braneParser::T__19: {
+        enterOuterAlt(_localctx, 1);
+        setState(210);
+        match(braneParser::T__19);
+        setState(211);
+        match(braneParser::T__20);
+        break;
+      }
+
+      case braneParser::T__3: {
+        enterOuterAlt(_localctx, 2);
+        setState(212);
+        match(braneParser::T__3);
+        setState(213);
+        match(braneParser::T__5);
+        break;
+      }
+
+    default:
+      throw NoViableAltException(this);
     }
    
   }
@@ -1351,6 +1757,10 @@ braneParser::FunctionSigContext::FunctionSigContext(ParserRuleContext *parent, s
   : ParserRuleContext(parent, invokingState) {
 }
 
+braneParser::TagsContext* braneParser::FunctionSigContext::tags() {
+  return getRuleContext<braneParser::TagsContext>(0);
+}
+
 braneParser::TemplateDefContext* braneParser::FunctionSigContext::templateDef() {
   return getRuleContext<braneParser::TemplateDefContext>(0);
 }
@@ -1361,6 +1771,10 @@ braneParser::TypeContext* braneParser::FunctionSigContext::type() {
 
 tree::TerminalNode* braneParser::FunctionSigContext::ID() {
   return getToken(braneParser::ID, 0);
+}
+
+braneParser::BracketOprContext* braneParser::FunctionSigContext::bracketOpr() {
+  return getRuleContext<braneParser::BracketOprContext>(0);
 }
 
 tree::TerminalNode* braneParser::FunctionSigContext::ADD() {
@@ -1398,7 +1812,7 @@ std::any braneParser::FunctionSigContext::accept(tree::ParseTreeVisitor *visitor
 
 braneParser::FunctionSigContext* braneParser::functionSig() {
   FunctionSigContext *_localctx = _tracker.createInstance<FunctionSigContext>(_ctx, getState());
-  enterRule(_localctx, 28, braneParser::RuleFunctionSig);
+  enterRule(_localctx, 38, braneParser::RuleFunctionSig);
   size_t _la = 0;
 
 #if __cplusplus > 201703L
@@ -1410,52 +1824,88 @@ braneParser::FunctionSigContext* braneParser::functionSig() {
   });
   try {
     enterOuterAlt(_localctx, 1);
-    setState(159);
+    setState(217);
     _errHandler->sync(this);
 
     _la = _input->LA(1);
     if (_la == braneParser::T__3) {
-      setState(158);
-      antlrcpp::downCast<FunctionSigContext *>(_localctx)->template_ = templateDef();
+      setState(216);
+      antlrcpp::downCast<FunctionSigContext *>(_localctx)->funcTags = tags();
     }
-    setState(162);
+    setState(220);
     _errHandler->sync(this);
 
     _la = _input->LA(1);
-    if (_la == braneParser::T__10) {
-      setState(161);
-      antlrcpp::downCast<FunctionSigContext *>(_localctx)->isConstexpr = match(braneParser::T__10);
+    if (_la == braneParser::T__12) {
+      setState(219);
+      antlrcpp::downCast<FunctionSigContext *>(_localctx)->template_ = templateDef();
     }
-    setState(172);
+    setState(223);
+    _errHandler->sync(this);
+
+    _la = _input->LA(1);
+    if (_la == braneParser::T__21) {
+      setState(222);
+      antlrcpp::downCast<FunctionSigContext *>(_localctx)->isConstexpr = match(braneParser::T__21);
+    }
+    setState(236);
     _errHandler->sync(this);
     switch (_input->LA(1)) {
-      case braneParser::T__8:
-      case braneParser::T__9:
+      case braneParser::T__15:
+      case braneParser::T__17:
+      case braneParser::T__18:
       case braneParser::ID: {
-        setState(164);
+        setState(225);
         type();
-        setState(168);
+        setState(232);
         _errHandler->sync(this);
         switch (_input->LA(1)) {
           case braneParser::ID: {
-            setState(165);
+            setState(226);
             antlrcpp::downCast<FunctionSigContext *>(_localctx)->id = match(braneParser::ID);
             break;
           }
 
-          case braneParser::T__11: {
-            setState(166);
-            match(braneParser::T__11);
-            setState(167);
-            antlrcpp::downCast<FunctionSigContext *>(_localctx)->oprID = _input->LT(1);
-            _la = _input->LA(1);
-            if (!((((_la & ~ 0x3fULL) == 0) &&
-              ((1ULL << _la) & 17451448556314784) != 0))) {
-              antlrcpp::downCast<FunctionSigContext *>(_localctx)->oprID = _errHandler->recoverInline(this);
-            }
-            else {
-              _errHandler->reportMatch(this);
-              consume();
+          case braneParser::T__22: {
+            setState(227);
+            match(braneParser::T__22);
+            setState(230);
+            _errHandler->sync(this);
+            switch (_input->LA(1)) {
+              case braneParser::T__13:
+              case braneParser::T__14:
+              case braneParser::T__23:
+              case braneParser::T__24:
+              case braneParser::T__25:
+              case braneParser::T__26:
+              case braneParser::MUL:
+              case braneParser::DIV:
+              case braneParser::ADD:
+              case braneParser::SUB:
+              case braneParser::LOGIC: {
+                setState(228);
+                antlrcpp::downCast<FunctionSigContext *>(_localctx)->oprID = _input->LT(1);
+                _la = _input->LA(1);
+                if (!((((_la & ~ 0x3fULL) == 0) &&
+                  ((1ULL << _la) & 34902897363828736) != 0))) {
+                  antlrcpp::downCast<FunctionSigContext *>(_localctx)->oprID = _errHandler->recoverInline(this);
+                }
+                else {
+                  _errHandler->reportMatch(this);
+                  consume();
+                }
+                break;
+              }
+
+              case braneParser::T__3:
+              case braneParser::T__19: {
+                setState(229);
+                antlrcpp::downCast<FunctionSigContext *>(_localctx)->bracketOprID = bracketOpr();
+                break;
+              }
+
+            default:
+              throw NoViableAltException(this);
             }
             break;
           }
@@ -1466,10 +1916,10 @@ braneParser::FunctionSigContext* braneParser::functionSig() {
         break;
       }
 
-      case braneParser::T__11: {
-        setState(170);
-        match(braneParser::T__11);
-        setState(171);
+      case braneParser::T__22: {
+        setState(234);
+        match(braneParser::T__22);
+        setState(235);
         antlrcpp::downCast<FunctionSigContext *>(_localctx)->castType = type();
         break;
       }
@@ -1517,7 +1967,7 @@ std::any braneParser::FunctionStubContext::accept(tree::ParseTreeVisitor *visito
 
 braneParser::FunctionStubContext* braneParser::functionStub() {
   FunctionStubContext *_localctx = _tracker.createInstance<FunctionStubContext>(_ctx, getState());
-  enterRule(_localctx, 30, braneParser::RuleFunctionStub);
+  enterRule(_localctx, 40, braneParser::RuleFunctionStub);
   size_t _la = 0;
 
 #if __cplusplus > 201703L
@@ -1529,26 +1979,26 @@ braneParser::FunctionStubContext* braneParser::functionStub() {
   });
   try {
     enterOuterAlt(_localctx, 1);
-    setState(174);
+    setState(238);
     antlrcpp::downCast<FunctionStubContext *>(_localctx)->sig = functionSig();
-    setState(175);
-    match(braneParser::T__17);
-    setState(176);
+    setState(239);
+    match(braneParser::T__19);
+    setState(240);
     antlrcpp::downCast<FunctionStubContext *>(_localctx)->arguments = argumentList();
-    setState(177);
-    match(braneParser::T__18);
-    setState(179);
+    setState(241);
+    match(braneParser::T__20);
+    setState(243);
     _errHandler->sync(this);
 
     _la = _input->LA(1);
-    if (_la == braneParser::T__8) {
-      setState(178);
-      antlrcpp::downCast<FunctionStubContext *>(_localctx)->isConst = match(braneParser::T__8);
+    if (_la == braneParser::T__17) {
+      setState(242);
+      antlrcpp::downCast<FunctionStubContext *>(_localctx)->isConst = match(braneParser::T__17);
     }
-    setState(181);
-    match(braneParser::T__19);
-    setState(182);
-    match(braneParser::T__0);
+    setState(245);
+    match(braneParser::T__27);
+    setState(246);
+    match(braneParser::T__9);
    
   }
   catch (RecognitionException &e) {
@@ -1597,7 +2047,7 @@ std::any braneParser::FunctionContext::accept(tree::ParseTreeVisitor *visitor) {
 
 braneParser::FunctionContext* braneParser::function() {
   FunctionContext *_localctx = _tracker.createInstance<FunctionContext>(_ctx, getState());
-  enterRule(_localctx, 32, braneParser::RuleFunction);
+  enterRule(_localctx, 42, braneParser::RuleFunction);
   size_t _la = 0;
 
 #if __cplusplus > 201703L
@@ -1609,37 +2059,37 @@ braneParser::FunctionContext* braneParser::function() {
   });
   try {
     enterOuterAlt(_localctx, 1);
-    setState(184);
+    setState(248);
     antlrcpp::downCast<FunctionContext *>(_localctx)->sig = functionSig();
-    setState(185);
-    match(braneParser::T__17);
-    setState(186);
+    setState(249);
+    match(braneParser::T__19);
+    setState(250);
     antlrcpp::downCast<FunctionContext *>(_localctx)->arguments = argumentList();
-    setState(187);
-    match(braneParser::T__18);
-    setState(189);
+    setState(251);
+    match(braneParser::T__20);
+    setState(253);
     _errHandler->sync(this);
 
     _la = _input->LA(1);
-    if (_la == braneParser::T__8) {
-      setState(188);
-      antlrcpp::downCast<FunctionContext *>(_localctx)->isConst = match(braneParser::T__8);
+    if (_la == braneParser::T__17) {
+      setState(252);
+      antlrcpp::downCast<FunctionContext *>(_localctx)->isConst = match(braneParser::T__17);
     }
-    setState(191);
-    match(braneParser::T__20);
-    setState(195);
+    setState(255);
+    match(braneParser::T__7);
+    setState(259);
     _errHandler->sync(this);
     _la = _input->LA(1);
     while ((((_la & ~ 0x3fULL) == 0) &&
-      ((1ULL << _la) & 554217213527552) != 0)) {
-      setState(192);
+      ((1ULL << _la) & 1108814528839936) != 0)) {
+      setState(256);
       antlrcpp::downCast<FunctionContext *>(_localctx)->statements = statement();
-      setState(197);
+      setState(261);
       _errHandler->sync(this);
       _la = _input->LA(1);
     }
-    setState(198);
-    match(braneParser::T__21);
+    setState(262);
+    match(braneParser::T__8);
    
   }
   catch (RecognitionException &e) {
@@ -1651,36 +2101,32 @@ braneParser::FunctionContext* braneParser::function() {
   return _localctx;
 }
 
-//----------------- LinkContext ------------------------------------------------------------------
+//----------------- CapturedVarContext ------------------------------------------------------------------
 
-braneParser::LinkContext::LinkContext(ParserRuleContext *parent, size_t invokingState)
+braneParser::CapturedVarContext::CapturedVarContext(ParserRuleContext *parent, size_t invokingState)
   : ParserRuleContext(parent, invokingState) {
 }
 
-std::vector<tree::TerminalNode *> braneParser::LinkContext::STRING() {
-  return getTokens(braneParser::STRING);
-}
-
-tree::TerminalNode* braneParser::LinkContext::STRING(size_t i) {
-  return getToken(braneParser::STRING, i);
+braneParser::ScopedIDContext* braneParser::CapturedVarContext::scopedID() {
+  return getRuleContext<braneParser::ScopedIDContext>(0);
 }
 
 
-size_t braneParser::LinkContext::getRuleIndex() const {
-  return braneParser::RuleLink;
+size_t braneParser::CapturedVarContext::getRuleIndex() const {
+  return braneParser::RuleCapturedVar;
 }
 
 
-std::any braneParser::LinkContext::accept(tree::ParseTreeVisitor *visitor) {
+std::any braneParser::CapturedVarContext::accept(tree::ParseTreeVisitor *visitor) {
   if (auto parserVisitor = dynamic_cast<braneVisitor*>(visitor))
-    return parserVisitor->visitLink(this);
+    return parserVisitor->visitCapturedVar(this);
   else
     return visitor->visitChildren(this);
 }
 
-braneParser::LinkContext* braneParser::link() {
-  LinkContext *_localctx = _tracker.createInstance<LinkContext>(_ctx, getState());
-  enterRule(_localctx, 34, braneParser::RuleLink);
+braneParser::CapturedVarContext* braneParser::capturedVar() {
+  CapturedVarContext *_localctx = _tracker.createInstance<CapturedVarContext>(_ctx, getState());
+  enterRule(_localctx, 44, braneParser::RuleCapturedVar);
   size_t _la = 0;
 
 #if __cplusplus > 201703L
@@ -1692,22 +2138,16 @@ braneParser::LinkContext* braneParser::link() {
   });
   try {
     enterOuterAlt(_localctx, 1);
-    setState(200);
-    match(braneParser::T__22);
-    setState(201);
-    antlrcpp::downCast<LinkContext *>(_localctx)->library = match(braneParser::STRING);
-    setState(204);
+    setState(265);
     _errHandler->sync(this);
 
     _la = _input->LA(1);
-    if (_la == braneParser::T__23) {
-      setState(202);
-      match(braneParser::T__23);
-      setState(203);
-      antlrcpp::downCast<LinkContext *>(_localctx)->alias = match(braneParser::STRING);
+    if (_la == braneParser::T__18) {
+      setState(264);
+      antlrcpp::downCast<CapturedVarContext *>(_localctx)->isRef = match(braneParser::T__18);
     }
-    setState(206);
-    match(braneParser::T__0);
+    setState(267);
+    antlrcpp::downCast<CapturedVarContext *>(_localctx)->id = scopedID();
    
   }
   catch (RecognitionException &e) {
@@ -1719,40 +2159,36 @@ braneParser::LinkContext* braneParser::link() {
   return _localctx;
 }
 
-//----------------- ExportContext ------------------------------------------------------------------
+//----------------- VarCaptureContext ------------------------------------------------------------------
 
-braneParser::ExportContext::ExportContext(ParserRuleContext *parent, size_t invokingState)
+braneParser::VarCaptureContext::VarCaptureContext(ParserRuleContext *parent, size_t invokingState)
   : ParserRuleContext(parent, invokingState) {
 }
 
-tree::TerminalNode* braneParser::ExportContext::STRING() {
-  return getToken(braneParser::STRING, 0);
+std::vector<braneParser::CapturedVarContext *> braneParser::VarCaptureContext::capturedVar() {
+  return getRuleContexts<braneParser::CapturedVarContext>();
 }
 
-std::vector<braneParser::ExportSegmentContext *> braneParser::ExportContext::exportSegment() {
-  return getRuleContexts<braneParser::ExportSegmentContext>();
-}
-
-braneParser::ExportSegmentContext* braneParser::ExportContext::exportSegment(size_t i) {
-  return getRuleContext<braneParser::ExportSegmentContext>(i);
+braneParser::CapturedVarContext* braneParser::VarCaptureContext::capturedVar(size_t i) {
+  return getRuleContext<braneParser::CapturedVarContext>(i);
 }
 
 
-size_t braneParser::ExportContext::getRuleIndex() const {
-  return braneParser::RuleExport;
+size_t braneParser::VarCaptureContext::getRuleIndex() const {
+  return braneParser::RuleVarCapture;
 }
 
 
-std::any braneParser::ExportContext::accept(tree::ParseTreeVisitor *visitor) {
+std::any braneParser::VarCaptureContext::accept(tree::ParseTreeVisitor *visitor) {
   if (auto parserVisitor = dynamic_cast<braneVisitor*>(visitor))
-    return parserVisitor->visitExport(this);
+    return parserVisitor->visitVarCapture(this);
   else
     return visitor->visitChildren(this);
 }
 
-braneParser::ExportContext* braneParser::export_() {
-  ExportContext *_localctx = _tracker.createInstance<ExportContext>(_ctx, getState());
-  enterRule(_localctx, 36, braneParser::RuleExport);
+braneParser::VarCaptureContext* braneParser::varCapture() {
+  VarCaptureContext *_localctx = _tracker.createInstance<VarCaptureContext>(_ctx, getState());
+  enterRule(_localctx, 46, braneParser::RuleVarCapture);
   size_t _la = 0;
 
 #if __cplusplus > 201703L
@@ -1764,116 +2200,19 @@ braneParser::ExportContext* braneParser::export_() {
   });
   try {
     enterOuterAlt(_localctx, 1);
-    setState(208);
-    match(braneParser::T__24);
-    setState(209);
-    antlrcpp::downCast<ExportContext *>(_localctx)->libID = match(braneParser::STRING);
-    setState(210);
-    match(braneParser::T__20);
-    setState(214);
+    setState(269);
+    capturedVar();
+    setState(274);
     _errHandler->sync(this);
     _la = _input->LA(1);
-    while ((((_la & ~ 0x3fULL) == 0) &&
-      ((1ULL << _la) & 281475178044944) != 0)) {
-      setState(211);
-      exportSegment();
-      setState(216);
+    while (_la == braneParser::T__4) {
+      setState(270);
+      match(braneParser::T__4);
+      setState(271);
+      capturedVar();
+      setState(276);
       _errHandler->sync(this);
       _la = _input->LA(1);
-    }
-    setState(217);
-    match(braneParser::T__21);
-   
-  }
-  catch (RecognitionException &e) {
-    _errHandler->reportError(this, e);
-    _localctx->exception = std::current_exception();
-    _errHandler->recover(this, _localctx->exception);
-  }
-
-  return _localctx;
-}
-
-//----------------- ExportSegmentContext ------------------------------------------------------------------
-
-braneParser::ExportSegmentContext::ExportSegmentContext(ParserRuleContext *parent, size_t invokingState)
-  : ParserRuleContext(parent, invokingState) {
-}
-
-braneParser::FunctionContext* braneParser::ExportSegmentContext::function() {
-  return getRuleContext<braneParser::FunctionContext>(0);
-}
-
-braneParser::FunctionStubContext* braneParser::ExportSegmentContext::functionStub() {
-  return getRuleContext<braneParser::FunctionStubContext>(0);
-}
-
-braneParser::StructDefContext* braneParser::ExportSegmentContext::structDef() {
-  return getRuleContext<braneParser::StructDefContext>(0);
-}
-
-braneParser::GlobalContext* braneParser::ExportSegmentContext::global() {
-  return getRuleContext<braneParser::GlobalContext>(0);
-}
-
-
-size_t braneParser::ExportSegmentContext::getRuleIndex() const {
-  return braneParser::RuleExportSegment;
-}
-
-
-std::any braneParser::ExportSegmentContext::accept(tree::ParseTreeVisitor *visitor) {
-  if (auto parserVisitor = dynamic_cast<braneVisitor*>(visitor))
-    return parserVisitor->visitExportSegment(this);
-  else
-    return visitor->visitChildren(this);
-}
-
-braneParser::ExportSegmentContext* braneParser::exportSegment() {
-  ExportSegmentContext *_localctx = _tracker.createInstance<ExportSegmentContext>(_ctx, getState());
-  enterRule(_localctx, 38, braneParser::RuleExportSegment);
-
-#if __cplusplus > 201703L
-  auto onExit = finally([=, this] {
-#else
-  auto onExit = finally([=] {
-#endif
-    exitRule();
-  });
-  try {
-    setState(223);
-    _errHandler->sync(this);
-    switch (getInterpreter<atn::ParserATNSimulator>()->adaptivePredict(_input, 27, _ctx)) {
-    case 1: {
-      enterOuterAlt(_localctx, 1);
-      setState(219);
-      function();
-      break;
-    }
-
-    case 2: {
-      enterOuterAlt(_localctx, 2);
-      setState(220);
-      functionStub();
-      break;
-    }
-
-    case 3: {
-      enterOuterAlt(_localctx, 3);
-      setState(221);
-      structDef();
-      break;
-    }
-
-    case 4: {
-      enterOuterAlt(_localctx, 4);
-      setState(222);
-      global();
-      break;
-    }
-
-    default:
-      break;
     }
    
   }
@@ -1894,6 +2233,10 @@ braneParser::StructDefContext::StructDefContext(ParserRuleContext *parent, size_
 
 tree::TerminalNode* braneParser::StructDefContext::ID() {
   return getToken(braneParser::ID, 0);
+}
+
+braneParser::TagsContext* braneParser::StructDefContext::tags() {
+  return getRuleContext<braneParser::TagsContext>(0);
 }
 
 braneParser::TemplateDefContext* braneParser::StructDefContext::templateDef() {
@@ -1923,7 +2266,7 @@ std::any braneParser::StructDefContext::accept(tree::ParseTreeVisitor *visitor) 
 
 braneParser::StructDefContext* braneParser::structDef() {
   StructDefContext *_localctx = _tracker.createInstance<StructDefContext>(_ctx, getState());
-  enterRule(_localctx, 40, braneParser::RuleStructDef);
+  enterRule(_localctx, 48, braneParser::RuleStructDef);
   size_t _la = 0;
 
 #if __cplusplus > 201703L
@@ -1935,41 +2278,59 @@ braneParser::StructDefContext* braneParser::structDef() {
   });
   try {
     enterOuterAlt(_localctx, 1);
-    setState(226);
+    setState(278);
     _errHandler->sync(this);
 
     _la = _input->LA(1);
     if (_la == braneParser::T__3) {
-      setState(225);
-      antlrcpp::downCast<StructDefContext *>(_localctx)->template_ = templateDef();
+      setState(277);
+      antlrcpp::downCast<StructDefContext *>(_localctx)->structTags = tags();
     }
-    setState(229);
+    setState(281);
     _errHandler->sync(this);
 
     _la = _input->LA(1);
-    if (_la == braneParser::T__25) {
-      setState(228);
-      antlrcpp::downCast<StructDefContext *>(_localctx)->packed = match(braneParser::T__25);
+    if (_la == braneParser::T__12) {
+      setState(280);
+      antlrcpp::downCast<StructDefContext *>(_localctx)->template_ = templateDef();
     }
-    setState(231);
-    match(braneParser::T__26);
-    setState(232);
-    antlrcpp::downCast<StructDefContext *>(_localctx)->id = match(braneParser::ID);
-    setState(233);
-    match(braneParser::T__20);
-    setState(237);
+    setState(284);
+    _errHandler->sync(this);
+
+    _la = _input->LA(1);
+    if (_la == braneParser::T__28) {
+      setState(283);
+      antlrcpp::downCast<StructDefContext *>(_localctx)->packed = match(braneParser::T__28);
+    }
+    setState(286);
+    match(braneParser::T__29);
+    setState(287);
+    antlrcpp::downCast<StructDefContext *>(_localctx)->id = _input->LT(1);
+    _la = _input->LA(1);
+    if (!(_la == braneParser::T__15
+
+    || _la == braneParser::ID)) {
+      antlrcpp::downCast<StructDefContext *>(_localctx)->id = _errHandler->recoverInline(this);
+    }
+    else {
+      _errHandler->reportMatch(this);
+      consume();
+    }
+    setState(288);
+    match(braneParser::T__7);
+    setState(292);
     _errHandler->sync(this);
     _la = _input->LA(1);
     while ((((_la & ~ 0x3fULL) == 0) &&
-      ((1ULL << _la) & 281474976718352) != 0)) {
-      setState(234);
+      ((1ULL << _la) & 562949966864400) != 0)) {
+      setState(289);
       antlrcpp::downCast<StructDefContext *>(_localctx)->memberVars = structMember();
-      setState(239);
+      setState(294);
       _errHandler->sync(this);
       _la = _input->LA(1);
     }
-    setState(240);
-    match(braneParser::T__21);
+    setState(295);
+    match(braneParser::T__8);
    
   }
   catch (RecognitionException &e) {
@@ -2043,7 +2404,7 @@ std::any braneParser::MemberFunctionContext::accept(tree::ParseTreeVisitor *visi
 }
 braneParser::StructMemberContext* braneParser::structMember() {
   StructMemberContext *_localctx = _tracker.createInstance<StructMemberContext>(_ctx, getState());
-  enterRule(_localctx, 42, braneParser::RuleStructMember);
+  enterRule(_localctx, 50, braneParser::RuleStructMember);
 
 #if __cplusplus > 201703L
   auto onExit = finally([=, this] {
@@ -2053,23 +2414,23 @@ braneParser::StructMemberContext* braneParser::structMember() {
     exitRule();
   });
   try {
-    setState(247);
+    setState(302);
     _errHandler->sync(this);
-    switch (getInterpreter<atn::ParserATNSimulator>()->adaptivePredict(_input, 31, _ctx)) {
+    switch (getInterpreter<atn::ParserATNSimulator>()->adaptivePredict(_input, 43, _ctx)) {
     case 1: {
       _localctx = _tracker.createInstance<braneParser::MemberVariableContext>(_localctx);
       enterOuterAlt(_localctx, 1);
-      setState(242);
+      setState(297);
       antlrcpp::downCast<MemberVariableContext *>(_localctx)->var = declaration();
-      setState(243);
-      match(braneParser::T__0);
+      setState(298);
+      match(braneParser::T__9);
       break;
     }
 
     case 2: {
       _localctx = _tracker.createInstance<braneParser::MemberFunctionContext>(_localctx);
       enterOuterAlt(_localctx, 2);
-      setState(245);
+      setState(300);
       antlrcpp::downCast<MemberFunctionContext *>(_localctx)->func = function();
       break;
     }
@@ -2077,7 +2438,7 @@ braneParser::StructMemberContext* braneParser::structMember() {
     case 3: {
       _localctx = _tracker.createInstance<braneParser::MemberFunctionStubContext>(_localctx);
       enterOuterAlt(_localctx, 3);
-      setState(246);
+      setState(301);
       functionStub();
       break;
     }
@@ -2261,7 +2622,7 @@ std::any braneParser::ReturnContext::accept(tree::ParseTreeVisitor *visitor) {
 }
 braneParser::StatementContext* braneParser::statement() {
   StatementContext *_localctx = _tracker.createInstance<StatementContext>(_ctx, getState());
-  enterRule(_localctx, 44, braneParser::RuleStatement);
+  enterRule(_localctx, 52, braneParser::RuleStatement);
   size_t _la = 0;
 
 #if __cplusplus > 201703L
@@ -2272,108 +2633,108 @@ braneParser::StatementContext* braneParser::statement() {
     exitRule();
   });
   try {
-    setState(295);
+    setState(350);
     _errHandler->sync(this);
-    switch (getInterpreter<atn::ParserATNSimulator>()->adaptivePredict(_input, 35, _ctx)) {
+    switch (getInterpreter<atn::ParserATNSimulator>()->adaptivePredict(_input, 47, _ctx)) {
     case 1: {
       _localctx = _tracker.createInstance<braneParser::ExprStatementContext>(_localctx);
       enterOuterAlt(_localctx, 1);
-      setState(249);
+      setState(304);
       expression(0);
-      setState(250);
-      match(braneParser::T__0);
+      setState(305);
+      match(braneParser::T__9);
       break;
     }
 
     case 2: {
       _localctx = _tracker.createInstance<braneParser::AssignmentContext>(_localctx);
       enterOuterAlt(_localctx, 2);
-      setState(252);
+      setState(307);
       antlrcpp::downCast<AssignmentContext *>(_localctx)->lValue = expression(0);
-      setState(253);
-      match(braneParser::T__27);
-      setState(254);
+      setState(308);
+      match(braneParser::T__30);
+      setState(309);
       antlrcpp::downCast<AssignmentContext *>(_localctx)->rValue = expression(0);
-      setState(255);
-      match(braneParser::T__0);
+      setState(310);
+      match(braneParser::T__9);
       break;
     }
 
     case 3: {
       _localctx = _tracker.createInstance<braneParser::RefAssignmentContext>(_localctx);
       enterOuterAlt(_localctx, 3);
-      setState(257);
+      setState(312);
       antlrcpp::downCast<RefAssignmentContext *>(_localctx)->lValue = expression(0);
-      setState(258);
-      match(braneParser::T__28);
-      setState(259);
+      setState(313);
+      match(braneParser::T__31);
+      setState(314);
       antlrcpp::downCast<RefAssignmentContext *>(_localctx)->rValue = expression(0);
-      setState(260);
-      match(braneParser::T__0);
+      setState(315);
+      match(braneParser::T__9);
       break;
     }
 
     case 4: {
       _localctx = _tracker.createInstance<braneParser::ScopeContext>(_localctx);
       enterOuterAlt(_localctx, 4);
-      setState(262);
-      match(braneParser::T__20);
-      setState(266);
+      setState(317);
+      match(braneParser::T__7);
+      setState(321);
       _errHandler->sync(this);
       _la = _input->LA(1);
       while ((((_la & ~ 0x3fULL) == 0) &&
-        ((1ULL << _la) & 554217213527552) != 0)) {
-        setState(263);
+        ((1ULL << _la) & 1108814528839936) != 0)) {
+        setState(318);
         statement();
-        setState(268);
+        setState(323);
         _errHandler->sync(this);
         _la = _input->LA(1);
       }
-      setState(269);
-      match(braneParser::T__21);
+      setState(324);
+      match(braneParser::T__8);
       break;
     }
 
     case 5: {
       _localctx = _tracker.createInstance<braneParser::ReturnContext>(_localctx);
       enterOuterAlt(_localctx, 5);
-      setState(270);
-      match(braneParser::T__29);
-      setState(272);
+      setState(325);
+      match(braneParser::T__32);
+      setState(327);
       _errHandler->sync(this);
 
       _la = _input->LA(1);
       if ((((_la & ~ 0x3fULL) == 0) &&
-        ((1ULL << _la) & 554188220401152) != 0)) {
-        setState(271);
+        ((1ULL << _la) & 1108582600605696) != 0)) {
+        setState(326);
         expression(0);
       }
-      setState(274);
-      match(braneParser::T__0);
+      setState(329);
+      match(braneParser::T__9);
       break;
     }
 
     case 6: {
       _localctx = _tracker.createInstance<braneParser::IfContext>(_localctx);
       enterOuterAlt(_localctx, 6);
-      setState(275);
-      match(braneParser::T__30);
-      setState(276);
-      match(braneParser::T__17);
-      setState(277);
+      setState(330);
+      match(braneParser::T__33);
+      setState(331);
+      match(braneParser::T__19);
+      setState(332);
       antlrcpp::downCast<IfContext *>(_localctx)->cond = expression(0);
-      setState(278);
-      match(braneParser::T__18);
-      setState(279);
+      setState(333);
+      match(braneParser::T__20);
+      setState(334);
       antlrcpp::downCast<IfContext *>(_localctx)->operation = statement();
-      setState(282);
+      setState(337);
       _errHandler->sync(this);
 
-      switch (getInterpreter<atn::ParserATNSimulator>()->adaptivePredict(_input, 34, _ctx)) {
+      switch (getInterpreter<atn::ParserATNSimulator>()->adaptivePredict(_input, 46, _ctx)) {
       case 1: {
-        setState(280);
-        match(braneParser::T__31);
-        setState(281);
+        setState(335);
+        match(braneParser::T__34);
+        setState(336);
         antlrcpp::downCast<IfContext *>(_localctx)->elseOp = statement();
         break;
       }
@@ -2387,15 +2748,15 @@ braneParser::StatementContext* braneParser::statement() {
     case 7: {
       _localctx = _tracker.createInstance<braneParser::WhileContext>(_localctx);
       enterOuterAlt(_localctx, 7);
-      setState(284);
-      match(braneParser::T__32);
-      setState(285);
-      match(braneParser::T__17);
-      setState(286);
+      setState(339);
+      match(braneParser::T__35);
+      setState(340);
+      match(braneParser::T__19);
+      setState(341);
       antlrcpp::downCast<WhileContext *>(_localctx)->cond = expression(0);
-      setState(287);
-      match(braneParser::T__18);
-      setState(288);
+      setState(342);
+      match(braneParser::T__20);
+      setState(343);
       antlrcpp::downCast<WhileContext *>(_localctx)->operation = statement();
       break;
     }
@@ -2403,15 +2764,15 @@ braneParser::StatementContext* braneParser::statement() {
     case 8: {
       _localctx = _tracker.createInstance<braneParser::UnrollContext>(_localctx);
       enterOuterAlt(_localctx, 8);
-      setState(290);
-      match(braneParser::T__33);
-      setState(291);
-      match(braneParser::T__17);
-      setState(292);
+      setState(345);
+      match(braneParser::T__36);
+      setState(346);
+      match(braneParser::T__19);
+      setState(347);
       antlrcpp::downCast<UnrollContext *>(_localctx)->id = match(braneParser::ID);
-      setState(293);
-      match(braneParser::T__18);
-      setState(294);
+      setState(348);
+      match(braneParser::T__20);
+      setState(349);
       antlrcpp::downCast<UnrollContext *>(_localctx)->body = statement();
       break;
     }
@@ -2654,6 +3015,37 @@ std::any braneParser::ParenContext::accept(tree::ParseTreeVisitor *visitor) {
   else
     return visitor->visitChildren(this);
 }
+//----------------- LambdaContext ------------------------------------------------------------------
+
+braneParser::TypeContext* braneParser::LambdaContext::type() {
+  return getRuleContext<braneParser::TypeContext>(0);
+}
+
+braneParser::ArgumentListContext* braneParser::LambdaContext::argumentList() {
+  return getRuleContext<braneParser::ArgumentListContext>(0);
+}
+
+std::vector<braneParser::StatementContext *> braneParser::LambdaContext::statement() {
+  return getRuleContexts<braneParser::StatementContext>();
+}
+
+braneParser::StatementContext* braneParser::LambdaContext::statement(size_t i) {
+  return getRuleContext<braneParser::StatementContext>(i);
+}
+
+braneParser::VarCaptureContext* braneParser::LambdaContext::varCapture() {
+  return getRuleContext<braneParser::VarCaptureContext>(0);
+}
+
+braneParser::LambdaContext::LambdaContext(ExpressionContext *ctx) { copyFrom(ctx); }
+
+
+std::any braneParser::LambdaContext::accept(tree::ParseTreeVisitor *visitor) {
+  if (auto parserVisitor = dynamic_cast<braneVisitor*>(visitor))
+    return parserVisitor->visitLambda(this);
+  else
+    return visitor->visitChildren(this);
+}
 //----------------- SizeOfPackContext ------------------------------------------------------------------
 
 tree::TerminalNode* braneParser::SizeOfPackContext::ID() {
@@ -2782,8 +3174,8 @@ braneParser::ExpressionContext* braneParser::expression(int precedence) {
   braneParser::ExpressionContext *_localctx = _tracker.createInstance<ExpressionContext>(_ctx, parentState);
   braneParser::ExpressionContext *previousContext = _localctx;
   (void)previousContext; // Silence compiler, in case the context is not used by generated code.
-  size_t startState = 46;
-  enterRecursionRule(_localctx, 46, braneParser::RuleExpression, precedence);
+  size_t startState = 54;
+  enterRecursionRule(_localctx, 54, braneParser::RuleExpression, precedence);
 
     size_t _la = 0;
 
@@ -2797,15 +3189,15 @@ braneParser::ExpressionContext* braneParser::expression(int precedence) {
   try {
     size_t alt;
     enterOuterAlt(_localctx, 1);
-    setState(324);
+    setState(399);
     _errHandler->sync(this);
-    switch (getInterpreter<atn::ParserATNSimulator>()->adaptivePredict(_input, 36, _ctx)) {
+    switch (getInterpreter<atn::ParserATNSimulator>()->adaptivePredict(_input, 50, _ctx)) {
     case 1: {
       _localctx = _tracker.createInstance<ConstIntContext>(_localctx);
       _ctx = _localctx;
       previousContext = _localctx;
 
-      setState(298);
+      setState(353);
       match(braneParser::INT);
       break;
     }
@@ -2814,7 +3206,7 @@ braneParser::ExpressionContext* braneParser::expression(int precedence) {
       _localctx = _tracker.createInstance<ConstFloatContext>(_localctx);
       _ctx = _localctx;
       previousContext = _localctx;
-      setState(299);
+      setState(354);
       match(braneParser::FLOAT);
       break;
     }
@@ -2823,7 +3215,7 @@ braneParser::ExpressionContext* braneParser::expression(int precedence) {
       _localctx = _tracker.createInstance<ConstCharContext>(_localctx);
       _ctx = _localctx;
       previousContext = _localctx;
-      setState(300);
+      setState(355);
       match(braneParser::CHAR);
       break;
     }
@@ -2832,7 +3224,7 @@ braneParser::ExpressionContext* braneParser::expression(int precedence) {
       _localctx = _tracker.createInstance<ConstStringContext>(_localctx);
       _ctx = _localctx;
       previousContext = _localctx;
-      setState(301);
+      setState(356);
       match(braneParser::STRING);
       break;
     }
@@ -2841,7 +3233,7 @@ braneParser::ExpressionContext* braneParser::expression(int precedence) {
       _localctx = _tracker.createInstance<ConstBoolContext>(_localctx);
       _ctx = _localctx;
       previousContext = _localctx;
-      setState(302);
+      setState(357);
       match(braneParser::BOOL);
       break;
     }
@@ -2850,14 +3242,14 @@ braneParser::ExpressionContext* braneParser::expression(int precedence) {
       _localctx = _tracker.createInstance<SizeOfTypeContext>(_localctx);
       _ctx = _localctx;
       previousContext = _localctx;
-      setState(303);
-      match(braneParser::T__34);
-      setState(304);
-      match(braneParser::T__17);
-      setState(305);
+      setState(358);
+      match(braneParser::T__37);
+      setState(359);
+      match(braneParser::T__19);
+      setState(360);
       antlrcpp::downCast<SizeOfTypeContext *>(_localctx)->t = type();
-      setState(306);
-      match(braneParser::T__18);
+      setState(361);
+      match(braneParser::T__20);
       break;
     }
 
@@ -2865,16 +3257,16 @@ braneParser::ExpressionContext* braneParser::expression(int precedence) {
       _localctx = _tracker.createInstance<SizeOfPackContext>(_localctx);
       _ctx = _localctx;
       previousContext = _localctx;
-      setState(308);
-      match(braneParser::T__34);
-      setState(309);
-      match(braneParser::T__2);
-      setState(310);
-      match(braneParser::T__17);
-      setState(311);
+      setState(363);
+      match(braneParser::T__37);
+      setState(364);
+      match(braneParser::T__11);
+      setState(365);
+      match(braneParser::T__19);
+      setState(366);
       antlrcpp::downCast<SizeOfPackContext *>(_localctx)->id = match(braneParser::ID);
-      setState(312);
-      match(braneParser::T__18);
+      setState(367);
+      match(braneParser::T__20);
       break;
     }
 
@@ -2882,7 +3274,7 @@ braneParser::ExpressionContext* braneParser::expression(int precedence) {
       _localctx = _tracker.createInstance<DeclContext>(_localctx);
       _ctx = _localctx;
       previousContext = _localctx;
-      setState(313);
+      setState(368);
       declaration();
       break;
     }
@@ -2891,7 +3283,7 @@ braneParser::ExpressionContext* braneParser::expression(int precedence) {
       _localctx = _tracker.createInstance<IdContext>(_localctx);
       _ctx = _localctx;
       previousContext = _localctx;
-      setState(314);
+      setState(369);
       scopedID();
       break;
     }
@@ -2900,14 +3292,14 @@ braneParser::ExpressionContext* braneParser::expression(int precedence) {
       _localctx = _tracker.createInstance<CastContext>(_localctx);
       _ctx = _localctx;
       previousContext = _localctx;
-      setState(315);
-      match(braneParser::T__17);
-      setState(316);
+      setState(370);
+      match(braneParser::T__19);
+      setState(371);
       type();
-      setState(317);
-      match(braneParser::T__18);
-      setState(318);
-      expression(6);
+      setState(372);
+      match(braneParser::T__20);
+      setState(373);
+      expression(7);
       break;
     }
 
@@ -2915,12 +3307,56 @@ braneParser::ExpressionContext* braneParser::expression(int precedence) {
       _localctx = _tracker.createInstance<ParenContext>(_localctx);
       _ctx = _localctx;
       previousContext = _localctx;
-      setState(320);
-      match(braneParser::T__17);
-      setState(321);
+      setState(375);
+      match(braneParser::T__19);
+      setState(376);
       expression(0);
-      setState(322);
-      match(braneParser::T__18);
+      setState(377);
+      match(braneParser::T__20);
+      break;
+    }
+
+    case 12: {
+      _localctx = _tracker.createInstance<LambdaContext>(_localctx);
+      _ctx = _localctx;
+      previousContext = _localctx;
+      setState(379);
+      antlrcpp::downCast<LambdaContext *>(_localctx)->returnType = type();
+      setState(380);
+      antlrcpp::downCast<LambdaContext *>(_localctx)->label = match(braneParser::T__15);
+      setState(385);
+      _errHandler->sync(this);
+
+      _la = _input->LA(1);
+      if (_la == braneParser::T__3) {
+        setState(381);
+        match(braneParser::T__3);
+        setState(382);
+        antlrcpp::downCast<LambdaContext *>(_localctx)->capture = varCapture();
+        setState(383);
+        match(braneParser::T__5);
+      }
+      setState(387);
+      match(braneParser::T__19);
+      setState(388);
+      antlrcpp::downCast<LambdaContext *>(_localctx)->arguments = argumentList();
+      setState(389);
+      match(braneParser::T__20);
+      setState(390);
+      match(braneParser::T__7);
+      setState(394);
+      _errHandler->sync(this);
+      _la = _input->LA(1);
+      while ((((_la & ~ 0x3fULL) == 0) &&
+        ((1ULL << _la) & 1108814528839936) != 0)) {
+        setState(391);
+        statement();
+        setState(396);
+        _errHandler->sync(this);
+        _la = _input->LA(1);
+      }
+      setState(397);
+      match(braneParser::T__8);
       break;
     }
 
@@ -2928,26 +3364,26 @@ braneParser::ExpressionContext* braneParser::expression(int precedence) {
       break;
     }
     _ctx->stop = _input->LT(-1);
-    setState(356);
+    setState(431);
     _errHandler->sync(this);
-    alt = getInterpreter<atn::ParserATNSimulator>()->adaptivePredict(_input, 39, _ctx);
+    alt = getInterpreter<atn::ParserATNSimulator>()->adaptivePredict(_input, 53, _ctx);
     while (alt != 2 && alt != atn::ATN::INVALID_ALT_NUMBER) {
       if (alt == 1) {
         if (!_parseListeners.empty())
           triggerExitRuleEvent();
         previousContext = _localctx;
-        setState(354);
+        setState(429);
         _errHandler->sync(this);
-        switch (getInterpreter<atn::ParserATNSimulator>()->adaptivePredict(_input, 38, _ctx)) {
+        switch (getInterpreter<atn::ParserATNSimulator>()->adaptivePredict(_input, 52, _ctx)) {
         case 1: {
           auto newContext = _tracker.createInstance<MuldivContext>(_tracker.createInstance<ExpressionContext>(parentContext, parentState));
           _localctx = newContext;
           newContext->left = previousContext;
           pushNewRecursionContext(newContext, startState, RuleExpression);
-          setState(326);
+          setState(401);
 
-          if (!(precpred(_ctx, 5))) throw FailedPredicateException(this, "precpred(_ctx, 5)");
-          setState(327);
+          if (!(precpred(_ctx, 6))) throw FailedPredicateException(this, "precpred(_ctx, 6)");
+          setState(402);
           antlrcpp::downCast<MuldivContext *>(_localctx)->opr = _input->LT(1);
           _la = _input->LA(1);
           if (!(_la == braneParser::MUL
@@ -2959,8 +3395,8 @@ braneParser::ExpressionContext* braneParser::expression(int precedence) {
             _errHandler->reportMatch(this);
             consume();
           }
-          setState(328);
-          antlrcpp::downCast<MuldivContext *>(_localctx)->right = expression(6);
+          setState(403);
+          antlrcpp::downCast<MuldivContext *>(_localctx)->right = expression(7);
           break;
         }
 
@@ -2969,10 +3405,10 @@ braneParser::ExpressionContext* braneParser::expression(int precedence) {
           _localctx = newContext;
           newContext->left = previousContext;
           pushNewRecursionContext(newContext, startState, RuleExpression);
-          setState(329);
+          setState(404);
 
-          if (!(precpred(_ctx, 4))) throw FailedPredicateException(this, "precpred(_ctx, 4)");
-          setState(330);
+          if (!(precpred(_ctx, 5))) throw FailedPredicateException(this, "precpred(_ctx, 5)");
+          setState(405);
           antlrcpp::downCast<AddsubContext *>(_localctx)->opr = _input->LT(1);
           _la = _input->LA(1);
           if (!(_la == braneParser::ADD
@@ -2984,8 +3420,8 @@ braneParser::ExpressionContext* braneParser::expression(int precedence) {
             _errHandler->reportMatch(this);
             consume();
           }
-          setState(331);
-          antlrcpp::downCast<AddsubContext *>(_localctx)->right = expression(5);
+          setState(406);
+          antlrcpp::downCast<AddsubContext *>(_localctx)->right = expression(6);
           break;
         }
 
@@ -2994,13 +3430,13 @@ braneParser::ExpressionContext* braneParser::expression(int precedence) {
           _localctx = newContext;
           newContext->left = previousContext;
           pushNewRecursionContext(newContext, startState, RuleExpression);
-          setState(332);
+          setState(407);
 
-          if (!(precpred(_ctx, 3))) throw FailedPredicateException(this, "precpred(_ctx, 3)");
-          setState(333);
+          if (!(precpred(_ctx, 4))) throw FailedPredicateException(this, "precpred(_ctx, 4)");
+          setState(408);
           antlrcpp::downCast<LogicContext *>(_localctx)->opr = match(braneParser::LOGIC);
-          setState(334);
-          antlrcpp::downCast<LogicContext *>(_localctx)->right = expression(4);
+          setState(409);
+          antlrcpp::downCast<LogicContext *>(_localctx)->right = expression(5);
           break;
         }
 
@@ -3009,22 +3445,22 @@ braneParser::ExpressionContext* braneParser::expression(int precedence) {
           _localctx = newContext;
           newContext->left = previousContext;
           pushNewRecursionContext(newContext, startState, RuleExpression);
-          setState(335);
+          setState(410);
 
-          if (!(precpred(_ctx, 2))) throw FailedPredicateException(this, "precpred(_ctx, 2)");
-          setState(336);
+          if (!(precpred(_ctx, 3))) throw FailedPredicateException(this, "precpred(_ctx, 3)");
+          setState(411);
           antlrcpp::downCast<ComparisonContext *>(_localctx)->opr = _input->LT(1);
           _la = _input->LA(1);
           if (!((((_la & ~ 0x3fULL) == 0) &&
-            ((1ULL << _la) & 123040) != 0))) {
+            ((1ULL << _la) & 251707392) != 0))) {
             antlrcpp::downCast<ComparisonContext *>(_localctx)->opr = _errHandler->recoverInline(this);
           }
           else {
             _errHandler->reportMatch(this);
             consume();
           }
-          setState(337);
-          antlrcpp::downCast<ComparisonContext *>(_localctx)->right = expression(3);
+          setState(412);
+          antlrcpp::downCast<ComparisonContext *>(_localctx)->right = expression(4);
           break;
         }
 
@@ -3033,15 +3469,15 @@ braneParser::ExpressionContext* braneParser::expression(int precedence) {
           _localctx = newContext;
           newContext->overrides = previousContext;
           pushNewRecursionContext(newContext, startState, RuleExpression);
-          setState(338);
+          setState(413);
 
-          if (!(precpred(_ctx, 10))) throw FailedPredicateException(this, "precpred(_ctx, 10)");
-          setState(339);
-          match(braneParser::T__17);
-          setState(340);
+          if (!(precpred(_ctx, 11))) throw FailedPredicateException(this, "precpred(_ctx, 11)");
+          setState(414);
+          match(braneParser::T__19);
+          setState(415);
           argumentPack();
-          setState(341);
-          match(braneParser::T__18);
+          setState(416);
+          match(braneParser::T__20);
           break;
         }
 
@@ -3050,15 +3486,15 @@ braneParser::ExpressionContext* braneParser::expression(int precedence) {
           _localctx = newContext;
           newContext->base = previousContext;
           pushNewRecursionContext(newContext, startState, RuleExpression);
-          setState(343);
+          setState(418);
 
-          if (!(precpred(_ctx, 8))) throw FailedPredicateException(this, "precpred(_ctx, 8)");
-          setState(344);
-          match(braneParser::T__35);
-          setState(345);
+          if (!(precpred(_ctx, 9))) throw FailedPredicateException(this, "precpred(_ctx, 9)");
+          setState(419);
+          match(braneParser::T__3);
+          setState(420);
           antlrcpp::downCast<IndexAccessContext *>(_localctx)->arg = expression(0);
-          setState(346);
-          match(braneParser::T__36);
+          setState(421);
+          match(braneParser::T__5);
           break;
         }
 
@@ -3067,19 +3503,19 @@ braneParser::ExpressionContext* braneParser::expression(int precedence) {
           _localctx = newContext;
           newContext->base = previousContext;
           pushNewRecursionContext(newContext, startState, RuleExpression);
-          setState(348);
+          setState(423);
 
-          if (!(precpred(_ctx, 7))) throw FailedPredicateException(this, "precpred(_ctx, 7)");
-          setState(349);
-          match(braneParser::T__37);
-          setState(350);
+          if (!(precpred(_ctx, 8))) throw FailedPredicateException(this, "precpred(_ctx, 8)");
+          setState(424);
+          match(braneParser::T__38);
+          setState(425);
           antlrcpp::downCast<MemberAccessContext *>(_localctx)->member = match(braneParser::ID);
-          setState(352);
+          setState(427);
           _errHandler->sync(this);
 
-          switch (getInterpreter<atn::ParserATNSimulator>()->adaptivePredict(_input, 37, _ctx)) {
+          switch (getInterpreter<atn::ParserATNSimulator>()->adaptivePredict(_input, 51, _ctx)) {
           case 1: {
-            setState(351);
+            setState(426);
             antlrcpp::downCast<MemberAccessContext *>(_localctx)->template_ = templateArgs();
             break;
           }
@@ -3094,9 +3530,9 @@ braneParser::ExpressionContext* braneParser::expression(int precedence) {
           break;
         } 
       }
-      setState(358);
+      setState(433);
       _errHandler->sync(this);
-      alt = getInterpreter<atn::ParserATNSimulator>()->adaptivePredict(_input, 39, _ctx);
+      alt = getInterpreter<atn::ParserATNSimulator>()->adaptivePredict(_input, 53, _ctx);
     }
   }
   catch (RecognitionException &e) {
@@ -3109,7 +3545,7 @@ braneParser::ExpressionContext* braneParser::expression(int precedence) {
 
 bool braneParser::sempred(RuleContext *context, size_t ruleIndex, size_t predicateIndex) {
   switch (ruleIndex) {
-    case 23: return expressionSempred(antlrcpp::downCast<ExpressionContext *>(context), predicateIndex);
+    case 27: return expressionSempred(antlrcpp::downCast<ExpressionContext *>(context), predicateIndex);
 
   default:
     break;
@@ -3119,13 +3555,13 @@ bool braneParser::sempred(RuleContext *context, size_t ruleIndex, size_t predica
 
 bool braneParser::expressionSempred(ExpressionContext *_localctx, size_t predicateIndex) {
   switch (predicateIndex) {
-    case 0: return precpred(_ctx, 5);
-    case 1: return precpred(_ctx, 4);
-    case 2: return precpred(_ctx, 3);
-    case 3: return precpred(_ctx, 2);
-    case 4: return precpred(_ctx, 10);
-    case 5: return precpred(_ctx, 8);
-    case 6: return precpred(_ctx, 7);
+    case 0: return precpred(_ctx, 6);
+    case 1: return precpred(_ctx, 5);
+    case 2: return precpred(_ctx, 4);
+    case 3: return precpred(_ctx, 3);
+    case 4: return precpred(_ctx, 11);
+    case 5: return precpred(_ctx, 9);
+    case 6: return precpred(_ctx, 8);
 
   default:
     break;

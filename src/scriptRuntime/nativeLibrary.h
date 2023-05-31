@@ -8,7 +8,7 @@
 
 #include <string>
 #include <vector>
-#include "functionHandle.h"
+#include "funcRef.h"
 
 namespace BraneScript
 {
@@ -22,7 +22,7 @@ namespace BraneScript
 
         void addFunction(std::string signature, void* f);
         template<typename Ret, typename... Args>
-        void addFunction(std::string signature, FunctionHandle<Ret, Args...> f)
+        void addFunction(std::string signature, FuncRef<Ret, Args...> f)
         {
             addFunction(std::move(signature), (void*)f);
         }

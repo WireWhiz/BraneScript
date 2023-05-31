@@ -16,9 +16,8 @@ void BS_API_CALL setRef(int newVal)
 TEST(BraneScript, API)
 {
     std::string testString = R"(
-    link "testLib" as "lib";
-
-    export as "tests"
+    module "tests"
+    link "testLib" as "lib"
     {
         void setRef(int v)
         {
@@ -28,7 +27,7 @@ TEST(BraneScript, API)
 )";
 
     std::string testLibString = R"(
-    export as "testLib"
+    module "testLib"
     {
         void setRef(int v) ext;
     }
@@ -44,11 +43,13 @@ TEST(BraneScript, API)
     checkCompileErrors(analyzer, testString)
 
     llvm::LLVMContext ctx;
-    auto ir = analyzer.getCtx("test")->scriptContext->compile(&ctx);
+    auto ir = analyzer.getCtx("test")->scriptContext->compile(&ctx, true, true);
+    ASSERT_TRUE(ir.modules.contains("tests"));
 
     ScriptRuntime rt;
+    rt.resetMallocDiff();
     rt.loadLibrary(testLib);
-    Script* testScript = rt.loadScript(ir);
+    Module* testScript = rt.loadModule(ir.modules.at("tests"));
     ASSERT_TRUE(testScript);
 
     auto scriptSetRef = testScript->getFunction<void, int>("tests::setRef");

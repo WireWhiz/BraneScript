@@ -6,7 +6,7 @@
 #define BRANESCRIPT_CONSTEXPREVALUATOR_H
 
 #include "documentContext.h"
-#include "functionHandle.h"
+#include "funcRef.h"
 
 namespace BraneScript
 {

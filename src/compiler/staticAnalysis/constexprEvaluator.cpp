@@ -369,6 +369,7 @@ namespace BraneScript
                             assert(false);
                     }
             }
+            return {"", std::make_unique<ConstBoolContext>(false)};
         }
 
         Value visitNativeCastContext(const NativeCastContext* ctx)
@@ -420,6 +421,7 @@ namespace BraneScript
                 default:
                     assert(false);
             }
+            return {"", std::make_unique<ConstIntContext>(0)};
         }
 
         Value visitExpression(const ExpressionContext* ctx)

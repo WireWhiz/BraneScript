@@ -12,7 +12,7 @@ TEST(BraneScript, Refs)
 
     std::string testString = R"(
 
-    export as "tests"
+    module "tests"
     {
         int testValue;
 
@@ -28,9 +28,9 @@ TEST(BraneScript, Refs)
 
         int addOneCall()
         {
-            int testValue = 0;
-            addOne(testValue);
-            return testValue;
+            int localTestValue = 0;
+            addOne(localTestValue);
+            return localTestValue;
         }
 
         void addOneToRef(ref int value)
@@ -44,11 +44,12 @@ TEST(BraneScript, Refs)
     analyzer.validate("test");
     checkCompileErrors(analyzer, testString);
 
-    llvm::LLVMContext ctx;
-    auto ir = analyzer.getCtx("test")->scriptContext->compile(&ctx, false, true);
+    auto ir = analyzer.compile("test");
+    ASSERT_TRUE(ir.modules.contains("tests"));
 
     ScriptRuntime rt;
-    Script* testScript = rt.loadScript(ir);
+    rt.resetMallocDiff();
+    Module* testScript = rt.loadModule(ir.modules.at("tests"));
     ASSERT_TRUE(testScript);
 
     auto getInt = testScript->getFunction<int*>("tests::getInt()");

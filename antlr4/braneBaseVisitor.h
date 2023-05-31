@@ -19,7 +19,23 @@ public:
     return visitChildren(ctx);
   }
 
-  virtual std::any visitProgSegment(braneParser::ProgSegmentContext *ctx) override {
+  virtual std::any visitLink(braneParser::LinkContext *ctx) override {
+    return visitChildren(ctx);
+  }
+
+  virtual std::any visitLinkList(braneParser::LinkListContext *ctx) override {
+    return visitChildren(ctx);
+  }
+
+  virtual std::any visitTags(braneParser::TagsContext *ctx) override {
+    return visitChildren(ctx);
+  }
+
+  virtual std::any visitModule(braneParser::ModuleContext *ctx) override {
+    return visitChildren(ctx);
+  }
+
+  virtual std::any visitModuleComponent(braneParser::ModuleComponentContext *ctx) override {
     return visitChildren(ctx);
   }
 
@@ -79,6 +95,10 @@ public:
     return visitChildren(ctx);
   }
 
+  virtual std::any visitBracketOpr(braneParser::BracketOprContext *ctx) override {
+    return visitChildren(ctx);
+  }
+
   virtual std::any visitFunctionSig(braneParser::FunctionSigContext *ctx) override {
     return visitChildren(ctx);
   }
@@ -91,15 +111,11 @@ public:
     return visitChildren(ctx);
   }
 
-  virtual std::any visitLink(braneParser::LinkContext *ctx) override {
+  virtual std::any visitCapturedVar(braneParser::CapturedVarContext *ctx) override {
     return visitChildren(ctx);
   }
 
-  virtual std::any visitExport(braneParser::ExportContext *ctx) override {
-    return visitChildren(ctx);
-  }
-
-  virtual std::any visitExportSegment(braneParser::ExportSegmentContext *ctx) override {
+  virtual std::any visitVarCapture(braneParser::VarCaptureContext *ctx) override {
     return visitChildren(ctx);
   }
 
@@ -192,6 +208,10 @@ public:
   }
 
   virtual std::any visitParen(braneParser::ParenContext *ctx) override {
+    return visitChildren(ctx);
+  }
+
+  virtual std::any visitLambda(braneParser::LambdaContext *ctx) override {
     return visitChildren(ctx);
   }
 

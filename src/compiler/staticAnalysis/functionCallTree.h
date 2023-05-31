@@ -27,6 +27,7 @@ namespace BraneScript
         void addFunction(FunctionContext* func);
         void addDependency(FunctionContext* func, FunctionContext* dep);
         bool resolveCallOrder(std::vector<FunctionContext*>& result);
+        void clear();
     };
 }
 

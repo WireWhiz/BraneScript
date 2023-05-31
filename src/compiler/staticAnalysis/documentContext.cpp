@@ -4,20 +4,14 @@
 
 #include "documentContext.h"
 #include <cassert>
-#include <llvm/Analysis/LoopAnalysisManager.h>
 
 #include "llvm/ADT/APFloat.h"
 #include "llvm/ADT/APInt.h"
-#include "llvm/Analysis/CGSCCPassManager.h"
 #include "llvm/Bitcode/BitcodeWriter.h"
 #include "llvm/IR/PassManager.h"
 #include "llvm/IR/Verifier.h"
 #include "llvm/Passes/PassBuilder.h"
-#include "llvm/Transforms/InstCombine/InstCombine.h"
 #include "llvm/Transforms/Scalar.h"
-#include "llvm/Transforms/Scalar/GVN.h"
-#include "llvm/Transforms/Scalar/Reassociate.h"
-#include "llvm/Transforms/Scalar/SimplifyCFG.h"
 
 namespace BraneScript
 {
@@ -86,6 +80,7 @@ namespace BraneScript
             case ValueType::Float64:
                 return 8;
             case ValueType::Struct:
+            case ValueType::FuncRef:
                 return sizeof(void*); // Not too important, these values are mostly used for casting cost calculations
         }
         return 1;
@@ -113,13 +108,14 @@ namespace BraneScript
         return false;
     }
 
-    void ValueContext::operator=(const LabeledValueContext& o)
+    ValueContext& ValueContext::operator=(const LabeledValueContext& o)
     {
         assert(o.type.storageType != ValueType::Struct || o.type.structCtx);
         type = o.type;
         isConst = o.isConst;
         isRef = o.isRef;
         isLValue = o.isLValue;
+        return *this;
     }
 
     ASTContext::ASTContext(llvm::LLVMContext* llvmCtx, std::string moduleSource) : llvmCtx(llvmCtx), builder(*llvmCtx)
@@ -147,6 +143,7 @@ namespace BraneScript
             llvmTypes.push_back(getLLVMType(*m));
         }
         entry.def.packed = structCtx->packed;
+        entry.def.tags = structCtx->tags;
 
         llvm::StructType* st;
         if(llvmTypes.empty())
@@ -155,7 +152,7 @@ namespace BraneScript
             st = llvm::StructType::create(llvmTypes, id, structCtx->packed);
 
         entry.llvmType = st;
-        entry.isExported = structCtx->getParent<LibraryContext>();
+        entry.isExported = structCtx->getParent<ModuleContext>();
 
         definedStructs.insert({std::move(id), std::move(entry)});
 
@@ -176,7 +173,7 @@ namespace BraneScript
         {
             case ValueType::Void:
                 if(valueCtx.isRef)
-                    return llvm::PointerType::get(*llvmCtx, 0);
+                    return llvm::PointerType::get(llvm::Type::getInt32Ty(*llvmCtx), 0);
                 else
                     return llvm::Type::getVoidTy(*llvmCtx);
             case ValueType::Bool:
@@ -226,7 +223,7 @@ namespace BraneScript
             std::string id = valueContext.longId();
             auto linkage = llvm::GlobalVariable::ExternalLinkage;
             if(shouldExport)
-                exportedGlobals.push_back(id);
+                exportedGlobals.push_back({id, valueContext.signature()});
             return new llvm::GlobalVariable(*module, type, false, linkage, llvm::UndefValue::get(type), id);
         };
     }
@@ -268,6 +265,11 @@ namespace BraneScript
         scopes.back().values.insert({std::move(id), {value, std::move(context)}});
     }
 
+    void ASTContext::addValue(llvm::Value* value, ValueContext context)
+    {
+        scopes.back().unnamedValues.push_back({value, std::move(context)});
+    }
+
     void ASTContext::setInsertPoint(llvm::BasicBlock* block)
     {
         currentBlock = block;
@@ -282,22 +284,18 @@ namespace BraneScript
         printf("%s", moduleTextStr.str().c_str());
     }
 
-    llvm::Value* ASTContext::convertToType(llvm::Value* value, const ValueContext& valueCtx, bool forceToValue)
+    llvm::Value* ASTContext::dereferenceToDepth(llvm::Value* value, size_t maxPointerDepth)
     {
-        auto valueType = value->getType();
-        auto targetType = getLLVMType(valueCtx);
-        if(valueType == targetType)
+        assert(value);
+        if(value->getType()->isOpaquePointerTy())
             return value;
-        if(valueType->isPointerTy() && (!valueCtx.isRef || forceToValue) && !valueCtx.type.structCtx)
+        size_t currentDepth = pointerDepth(value->getType());
+        assert(currentDepth >= maxPointerDepth);
+        while(currentDepth > maxPointerDepth)
         {
-            assert(valueType->getContainedType(0) == targetType);
-            return builder.CreateLoad(targetType, value);
+            value = builder.CreateLoad(value->getType()->getContainedType(0), value);
+            currentDepth--;
         }
-        if(valueType->isPointerTy() && valueCtx.isRef && !valueType->isOpaquePointerTy() &&
-           valueType->getContainedType(0)->isPointerTy())
-            return builder.CreateLoad(getLLVMType(valueCtx), value);
-        if(!valueType->isPointerTy() && valueCtx.isRef)
-            throw std::runtime_error("Unable to create ref from lValue");
         return value;
     }
 
@@ -312,13 +310,32 @@ namespace BraneScript
                     continue;
                 if(!value.second.context.type.structCtx)
                     continue;
-                auto destructorFunc = functions.find(value.second.context.type.structCtx->destructorSig());
+                auto destructorFunc = functions.find(value.second.context.type.structCtx->destructor->signature());
                 assert(destructorFunc != functions.end());
                 builder.CreateCall(destructorFunc->second, {value.second.value});
+            }
+            for(auto& value : itr->unnamedValues)
+            {
+                if(value.context.isRef)
+                    continue;
+                if(!value.context.type.structCtx)
+                    continue;
+                auto destructorFunc = functions.find(value.context.type.structCtx->destructor->signature());
+                assert(destructorFunc != functions.end());
+                builder.CreateCall(destructorFunc->second, {value.value});
             }
             if(onlyLocal)
                 break;
         }
+    }
+
+    size_t ASTContext::pointerDepth(llvm::Type* type)
+    {
+        if(!type->isPointerTy())
+            return 0;
+        if(type->isOpaquePointerTy())
+            return 1;
+        return 1 + pointerDepth(type->getContainedType(0));
     }
 
     ASTContext::~ASTContext() = default;
@@ -338,7 +355,7 @@ namespace BraneScript
     }
 
     void DocumentContext::getFunction(const std::string& identifier,
-                                      std::list<FunctionContext*>& overrides,
+                                      FunctionOverridesContext* overrides,
                                       uint8_t searchOptions)
     {
         if(parent && !(searchOptions & IDSearchOptions_ChildrenOnly))
@@ -361,6 +378,14 @@ namespace BraneScript
     DocumentContext* DocumentContext::deepCopy() const
     {
         return deepCopy([](auto _) { return _; });
+    }
+
+    DocumentContext* DocumentContext::findIdentifier(const std::string& identifier) {
+        return findIdentifier(identifier, 0);
+    }
+
+    void DocumentContext::getFunction(const std::string& identifier, FunctionOverridesContext* overrides) {
+        getFunction(identifier, overrides, 0);
     }
 
     std::string ValueContext::signature() const
@@ -420,6 +445,14 @@ namespace BraneScript
         if(type.isFloat() && target.type.isInt())
             cost += 30;
         return cost;
+    }
+
+    ValueContext::ValueContext(TypeContext type, bool isLValue, bool isConst, bool isRef)
+    {
+        this->type = std::move(type);
+        this->isLValue = isLValue;
+        this->isConst = isConst;
+        this->isRef = isRef;
     }
 
     std::string LabeledValueContext::signature() const { return ValueContext::signature() + " " + identifier.text; }
@@ -565,8 +598,8 @@ namespace BraneScript
 
         auto parentFunc = getParent<FunctionContext>();
         assert(parentFunc);
-        auto retValue = ctx.convertToType(value->createAST(ctx), parentFunc->returnType);
-
+        auto retValue = value->createAST(ctx);
+        assert(retValue);
         if(!parentFunc->returnType.isRef && parentFunc->returnType.type.structCtx)
         {
             // If we are returning a value from a function, it will have detected this node as a parent and returned
@@ -580,10 +613,10 @@ namespace BraneScript
             auto retRef = ctx.findValue("-retRef");
             assert(retRef);
 
-            auto copy = ctx.functions.find(parentFunc->returnType.type.structCtx->copyConstructorSig());
+            auto copy = ctx.functions.find(parentFunc->returnType.type.structCtx->copyConstructor->signature());
             assert(copy != ctx.functions.end());
 
-            std::vector<llvm::Value*> args = {retRef, retValue};
+            std::vector<llvm::Value*> args = {retRef, ctx.dereferenceToDepth(retValue, 1)};
             ctx.builder.CreateCall(copy->second, args);
             ctx.destructStack();
             ctx.builder.CreateRetVoid();
@@ -591,9 +624,8 @@ namespace BraneScript
             return nullptr;
         }
 
-
-        if(retValue->getType()->getNumContainedTypes() && retValue->getType()->getContainedType(0)->isPointerTy())
-            retValue = ctx.builder.CreateLoad(retValue->getType()->getContainedType(0), retValue);
+        bool isRefType = parentFunc->returnType.isRef || parentFunc->returnType.type.storageType == ValueType::FuncRef;
+        retValue = ctx.dereferenceToDepth(retValue, isRefType ? 1 : 0);
         assert(retValue->getType() == ctx.func->getReturnType());
 
         ctx.destructStack();
@@ -627,7 +659,7 @@ namespace BraneScript
 
     llvm::Value* IfContext::createAST(ASTContext& ctx) const
     {
-        auto* cond = ctx.convertToType(condition->createAST(ctx), condition->returnType, true);
+        auto* cond = ctx.dereferenceToDepth(condition->createAST(ctx), 0);
         assert(cond->getType()->getIntegerBitWidth() == 1);
 
         llvm::BasicBlock* trueBranch = llvm::BasicBlock::Create(*ctx.llvmCtx, "", ctx.func);
@@ -694,26 +726,25 @@ namespace BraneScript
 
     llvm::Value* AssignmentContext::createAST(ASTContext& ctx) const
     {
-        llvm::Value* l = lValue->createAST(ctx);
+        llvm::Value* l = ctx.dereferenceToDepth(lValue->createAST(ctx), lValue->returnType.type.storageType == ValueType::FuncRef ? 2 : 1);
         llvm::Value* r = rValue->createAST(ctx);
 
         assert(l->getType()->isPointerTy());
         if(!lValue->returnType.type.structCtx)
         {
-            if(!l->getType()->getContainedType(0)->isPointerTy() && r->getType()->isPointerTy())
-                r = ctx.builder.CreateLoad(r->getType()->getContainedType(0), r);
+            r = ctx.dereferenceToDepth(r, lValue->returnType.type.storageType == ValueType::FuncRef ? 1 : 0);
+            assert(l->getType()->getContainedType(0) == r->getType());
             ctx.builder.CreateStore(r, l);
             return nullptr;
         }
 
-        auto cc = ctx.functions.find(lValue->returnType.type.structCtx->copyConstructorSig());
+        auto cc = ctx.functions.find(lValue->returnType.type.structCtx->copyConstructor->signature());
         assert(cc != ctx.functions.end());
         assert(cc->second->arg_size() == 2);
         auto structPointerType = lValue->returnType;
         structPointerType.isRef = true;
 
-        std::vector<llvm::Value*> args = {ctx.convertToType(l, structPointerType),
-                                          ctx.convertToType(r, structPointerType)};
+        std::vector<llvm::Value*> args = {l, ctx.dereferenceToDepth(r, 1)};
         ctx.builder.CreateCall(cc->second, args);
         return nullptr;
     }
@@ -754,18 +785,16 @@ namespace BraneScript
 
     void RefAssignmentContext::setArgs(ExpressionContext* lValue, ExpressionContext* rValue)
     {
-        assert((lValue->returnType.isRef || lValue->returnType.type.storageType == ValueType::FuncRef) && (rValue->returnType.isLValue || rValue->returnType.isRef));
+        assert((lValue->returnType.isRef || lValue->returnType.type.storageType == ValueType::FuncRef) &&
+               (rValue->returnType.isLValue || rValue->returnType.isRef));
         this->lValue.reset(lValue);
         this->rValue.reset(rValue);
     }
 
     llvm::Value* RefAssignmentContext::createAST(ASTContext& ctx) const
     {
-        llvm::Value* l = lValue->createAST(ctx);
-        llvm::Value* r = ctx.convertToType(rValue->createAST(ctx), lValue->returnType);
-
-        assert(l->getType()->isPointerTy() && r->getType()->isPointerTy());
-        assert(l->getType()->getContainedType(0)->isPointerTy());
+        llvm::Value* l = ctx.dereferenceToDepth(lValue->createAST(ctx), 2);
+        llvm::Value* r = ctx.dereferenceToDepth(rValue->createAST(ctx), 1);
 
         ctx.builder.CreateStore(r, l);
         return nullptr;
@@ -792,9 +821,8 @@ namespace BraneScript
     {
         auto* type = ctx.getLLVMType(value);
         auto nullValue = llvm::ConstantPointerNull::get(llvm::PointerType::get(type, 0));
-        std::vector<llvm::Value*> indices = {llvm::ConstantInt::get(*ctx.llvmCtx, llvm::APInt(16, 1))};
-        auto* offset = ctx.builder.CreateGEP(type, nullValue, indices);
-        return ctx.builder.CreatePtrToInt(offset, ctx.getLLVMType(returnType), "typeSize");
+        auto* offset = ctx.builder.CreateGEP(type, nullValue, llvm::ConstantInt::get(*ctx.llvmCtx, llvm::APInt(16, 1)));
+        return ctx.builder.CreatePtrToInt(offset,  ctx.getLLVMType(returnType), "typeSize");
     }
 
     bool TypeSizeContext::isConstexpr() const { return !value.isRef; }
@@ -908,7 +936,8 @@ namespace BraneScript
         if(!stringType)
             throw std::runtime_error("String library must be linked to use strings!");
         auto* tempString = ctx.builder.CreateAlloca(stringType);
-        auto hiddenConstructor = ctx.module->getOrInsertFunction("string::stringFromCharArr(ref string::string, const ref char)",
+        auto hiddenConstructor =
+            ctx.module->getOrInsertFunction("string::stringFromCharArr(ref string::string, const ref char)",
                                             llvm::Type::getVoidTy(*ctx.llvmCtx),
                                             llvm::PointerType::get(stringType, 0),
                                             llvm::Type::getInt8PtrTy(*ctx.llvmCtx));
@@ -938,7 +967,7 @@ namespace BraneScript
         if(!returnType.type.structCtx || returnType.isRef)
             return value;
 
-        auto func = ctx.functions.find(returnType.type.structCtx->constructorSig());
+        auto func = ctx.functions.find(returnType.type.structCtx->constructor->signature());
         assert(func != ctx.functions.end());
         assert(func->second->arg_size() == 1);
 
@@ -946,7 +975,7 @@ namespace BraneScript
         structPointerType.isRef = true;
 
         assert(value->getType()->isPointerTy());
-        std::vector<llvm::Value*> arg = {ctx.convertToType(value, structPointerType)};
+        std::vector<llvm::Value*> arg = {ctx.dereferenceToDepth(value, 1)};
         ctx.builder.CreateCall(func->second, arg);
         return value;
     }
@@ -966,7 +995,7 @@ namespace BraneScript
         if(!returnType.type.structCtx)
             return value;
 
-        auto func = ctx.functions.find(returnType.type.structCtx->destructorSig());
+        auto func = ctx.functions.find(returnType.type.structCtx->destructor->signature());
         assert(func != ctx.functions.end());
 
 
@@ -998,86 +1027,28 @@ namespace BraneScript
 
     llvm::Value* LabeledValueReferenceContext::createAST(ASTContext& ctx) const { return ctx.findValue(identifier); }
 
-    FunctionOverridesContext::FunctionOverridesContext(std::vector<FunctionContext*> overrides) : overrides(std::move(overrides))
-    {
-    }
-
     bool FunctionOverridesContext::isConstexpr() const { return false; }
 
     DocumentContext*
     FunctionOverridesContext::deepCopy(const std::function<DocumentContext*(DocumentContext*)>& callback) const
     {
-         return callback(new FunctionOverridesContext{overrides});
+        auto copy = new FunctionOverridesContext{};
+        copy->thisRef = std::unique_ptr<ExpressionContext>((ExpressionContext*)thisRef->deepCopy());
+        copy->overrides = overrides;
+        copy->templates = templates;
+        return callback(copy);
     }
 
-    FunctionContext* FunctionOverridesContext::bestMatch(const std::vector<ValueContext>& args,
-                                                         const CastCallback& canImplicitCast,
-                                                         MatchFlags flags) const
-    {
-        if(overrides.empty())
-            return nullptr;
-         /* We want to find the best match with the lowest amount of implicit casts. So we store the cast count for
-          * each candidate function and try to find the closest one. Cast cost is a measure of the desirability of
-          * casts the casts. For instance a cast from uint32 to uint64 is more desirable than a cast from uint32_t to
-          * a float.
-          * */
-         uint16_t bestCastCount = -1;
-         uint32_t bestCastCost = -1;
-         FunctionContext* bestMatch = nullptr;
-         for(auto f : overrides)
-         {
-            if((flags & MatchFlags::Constexpr) && !f->isConstexpr)
-                continue;
-
-            uint8_t castCount = 0;
-            uint16_t castCost = 0;
-
-            if(f->arguments.size() != args.size())
-                    continue;
-
-            bool argsMatch = true;
-            for(size_t i = 0; i < args.size(); ++i)
-            {
-                if(f->arguments[i]->type != args[i].type)
-                {
-                    if(!canImplicitCast(*f->arguments[i], args[i]))
-                    {
-                        argsMatch = false;
-                        break;
-                    }
-                    castCount++;
-                    castCost += args[i].castCost(*f->arguments[i]);
-                }
-                // Honor constness
-                if(args[i].isConst && f->arguments[i]->isRef && !f->arguments[i]->isConst)
-                {
-                    argsMatch = false;
-                    break;
-                }
-            }
-            if(!argsMatch)
-                continue;
-            // This is the best match if it requires fewer casts or has the same amount and just costs lest
-            if(castCount < bestCastCount || (castCount == bestCastCount && bestCastCost < castCost))
-            {
-                bestMatch = f;
-                bestCastCount = castCount;
-                bestCastCost = castCost;
-            }
-         }
-
-         return bestMatch;
-    }
 
     llvm::Value* FunctionOverridesContext::createAST(ASTContext& ctx) const
     {
-         assert(false);
-         return nullptr;
+        assert(false);
+        return nullptr;
     }
 
     std::string FunctionOverridesContext::longId() const
     {
-         if(overrides.empty())
+        if(overrides.empty())
             return "";
         return overrides[0]->identifier.text;
     }
@@ -1094,19 +1065,10 @@ namespace BraneScript
         }
         tempArgs += ">";
 
-        returnType.type = {
-            "FuncRef" + tempArgs,
-            ValueType::FuncRef,
-            nullptr
-        };
-        returnType.isRef = true;
-        returnType.isConst = true;
+        returnType.type = {"FuncRef" + tempArgs, ValueType::FuncRef, nullptr};
     }
 
-    bool FunctionReferenceContext::isConstexpr() const
-    {
-        return false;
-    }
+    bool FunctionReferenceContext::isConstexpr() const { return false; }
 
     llvm::Value* FunctionReferenceContext::createAST(ASTContext& ctx) const
     {
@@ -1114,11 +1076,11 @@ namespace BraneScript
         return llvm::ConstantExpr::getBitCast(func, ctx.getLLVMType(returnType));
     }
 
-    DocumentContext* FunctionReferenceContext::deepCopy(const std::function<DocumentContext*(DocumentContext*)>& callback) const
+    DocumentContext*
+    FunctionReferenceContext::deepCopy(const std::function<DocumentContext*(DocumentContext*)>& callback) const
     {
         return callback(new FunctionReferenceContext{*this});
     }
-
 
     MemberAccessContext::MemberAccessContext(ExpressionContext* base, StructContext* baseType, size_t member)
     {
@@ -1144,9 +1106,7 @@ namespace BraneScript
 
     llvm::Value* MemberAccessContext::createAST(ASTContext& ctx) const
     {
-        auto baseValue = baseExpression->createAST(ctx);
-        if(baseValue->getType()->getContainedType(0)->isPointerTy())
-            baseValue = ctx.builder.CreateLoad(baseValue->getType()->getContainedType(0), baseValue);
+        auto baseValue = ctx.dereferenceToDepth(baseExpression->createAST(ctx), 1);
 
         assert(baseValue->getType()->getContainedType(0)->isStructTy());
         return ctx.builder.CreateStructGEP(baseValue->getType()->getContainedType(0), baseValue, member);
@@ -1215,7 +1175,7 @@ namespace BraneScript
         }
 
         auto& sourceType = sourceExpr->returnType;
-        auto* sourceValue = ctx.convertToType(sourceExpr->createAST(ctx), sourceType, true);
+        auto* sourceValue = ctx.dereferenceToDepth(sourceExpr->createAST(ctx), 0);
         CastOps castType;
 
         switch(returnType.type.storageType)
@@ -1408,8 +1368,8 @@ namespace BraneScript
 
     llvm::Value* NativeArithmeticContext::createAST(ASTContext& ctx) const
     {
-        auto l = ctx.convertToType(lValue->createAST(ctx), lValue->returnType);
-        auto r = ctx.convertToType(rValue->createAST(ctx), rValue->returnType);
+        auto l = ctx.dereferenceToDepth(lValue->createAST(ctx), 0);
+        auto r = ctx.dereferenceToDepth(rValue->createAST(ctx), 0);
         auto type = returnType.type.storageType;
         switch(type)
         {
@@ -1541,6 +1501,7 @@ namespace BraneScript
                 assert(false);
                 return nullptr;
         }
+        return nullptr;
     }
 
     DocumentContext*
@@ -1598,7 +1559,12 @@ namespace BraneScript
         {
             size_t argIndex = 0;
             for(auto& arg : arguments)
-                args.push_back(ctx.convertToType(arg->createAST(ctx), *function->arguments[argIndex++]));
+            {
+                bool isRefType = function->arguments[argIndex]->isRef || function->arguments[argIndex]->type.storageType == ValueType::FuncRef;
+                args.push_back(ctx.dereferenceToDepth(arg->createAST(ctx), isRefType ? 1 : 0));
+                argIndex++;
+            }
+
             auto funcItr = ctx.functions.find(function->signature());
             assert(funcItr != ctx.functions.end());
             llvm::Function* func = funcItr->second;
@@ -1612,7 +1578,8 @@ namespace BraneScript
             for(auto& arg : arguments)
             {
                 argTypes.push_back(ctx.getLLVMType(arg->returnType));
-                args.push_back(ctx.convertToType(arg->createAST(ctx), arg->returnType));
+                bool isRefType = arg->returnType.isRef || arg->returnType.type.storageType == ValueType::FuncRef;
+                args.push_back(ctx.dereferenceToDepth(arg->createAST(ctx), isRefType ? 1 : 0));
             }
 
             auto retType = argRet ? ctx.getLLVMType({}) : ctx.getLLVMType(returnType);
@@ -1627,13 +1594,91 @@ namespace BraneScript
             else if(funcRef->getType()->getContainedType(0)->isFunctionTy())
                 funcRef = ctx.builder.CreateBitCast(funcRef, llvm::PointerType::get(funcType, 0));
 
-            retVal = ctx.builder.CreateCall(funcType,  funcRef, args);
+            retVal = ctx.builder.CreateCall(funcType, funcRef, args);
         }
 
 
         if(!returnType.isRef && returnType.type.structCtx)
             return args[0];
         return retVal;
+    }
+
+    bool LambdaInstanceContext::isConstexpr() const
+    {
+        return false;
+    }
+
+    DocumentContext* LambdaInstanceContext::deepCopy(const std::function<DocumentContext*(DocumentContext*)>& callback) const
+    {
+        auto* copy = new LambdaInstanceContext{};
+        copyBase(this, copy);
+        copy->lambdaType = lambdaType;
+        copy->captureType = captureType;
+        copy->func = func;
+        for(auto& arg : captures)
+            copy->captures.emplace_back(assertCast<ExpressionContext>(arg->deepCopy(callback)));
+        return callback(copy);
+    }
+
+    llvm::Value* LambdaInstanceContext::createAST(ASTContext& ctx) const
+    {
+        auto lt = ctx.getLLVMType(returnType);
+        auto lambdaInstance = ctx.builder.CreateAlloca(lt, nullptr, "lambda");
+        ctx.addValue(lambdaInstance, returnType);
+
+        auto lambdaConstructor = ctx.functions.at(lambdaType->constructor->signature());
+        assert(lambdaConstructor);
+        ctx.builder.CreateCall(lambdaConstructor, {lambdaInstance});
+
+        auto allocateCaptureMem = ctx.functions.at(allocFunc->signature());
+        assert(allocateCaptureMem);
+        ctx.builder.CreateCall(allocateCaptureMem, {lambdaInstance});
+
+        auto dataType = ctx.getLLVMType({{"", ValueType::Struct, captureType}, true, false, false});
+        auto _data = ctx.builder.CreateStructGEP(lt, lambdaInstance, 0);
+        _data = ctx.builder.CreateLoad(_data->getType()->getContainedType(0), _data);
+        _data = ctx.builder.CreatePointerCast(_data, llvm::PointerType::get(dataType, 0));
+
+        size_t captureIndex = 0;
+        for(auto& capture : captures)
+        {
+            auto l = ctx.builder.CreateStructGEP(dataType, _data, captureIndex);
+            auto r = capture->createAST(ctx);
+
+            if(!capture->returnType.type.structCtx)
+            {
+                bool isRefType = capture->returnType.isRef || capture->returnType.type.storageType == ValueType::FuncRef;
+                ctx.builder.CreateStore(ctx.dereferenceToDepth(r, isRefType ? 1 : 0), l);
+                continue;
+            }
+
+            auto cc = ctx.functions.find(capture->returnType.type.structCtx->copyConstructor->signature());
+            assert(cc != ctx.functions.end());
+            assert(cc->second->arg_size() == 2);
+            auto structPointerType = *captureType->variables[captureIndex];
+            structPointerType.isRef = true;
+
+            std::vector<llvm::Value*> args = {ctx.dereferenceToDepth(l, 1), ctx.dereferenceToDepth(r, 1)};
+            ctx.builder.CreateCall(cc->second, args);
+            captureIndex++;
+        }
+
+        auto _f = ctx.builder.CreateStructGEP(lt, lambdaInstance, 1);
+        llvm::Value* f = ctx.functions.at(func->signature());
+        f = ctx.builder.CreatePointerCast(f, _f->getType()->getContainedType(0));
+        ctx.builder.CreateStore(f, _f);
+
+        auto _dataDestructor = ctx.builder.CreateStructGEP(lt, lambdaInstance, 2);
+        llvm::Value* dataDestructor = ctx.functions.at(captureType->destructor->signature());
+        dataDestructor = ctx.builder.CreatePointerCast(dataDestructor, _dataDestructor->getType()->getContainedType(0));
+        ctx.builder.CreateStore(dataDestructor, _dataDestructor);
+
+        auto _dataCopyConstructor = ctx.builder.CreateStructGEP(lt, lambdaInstance, 3);
+        llvm::Value* dataCopyConstructor = ctx.functions.at(captureType->copyConstructor->signature());
+        dataCopyConstructor = ctx.builder.CreatePointerCast(dataCopyConstructor, _dataCopyConstructor->getType()->getContainedType(0));
+        ctx.builder.CreateStore(dataCopyConstructor, _dataCopyConstructor);
+
+        return lambdaInstance;
     }
 
     DocumentContext* FunctionContext::findIdentifier(const std::string& identifier, uint8_t searchOptions)
@@ -1686,10 +1731,7 @@ namespace BraneScript
         return sig;
     }
 
-    std::string FunctionContext::signature() const
-    {
-        return longId() + argSig();
-    }
+    std::string FunctionContext::signature() const { return longId() + argSig(); }
 
     DocumentContext* FunctionContext::deepCopy(const std::function<DocumentContext*(DocumentContext*)>& callback) const
     {
@@ -1717,37 +1759,13 @@ namespace BraneScript
 
     llvm::Value* FunctionContext::createAST(ASTContext& ctx) const
     {
-        std::vector<llvm::Type*> argTypes;
-        bool argReturn = false;
-        if(!returnType.isRef && returnType.type.structCtx)
-        {
-            auto thisRefType = returnType;
-            thisRefType.isRef = true;
-            argTypes.push_back(ctx.getLLVMType(thisRefType));
-            argReturn = true;
-        }
-
-        for(auto& arg : arguments)
-            argTypes.push_back(ctx.getLLVMType(*arg));
-        auto retType = argReturn ? ctx.getLLVMType({}) : ctx.getLLVMType(returnType);
-        llvm::FunctionType* funcType = llvm::FunctionType::get(retType, argTypes, false);
-
-        bool exported = false;
-        auto linkage = llvm::Function::PrivateLinkage;
-        if(!body)
-            linkage = llvm::Function::AvailableExternallyLinkage;
-        else if(getParent<LibraryContext>())
-        {
-            exported = true;
-            linkage = llvm::Function::ExternalLinkage;
-            ctx.exportedFunctions.push_back(signature());
-        }
-
-        ctx.func = llvm::Function::Create(funcType, linkage, signature(), *ctx.module);
-        ctx.functions.insert({signature(), ctx.func});
+        assert(ctx.functions.contains(signature()));
+        ctx.func = ctx.functions.at(signature());
+        ctx.exportedFunctions.push_back({signature(), returnType.signature(), tags});
 
         ctx.pushScope();
 
+        bool argReturn = !returnType.isRef && returnType.type.structCtx;
         size_t index = argReturn ? -1 : 0;
         for(auto& arg : ctx.func->args())
         {
@@ -1796,6 +1814,36 @@ namespace BraneScript
         return nullptr;
     }
 
+    void FunctionContext::registerFunction(ASTContext& ctx, bool isLinked) const
+    {
+        std::vector<llvm::Type*> argTypes;
+        bool argReturn = !returnType.isRef && returnType.type.structCtx;
+        if(argReturn)
+        {
+            auto thisRefType = returnType;
+            thisRefType.isRef = true;
+            argTypes.push_back(ctx.getLLVMType(thisRefType));
+        }
+
+        bool exported = false;
+        llvm::Function::LinkageTypes linkage;
+        if(isLinked)
+            linkage = llvm::Function::ExternalWeakLinkage;
+        else if(isTemplateInstance)
+            linkage = llvm::Function::WeakAnyLinkage;
+        else
+            linkage = llvm::Function::ExternalLinkage;
+
+        for(auto& arg : arguments)
+            argTypes.push_back(ctx.getLLVMType(*arg));
+        auto retType = argReturn ? ctx.getLLVMType({}) : ctx.getLLVMType(returnType);
+        llvm::FunctionType* funcType = llvm::FunctionType::get(retType, argTypes, false);
+
+        std::string sig = signature();
+        auto func = llvm::Function::Create(funcType, linkage, sig, ctx.module.get());
+        ctx.functions.insert({sig, func});
+    }
+
     DocumentContext* StructContext::getNodeAtChar(TextPos pos)
     {
         if(!DocumentContext::getNodeAtChar(pos))
@@ -1824,23 +1872,21 @@ namespace BraneScript
                 return v.get();
         }
 
-        for(auto& f : functions)
-        {
-            if(f->identifier.text == id)
-                return f.get();
-        }
         return DocumentContext::findIdentifier(id, searchOptions);
     }
 
     void StructContext::getFunction(const std::string& identifier,
-                                    std::list<FunctionContext*>& overrides,
+                                    FunctionOverridesContext* overrides,
                                     uint8_t searchOptions)
     {
         for(auto& f : functions)
         {
             if(f->identifier.text == identifier)
-                overrides.push_back(f.get());
+                overrides->overrides.push_back(f.get());
         }
+        auto temp = templates.find(identifier);
+        if(temp != templates.end())
+            overrides->templates.push_back(temp->second.get());
         DocumentContext::getFunction(identifier, overrides, searchOptions);
     }
 
@@ -1867,37 +1913,44 @@ namespace BraneScript
         return callback(copy);
     }
 
-    std::string StructContext::constructorSig() const
-    {
-        std::string name = longId();
-        return name + "::_construct(ref " + name + ")";
-    }
-
-    std::string StructContext::moveConstrutorSig() const
-    {
-        std::string name = longId();
-        return name + "::_move(ref " + name + ",ref " + name + ")";
-    }
-
-    std::string StructContext::copyConstructorSig() const
-    {
-        std::string name = longId();
-        return name + "::_copy(ref " + name + ",const ref " + name + ")";
-    }
-
-    std::string StructContext::destructorSig() const
-    {
-        std::string name = longId();
-        return name + "::_destruct(ref " + name + ")";
-    }
-
     llvm::Value* StructContext::createAST(ASTContext& ctx) const
     {
         assert(false);
         return nullptr;
     }
 
-    DocumentContext* LibraryContext::getNodeAtChar(TextPos pos)
+    TemplateHandle::TemplateHandle(TemplateHandle::Type type,
+                                   antlr4::ParserRuleContext* root,
+                                   DocumentContext* parent,
+                                   const std::vector<TemplateDefArgumentContext*>& args)
+    {
+        this->type = type;
+        this->root = root;
+        this->parent = parent;
+        for(auto& arg : args)
+            this->args.emplace_back(arg);
+    }
+
+    llvm::Value* TemplateHandle::createAST(ASTContext& ctx) const
+    {
+        throw std::runtime_error("TemplateHandle can not create AST!");
+    }
+
+    std::string TemplateHandle::longId() const
+    {
+        return parent->longId() + "::" + identifier.text;
+    }
+
+    DocumentContext* TemplateHandle::deepCopy(const std::function<DocumentContext*(DocumentContext*)>& callback) const
+    {
+        std::vector<TemplateDefArgumentContext*> copyArgs;
+        for(auto& arg : args)
+            copyArgs.push_back(new TemplateDefArgumentContext{*arg});
+        auto* copy = new TemplateHandle(type, root, parent, copyArgs);
+        return callback(copy);
+    }
+
+    DocumentContext* ModuleContext::getNodeAtChar(TextPos pos)
     {
         for(auto& f : functions)
         {
@@ -1922,18 +1975,16 @@ namespace BraneScript
         return this;
     }
 
-    DocumentContext* LibraryContext::findIdentifier(const std::string& id, uint8_t searchOptions)
+    DocumentContext* ModuleContext::findIdentifier(const std::string& id, uint8_t searchOptions)
     {
+        auto t = templates.find(id);
+        if(t != templates.end() && t->second->type == TemplateHandle::Struct)
+            return t->second.get();
+
         for(auto& g : globals)
         {
             if(g->identifier.text == id)
                 return g.get();
-        }
-
-        for(auto& f : functions)
-        {
-            if(f->identifier.text == id)
-                return f.get();
         }
 
         for(auto& s : structs)
@@ -1947,21 +1998,25 @@ namespace BraneScript
         return DocumentContext::findIdentifier(id, searchOptions);
     }
 
-    void LibraryContext::getFunction(const std::string& id, std::list<FunctionContext*>& overrides, uint8_t searchOptions)
+    void
+    ModuleContext::getFunction(const std::string& id, FunctionOverridesContext* overrides, uint8_t searchOptions)
     {
         DocumentContext::getFunction(id, overrides, searchOptions);
         for(auto& f : functions)
         {
             if(f->identifier.text == id)
-                overrides.push_back(f.get());
+                overrides->overrides.push_back(f.get());
         }
+        auto temp = templates.find(id);
+        if(temp != templates.end() && temp->second->type == TemplateHandle::Function)
+            overrides->templates.push_back(temp->second.get());
         if(searchOptions & IDSearchOptions_ParentsOnly)
             return;
         for(auto& s : structs)
             s->getFunction(id, overrides, searchOptions);
     }
 
-    std::string LibraryContext::longId() const
+    std::string ModuleContext::longId() const
     {
         auto prefix = DocumentContext::longId();
         if(prefix.empty())
@@ -1969,9 +2024,9 @@ namespace BraneScript
         return prefix + "::" + identifier.text;
     }
 
-    DocumentContext* LibraryContext::deepCopy(const std::function<DocumentContext*(DocumentContext*)>& callback) const
+    DocumentContext* ModuleContext::deepCopy(const std::function<DocumentContext*(DocumentContext*)>& callback) const
     {
-        auto* copy = new LibraryContext{};
+        auto* copy = new ModuleContext{};
         copyBase(this, copy);
         copy->identifier = identifier;
 
@@ -1985,161 +2040,45 @@ namespace BraneScript
         return callback(copy);
     }
 
-    llvm::Value* LibraryContext::createAST(ASTContext& ctx) const
+    llvm::Value* ModuleContext::createAST(ASTContext& ctx) const
     {
-        if(!ctx.exports.contains(longId()))
-            ctx.exports.insert(longId());
         for(auto& g : globals)
         {
             auto type = ctx.getLLVMType(*g);
             auto glob = ctx.module->getOrInsertGlobal(g->identifier.text, type, ctx.makeGlobalVariable(*g, true));
             ctx.globals.insert({g->longId(), glob});
         }
-        return nullptr;
-    }
-
-    DocumentContext* ScriptContext::getNodeAtChar(TextPos pos)
-    {
-        for(auto& f : functions)
-        {
-            auto node = f->getNodeAtChar(pos);
-            if(node)
-                return node;
-        }
-        for(auto& s : structs)
-        {
-            auto node = s->getNodeAtChar(pos);
-            if(node)
-                return node;
-        }
-        for(auto& g : globals)
-        {
-            auto node = g->getNodeAtChar(pos);
-            if(node)
-                return node;
-        }
-        for(auto& lib : exports)
-        {
-            auto node = lib.second->getNodeAtChar(pos);
-            if(node)
-                return node;
-        }
-        for(auto& i : imports)
-        {
-            auto node = i.second->getNodeAtChar(pos);
-            if(node)
-                return node;
-        }
-        if(!range.posInRange(pos))
-            return nullptr;
-        return this;
-    }
-
-    DocumentContext* ScriptContext::findIdentifier(const std::string& identifier, uint8_t searchOptions)
-    {
-        auto l = exports.find(identifier);
-        if(l != exports.end())
-            return l->second.get();
-
-        for(auto& g : globals)
-        {
-            if(g->identifier.text == identifier)
-                return g.get();
-        }
+        for(auto& link : links)
+            link.second->createAST(ctx);
 
         for(auto& f : functions)
-        {
-            if(f->identifier.text == identifier)
-                return f.get();
-        }
+            f->registerFunction(ctx, false);
 
         for(auto& s : structs)
         {
-            if(s->identifier.text == identifier)
-                return s.get();
+            for(auto& f : s->functions)
+                f->registerFunction(ctx, false);
+        }
+
+        for(auto& f : functions)
+            f->createAST(ctx);
+
+        for(auto& s : structs)
+        {
+            for(auto& f : s->functions)
+                f->createAST(ctx);
         }
         return nullptr;
     }
 
-    void ScriptContext::getFunction(const std::string& identifier,
-                                    std::list<FunctionContext*>& overrides,
-                                    uint8_t searchOptions)
+    IRModule ModuleContext::compile(llvm::LLVMContext* ctx, bool optimize, bool print)
     {
-        for(auto& f : functions)
-        {
-            if(f->identifier.text == identifier)
-                overrides.push_back(f.get());
-        }
-
-        if(!(searchOptions & IDSearchOptions_ParentsOnly))
-        {
-            for(auto& lib : exports)
-                lib.second->getFunction(identifier, overrides, searchOptions);
-        }
-    }
-
-    llvm::Value* ScriptContext::createAST(ASTContext& ctx) const
-    {
-        for(auto& g : globals)
-        {
-            auto type = ctx.getLLVMType(*g);
-            auto glob = ctx.module->getOrInsertGlobal(g->identifier.text, type, ctx.makeGlobalVariable(*g, false));
-            ctx.globals.insert({g->longId(), glob});
-        }
-        for(auto& lib : imports)
-            lib.second->createAST(ctx);
-        for(auto& lib : exports)
-            lib.second->createAST(ctx);
-
-        for(auto func : callOrder)
-            func->createAST(ctx);
-
-        std::string modErr;
-        llvm::raw_string_ostream modErrStr(modErr);
-        if(llvm::verifyModule(*ctx.module, &modErrStr))
-        {
-            ctx.printModule();
-            std::fprintf(stderr, "Invalid IR result, verifyModule returned error: %s\n\n", modErr.c_str());
-            throw std::runtime_error("Module IR invalid! [" + modErr + "]");
-        }
-
-        if(ctx.mpm)
-            ctx.mpm->run(*ctx.module, *ctx.mam);
-
-        return nullptr;
-    }
-
-    DocumentContext* ScriptContext::deepCopy(const std::function<DocumentContext*(DocumentContext*)>& callback) const
-    {
-        auto* copy = new ScriptContext{};
-        copyBase(this, copy);
-
-        for(auto& var : globals)
-            copy->globals.emplace_back(assertCast<LabeledValueContext>(var->deepCopy(callback)));
-        for(auto& s : structs)
-            copy->structs.emplace_back(assertCast<StructContext>(s->deepCopy(callback)));
-        for(auto& func : functions)
-            copy->functions.emplace_back(assertCast<FunctionContext>(func->deepCopy(callback)));
-        for(auto& lib : exports)
-            copy->exports.insert({lib.first, assertCast<LibraryContext>(lib.second->deepCopy(callback))});
-        for(auto& lib : imports)
-        {
-            auto* imp = assertCast<ImportContext>(lib.second->deepCopy(callback));
-            copy->imports.emplace(imp->library, imp);
-            delete imp;
-        }
-
-        return callback(copy);
-    }
-
-    IRScript ScriptContext::compile(llvm::LLVMContext* ctx, bool optimize, bool print)
-    {
-        IRScript script;
-        script.id = id;
+        IRModule module;
+        module.id = identifier.text;
         llvm::LoopAnalysisManager LAM;
         llvm::CGSCCAnalysisManager CGAM;
 
-        ASTContext cc(ctx, id);
+        ASTContext cc(ctx, identifier.text);
         if(optimize)
         {
             cc.fam = std::make_unique<llvm::FunctionAnalysisManager>();
@@ -2159,145 +2098,135 @@ namespace BraneScript
             cc.mpm = std::make_unique<llvm::ModulePassManager>(
                 PB.buildPerModuleDefaultPipeline(llvm::PassBuilder::OptimizationLevel::O2));
             cc.fpm = std::make_unique<llvm::FunctionPassManager>(PB.buildFunctionSimplificationPipeline(
-                llvm::PassBuilder::OptimizationLevel::O2, llvm::ThinOrFullLTOPhase::FullLTOPreLink));
+                llvm::PassBuilder::OptimizationLevel::O2, llvm::ThinOrFullLTOPhase::None));
         }
 
         createAST(cc);
 
+        std::string modErr;
+        llvm::raw_string_ostream modErrStr(modErr);
+        if(llvm::verifyModule(*cc.module, &modErrStr))
+        {
+            cc.printModule();
+            std::fprintf(stderr, "Invalid IR result, verifyModule returned error: %s\n\n", modErr.c_str());
+            throw std::runtime_error("Module IR invalid! [" + modErr + "]");
+        }
+
+        if(cc.mpm)
+            cc.mpm->run(*cc.module, *cc.mam);
+
         if(print)
             cc.printModule();
 
-        llvm::raw_string_ostream bitcodeStream(script.bitcode);
+        llvm::raw_string_ostream bitcodeStream(module.bitcode);
         llvm::WriteBitcodeToFile(*cc.module, bitcodeStream);
         bitcodeStream.str();
 
-        for(auto& lib : cc.exports)
-            script.exportedLibs.push_back(lib);
-        for(auto& lib : cc.imports)
-            script.importedLibs.push_back(lib);
-        script.exportedFunctions = std::move(cc.exportedFunctions);
-        script.exportedGlobals = std::move(cc.exportedGlobals);
+        for(auto& link : cc.linkedModules)
+            module.links.push_back(link);
+
+        module.functions = std::move(cc.exportedFunctions);
+        module.globals = std::move(cc.exportedGlobals);
         for(auto& s : cc.definedStructs)
         {
             if(!s.second.isExported)
                 continue;
-            script.exportedStructs.push_back(std::move(s.second.def));
+            module.structs.push_back(std::move(s.second.def));
         }
 
-        return std::move(script);
+        return std::move(module);
     }
 
-    DocumentContext* LibrarySet::findIdentifier(const std::string& identifier, uint8_t searchOptions)
+
+    IRScript ScriptContext::compile(llvm::LLVMContext* ctx, bool optimize, bool print)
     {
-        for(auto& lib : exports)
+        IRScript script;
+        script.id = id;
+
+        for(auto& mod : modules)
         {
-            auto* ident = lib->findIdentifier(identifier, searchOptions);
-            if(ident)
-                return ident;
+            auto module = mod.second->compile(ctx, optimize, print);
+            script.modules.insert({module.id, std::move(module)});
         }
+
+        return script;
+    }
+
+    DocumentContext* ScriptContext::getNodeAtChar(TextPos pos)
+    {
+        for(auto& m : modules)
+        {
+            auto node = m.second->getNodeAtChar(pos);
+            if(node)
+                return node;
+        }
+        if(!range.posInRange(pos))
+            return nullptr;
+        return this;
+    }
+
+    DocumentContext* ScriptContext::findIdentifier(const std::string& identifier, uint8_t searchOptions)
+    {
+        auto m = modules.find(identifier);
+        if(m != modules.end())
+            return m->second.get();
         return nullptr;
     }
 
-    void LibrarySet::getFunction(const std::string& identifier,
-                                 std::list<FunctionContext*>& overrides,
-                                 uint8_t searchOptions)
+    void ScriptContext::getFunction(const std::string& identifier,
+                                    FunctionOverridesContext* overrides,
+                                    uint8_t searchOptions)
     {
-        for(auto& lib : exports)
-            lib->getFunction(identifier, overrides, searchOptions);
+
     }
 
-    DocumentContext* LibrarySet::deepCopy(const std::function<DocumentContext*(DocumentContext*)>& callback) const
-    {
-        return callback(new LibrarySet{*this});
-    }
-
-    std::string LibrarySet::longId() const
-    {
-        if(exports.empty())
-            return "";
-        return (*exports.begin())->longId();
-    }
-
-    llvm::Value* LibrarySet::createAST(ASTContext& ctx) const
+    llvm::Value* ScriptContext::createAST(ASTContext& ctx) const
     {
         assert(false);
         return nullptr;
     }
 
-    DocumentContext* ImportContext::deepCopy(const std::function<DocumentContext*(DocumentContext*)>& callback) const
+    DocumentContext* ScriptContext::deepCopy(const std::function<DocumentContext*(DocumentContext*)>& callback) const
     {
-        return callback(new ImportContext{*this});
+        auto* copy = new ScriptContext{};
+        copyBase(this, copy);
+
+        for(auto& lib : modules)
+            copy->modules.insert({lib.first, assertCast<ModuleContext>(lib.second->deepCopy(callback))});
+
+        return callback(copy);
     }
 
-    llvm::Value* ImportContext::createAST(ASTContext& ctx) const
+    DocumentContext* LinkContext::deepCopy(const std::function<DocumentContext*(DocumentContext*)>& callback) const
     {
-        if(!ctx.imports.contains(library))
-            ctx.imports.insert(library);
-        for(auto lib : importedModules)
+        return callback(new LinkContext{*this});
+    }
+
+    llvm::Value* LinkContext::createAST(ASTContext& ctx) const
+    {
+        assert(module);
+        if(ctx.linkedModules.contains(module->identifier.text))
+            return nullptr;
+        ctx.linkedModules.insert(module->identifier.text);
+
+        for(auto& g : module->globals)
         {
-            for(auto& g : lib->globals)
-            {
-                auto type = ctx.getLLVMType(*g);
-                auto glob = ctx.module->getOrInsertGlobal(g->identifier.text, type, ctx.makeExternGlobalVariable(*g));
-                ctx.globals.insert({g->longId(), glob});
-            }
-
-            for(auto& f : lib->functions)
-            {
-                std::vector<llvm::Type*> argTypes;
-                argTypes.reserve(f->arguments.size());
-                for(auto& arg : f->arguments)
-                    argTypes.push_back(ctx.getLLVMType(*arg));
-                bool argReturn = false;
-                if(!f->returnType.isRef && f->returnType.type.structCtx)
-                {
-                    auto thisRefType = f->returnType;
-                    thisRefType.isRef = true;
-                    argTypes.push_back(ctx.getLLVMType(thisRefType));
-                    argReturn = true;
-                }
-                llvm::Type* retType = ctx.getLLVMType(f->returnType);
-                if(argReturn)
-                    retType = ctx.getLLVMType({});
-                llvm::FunctionType* funcType = llvm::FunctionType::get(retType, argTypes, false);
-
-                auto linkage = llvm::Function::ExternalLinkage;
-                std::string id = f->signature();
-                assert(!id.empty());
-                ctx.func = llvm::Function::Create(funcType, linkage, id, *ctx.module);
-                ctx.functions.insert({id, ctx.func});
-            }
-
-            for(auto& s : lib->structs)
-            {
-                for(auto& f : s->functions)
-                {
-                    std::vector<llvm::Type*> argTypes;
-                    argTypes.reserve(f->arguments.size());
-                    for(auto& arg : f->arguments)
-                        argTypes.push_back(ctx.getLLVMType(*arg));
-                    bool argReturn = false;
-                    if(!f->returnType.isRef && f->returnType.type.structCtx)
-                    {
-                        auto thisRefType = f->returnType;
-                        thisRefType.isRef = true;
-                        argTypes.push_back(ctx.getLLVMType(thisRefType));
-                        argReturn = true;
-                    }
-                    llvm::Type* retType = ctx.getLLVMType(f->returnType);
-                    if(argReturn)
-                        retType = ctx.getLLVMType({});
-                    llvm::FunctionType* funcType = llvm::FunctionType::get(retType, argTypes, false);
-
-                    auto linkage = llvm::Function::ExternalLinkage;
-                    std::string id = f->signature();
-                    assert(!id.empty());
-                    ctx.func = llvm::Function::Create(funcType, linkage, id, *ctx.module);
-                    ctx.functions.insert({id, ctx.func});
-                }
-            }
+            auto type = ctx.getLLVMType(*g);
+            auto glob = ctx.module->getOrInsertGlobal(g->identifier.text, type, ctx.makeExternGlobalVariable(*g));
+            ctx.globals.insert({g->longId(), glob});
         }
 
+        for(auto& f : module->functions)
+            f->registerFunction(ctx, true);
+
+        for(auto& s : module->structs)
+        {
+            for(auto& f : s->functions)
+                f->registerFunction(ctx, true);
+        }
+
+        for(auto& link : module->links)
+            link.second->createAST(ctx);
         return nullptr;
     }
 
@@ -2319,5 +2248,4 @@ namespace BraneScript
     }
 
     bool ConstValueContext::isConstexpr() const { return true; }
-
 } // namespace BraneScript

@@ -1,7 +1,7 @@
 grammar brane;
 
+COMMENT : '//' .*? [\r\n] -> skip;
 NEWLINE : [\r\n]+ -> skip;
-COMMENT : '//'(.*?)[\r\n(EOF)] -> skip;
 BLOCK_COMMENT : '/*'.*?'*/' -> skip;
 SPACE   : (' '|'\t') -> skip;
 
@@ -19,17 +19,21 @@ ADD     : '+';
 SUB     : '-';
 LOGIC   : '&&'|'||';
 
-program     : (progSegment+ EOF | EOF);
+program     : (module+ EOF? | EOF?);
 
-progSegment : function
-            | functionStub
-            | structDef
-            | global
-            | link
-            | export
-            ;
+link          : isPublic='public'? 'link' library=STRING ('as' alias=STRING)?;
+linkList      : link*;
 
-global      : type id=ID ';';
+tags   : '[' (tag=STRING (',' tag=STRING)*)? ']';
+module        : modTags=tags? 'module' id=STRING linkList '{' moduleComponent* '}';
+
+moduleComponent : function
+                | functionStub
+                | structDef
+                | global
+                ;
+
+global        : type id=ID ';';
 
 
 templateDefArgument : ((exprType=type) | (isTypedef='typedef')) isPack='...'? id=ID;
@@ -40,7 +44,7 @@ templateArg      : t=type          #templateTypeArg
                  ;
 templateArgs     : '<' templateArg (',' templateArg)* '>';
 
-scopedID    : id=ID (template=templateArgs)? ('::' child=scopedID)?;
+scopedID    : id=(ID | 'Lambda') (template=templateArgs)? ('::' child=scopedID)?;
 
 type        : isConst='const'? isRef='ref'? name=scopedID;
 declaration : type id=ID;
@@ -48,19 +52,15 @@ argumentListItem : declaration | pack=ID '...' id=ID;
 argumentList: (argumentListItem (',' argumentListItem)*)?;
 argumentPackItem : expr=expression | packID=ID '...';
 argumentPack: (argumentPackItem (',' argumentPackItem)*)?;
-functionSig : (template=templateDef)? isConstexpr='constexpr'? ((type (id=ID | ('opr' oprID=(ADD|SUB|MUL|DIV|'=='|'!='|'<'|'>'|'<='|'>='|LOGIC|'[]')))) | ('opr' castType=type));
+bracketOpr : ('('')') | ('['']');
+functionSig : funcTags=tags? (template=templateDef)? isConstexpr='constexpr'? ((type (id=ID | ('opr' (oprID=(ADD|SUB|MUL|DIV|'=='|'!='|'<'|'>'|'<='|'>='|LOGIC) | bracketOprID=bracketOpr)))) | ('opr' castType=type));
 functionStub: sig=functionSig '(' arguments=argumentList ')' isConst='const'? 'ext' ';';
 function    : sig=functionSig '(' arguments=argumentList ')' isConst='const'? '{' statements=statement* '}';
 
-link          : 'link' library=STRING ('as' alias=STRING)? ';';
-export        : 'export as' libID=STRING '{' exportSegment* '}';
-exportSegment : function
-              | functionStub
-              | structDef
-              | global
-              ;
+capturedVar : isRef='ref'? id=scopedID;
+varCapture : capturedVar (',' capturedVar)*;
 
-structDef     : (template=templateDef)?  packed='packed'? 'struct' id=ID '{' memberVars=structMember* '}';
+structDef     : structTags=tags? (template=templateDef)?  packed='packed'? 'struct' id=(ID | 'Lambda') '{' memberVars=structMember* '}';
 structMember  : var=declaration ';' #memberVariable
               | func=function       #memberFunction
               | functionStub        #memberFunctionStub
@@ -75,8 +75,6 @@ statement   : expression ';'                                                    
             | 'while' '(' cond=expression ')' operation=statement                         #while
             | 'unroll' '(' id=ID ')' body=statement                                       #unroll
             ;
-
-
 
 expression  : INT                                                           #constInt
             | FLOAT                                                         #constFloat
@@ -96,4 +94,5 @@ expression  : INT                                                           #con
             | left=expression opr=LOGIC       right=expression              #logic
             | left=expression opr=('==' | '!=' | '<' | '>' | '<=' | '>=') right=expression #comparison
             | '(' expression ')'                                            #paren
+            | returnType=type label='Lambda' ('[' capture=varCapture ']')? '(' arguments=argumentList ')' '{' statement* '}' #lambda
             ;
