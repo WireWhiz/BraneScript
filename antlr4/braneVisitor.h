@@ -115,6 +115,8 @@ public:
 
     virtual std::any visitCast(braneParser::CastContext *context) = 0;
 
+    virtual std::any visitNot(braneParser::NotContext *context) = 0;
+
     virtual std::any visitParen(braneParser::ParenContext *context) = 0;
 
     virtual std::any visitLambda(braneParser::LambdaContext *context) = 0;

@@ -55,6 +55,25 @@ TEST(BraneScript, FunctionRefs)
         {
             globalFunc = addOne;
         }
+
+        struct TestStruct
+        {
+            int value;
+        }
+
+        TestStruct getStruct(int value)
+        {
+            TestStruct testStruct;
+            testStruct.value = value;
+            return testStruct;
+        }
+
+        int testStructRet()
+        {
+            FuncRef<TestStruct, int> func = getStruct;
+            TestStruct testStruct = func(5);
+            return testStruct.value;
+        }
     }
 )";
     StaticAnalyzer analyzer;
@@ -92,4 +111,8 @@ TEST(BraneScript, FunctionRefs)
     setGlobalFunctionLoc();
 
     EXPECT_EQ(callGlobalFunction(2), 3);
+
+    auto testStructRet = testScript->getFunction<int>("tests::testStructRet()");
+    ASSERT_TRUE(testStructRet);
+    ASSERT_EQ(testStructRet(), 5);
 }

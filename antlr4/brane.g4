@@ -53,7 +53,7 @@ argumentList: (argumentListItem (',' argumentListItem)*)?;
 argumentPackItem : expr=expression | packID=ID '...';
 argumentPack: (argumentPackItem (',' argumentPackItem)*)?;
 bracketOpr : ('('')') | ('['']');
-functionSig : funcTags=tags? (template=templateDef)? isConstexpr='constexpr'? ((type (id=ID | ('opr' (oprID=(ADD|SUB|MUL|DIV|'=='|'!='|'<'|'>'|'<='|'>='|LOGIC) | bracketOprID=bracketOpr)))) | ('opr' castType=type));
+functionSig : funcTags=tags? (template=templateDef)? isConstexpr='constexpr'? ((type (id=ID | ('opr' (oprID=(ADD|SUB|MUL|DIV|'=='|'!='|'<'|'>'|'<='|'>='|'!'|LOGIC) | bracketOprID=bracketOpr)))) | ('opr' castType=type));
 functionStub: sig=functionSig '(' arguments=argumentList ')' isConst='const'? 'ext' ';';
 function    : sig=functionSig '(' arguments=argumentList ')' isConst='const'? '{' statements=statement* '}';
 
@@ -92,6 +92,7 @@ expression  : INT                                                           #con
             | left=expression opr=(MUL | DIV) right=expression              #muldiv
             | left=expression opr=(ADD | SUB) right=expression              #addsub
             | left=expression opr=LOGIC       right=expression              #logic
+            | '!' value=expression                                          #not
             | left=expression opr=('==' | '!=' | '<' | '>' | '<=' | '>=') right=expression #comparison
             | '(' expression ')'                                            #paren
             | returnType=type label='Lambda' ('[' capture=varCapture ']')? '(' arguments=argumentList ')' '{' statement* '}' #lambda

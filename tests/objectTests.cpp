@@ -34,17 +34,10 @@ struct TestStruct2
     float c;
 };
 
-struct NestedStructChild
-{
-    float x;
-    float y;
-    float z;
-};
-
 struct NestedStructBase
 {
     float a;
-    NestedStructChild b;
+    TestStruct1 b;
     float c;
 };
 
@@ -130,33 +123,30 @@ TEST(BraneScript, Objects)
             return s.sum();
         }
 
-        struct NestedStructChild
-        {
-            float x;
-            float y;
-            float z;
-            void _construct()
-            {
-                x = 1;
-                y = 2;
-                z = 3;
-            }
-        }
         struct NestedStructBase
         {
             float a;
-            NestedStructChild b;
+            TestStruct1 b;
             float c;
+            void _construct()
+            {
+                a = 5;
+            }
+            void _destruct()
+            {
+            }
         }
 
         NestedStructBase nestedTest()
         {
             NestedStructBase base;
             base.c = 42;
-            base.b.y = 4;
+            base.b.b = 4;
             NestedStructBase copied = base;
             return copied;
         }
+
+
     }
 )";
 
@@ -298,12 +288,21 @@ TEST(BraneScript, Objects)
     EXPECT_EQ(ts2.b, true);
     EXPECT_EQ(ts2.c, 4.2f);
 
+    resetTestCounters();
+
     NestedStructBase nestedStruct{};
     auto nestedTest = testScript->getFunction<void, NestedStructBase*>("tests::nestedTest(ref tests::NestedStructBase)");
     ASSERT_TRUE(nestedTest);
     nestedTest(&nestedStruct);
     // We don't test a and c as they are not initialized
-    EXPECT_EQ(nestedStruct.b.x, 1.0f);
-    EXPECT_EQ(nestedStruct.b.y, 4.0f);
-    EXPECT_EQ(nestedStruct.b.z, 3.0f);
+    EXPECT_EQ(nestedStruct.b.a, 0);
+    EXPECT_EQ(nestedStruct.b.b, 4);
+    EXPECT_EQ(nestedStruct.b.c, false);
+    EXPECT_EQ(nestedStruct.a, 5);
+    EXPECT_EQ(nestedStruct.c, 42.0f);
+
+    EXPECT_EQ(constructorCalled, 2);
+    EXPECT_EQ(moveConstructorCalled, 0);
+    EXPECT_EQ(copyConstructorCalled, 2);
+    EXPECT_EQ(destructorCalled, 2);
 }

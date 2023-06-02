@@ -673,6 +673,36 @@ namespace BraneScript
         DocumentContext* deepCopy(const std::function<DocumentContext*(DocumentContext*)>& callback) const override;
     };
 
+    struct NativeNotContext  : public ExpressionContext
+    {
+
+        std::unique_ptr<ExpressionContext> value;
+
+        NativeNotContext(ExpressionContext* value);
+
+        bool isConstexpr() const override;
+        llvm::Value* createAST(ASTContext& ctx) const override;
+        DocumentContext* deepCopy(const std::function<DocumentContext*(DocumentContext*)>& callback) const override;
+    };
+
+    struct NativeLogicContext : public ExpressionContext
+    {
+        enum Operation
+        {
+            AND,
+            OR
+        } op;
+
+        std::unique_ptr<ExpressionContext> lValue;
+        std::unique_ptr<ExpressionContext> rValue;
+
+        NativeLogicContext(Operation op, ExpressionContext* lValue, ExpressionContext* rValue);
+
+        bool isConstexpr() const override;
+        llvm::Value* createAST(ASTContext& ctx) const override;
+        DocumentContext* deepCopy(const std::function<DocumentContext*(DocumentContext*)>& callback) const override;
+    };
+
     struct NativeCompareContext : public ExpressionContext
     {
         enum Operation
@@ -714,6 +744,7 @@ namespace BraneScript
         std::vector<std::unique_ptr<ExpressionContext>> captures;
         FunctionContext* func = nullptr;
         FunctionContext* allocFunc = nullptr;
+        FunctionContext* copyFunc = nullptr;
 
         bool isConstexpr() const override;
         llvm::Value* createAST(ASTContext& ctx) const override;

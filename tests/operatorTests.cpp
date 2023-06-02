@@ -73,6 +73,21 @@ TEST(BraneScript, Operators)
         {
             return a > b;
         }
+
+        bool testAnd(bool a, bool b)
+        {
+            return a && b;
+        }
+
+        bool testOr(bool a, bool b)
+        {
+            return a || b;
+        }
+
+        bool testNot(bool a)
+        {
+            return !a;
+        }
 )";
 
     auto scalarCasts = {"uint", "uint64", "int", "int64", "float", "double"};
@@ -115,7 +130,27 @@ TEST(BraneScript, Operators)
     EXPECT_TRUE(testBoolCast(5, 3));
     EXPECT_FALSE(testBoolCast(2, 4));
 
-    // Arithmatic
+    //Logical
+    auto testAnd = testScript->getFunction<bool, bool, bool>("tests::testAnd");
+    ASSERT_TRUE(testAnd) << "Function was not found in script";
+    EXPECT_TRUE(testAnd(true, true));
+    EXPECT_FALSE(testAnd(true, false));
+    EXPECT_FALSE(testAnd(false, true));
+    EXPECT_FALSE(testAnd(false, false));
+
+    auto testOr = testScript->getFunction<bool, bool, bool>("tests::testOr");
+    ASSERT_TRUE(testOr) << "Function was not found in script";
+    EXPECT_TRUE(testOr(true, true));
+    EXPECT_TRUE(testOr(true, false));
+    EXPECT_TRUE(testOr(false, true));
+    EXPECT_FALSE(testOr(false, false));
+
+    auto testNot = testScript->getFunction<bool, bool>("tests::testNot");
+    ASSERT_TRUE(testNot) << "Function was not found in script";
+    EXPECT_FALSE(testNot(true));
+    EXPECT_TRUE(testNot(false));
+
+    // Arithmetic
     runScalarTestFunctions<int32_t>("int",
                                     testScript,
                                     {{0, 1},

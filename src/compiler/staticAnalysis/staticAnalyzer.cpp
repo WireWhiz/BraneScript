@@ -1468,6 +1468,7 @@ namespace BraneScript
             auto arguments = std::move(constructArgumentList(ctx->arguments, &argPackInstanceContext));
 
             auto parentStruct = lastNode()->getLast<StructContext>();
+            auto constructorType = ConstructorType::None;
             if(parentStruct)
             {
                 auto* thisRef = new LabeledValueContext{};
@@ -1477,6 +1478,29 @@ namespace BraneScript
                 thisRef->isRef = true;
                 thisRef->isConst = ctx->isConst;
                 arguments.emplace(arguments.begin(), thisRef);
+
+                if(sig.id == "_construct")
+                {
+                    if(arguments.size() != 1)
+                        recordError(ctx->arguments, "Constructor may have no arguments, it is intended for initializing default values only!");
+                    constructorType = ConstructorType::Default;
+                }
+                else if(sig.id == "_copy")
+                {
+                    if(arguments.size() != 2 || arguments[1]->type.structCtx != parentStruct || !arguments[1]->isConst)
+                        recordError(ctx->sig->id, "Copy constructor must have exactly one argument of type \"const ref " + parentStruct->longId() + "\".");
+                }
+                else if(sig.id == "_move")
+                {
+                    if(arguments.size() != 2 || arguments[1]->type.structCtx != parentStruct || arguments[1]->isConst)
+                        recordError(ctx->sig->id, "Copy constructor must have exactly one argument of type \"ref " + parentStruct->longId() + "\".");
+                }
+                else if(sig.id == "_destruct")
+                {
+                    if(arguments.size() != 1)
+                        recordError(ctx->sig->id, "Destructor may have no arguments!");
+                    constructorType = ConstructorType::Destructor;
+                }
             }
 
             FunctionContext* func = getFunctionNode(sig.id, arguments);
@@ -1524,6 +1548,9 @@ namespace BraneScript
             {
                 func->body = std::make_unique<ScopeContext>();
                 initDoc(func->body.get(), ctx);
+                if(constructorType != ConstructorType::None)
+                    appendDefaultConstructorOperations(func, constructorType);
+
                 for(auto stmt : ctx->statement())
                 {
                     auto statement = asStmt(visit(stmt));
@@ -1589,6 +1616,23 @@ namespace BraneScript
             buildDefaultConstructor(lambdaCaptureStruct, ConstructorType::Copy);
             buildDefaultConstructor(lambdaCaptureStruct, ConstructorType::Move);
             buildDefaultConstructor(lambdaCaptureStruct, ConstructorType::Destructor);
+
+            std::vector<std::unique_ptr<LabeledValueContext>> captureArgs;
+            captureArgs.emplace_back(new LabeledValueContext{"this", ValueContext{{lambdaCaptureStruct->longId(), ValueType::Struct, lambdaCaptureStruct}, true, false, true}});
+            captureArgs.emplace_back(new LabeledValueContext{"other", ValueContext{{lambdaCaptureStruct->longId(), ValueType::Struct, lambdaCaptureStruct}, true, true, true}});
+            FunctionContext* copyData = getFunctionNode(lambdaID + "CopyData", arguments);
+            initDoc(copyData, ctx);
+            copyData->arguments = std::move(captureArgs);
+            copyData->body = std::make_unique<ScopeContext>();
+            LabeledValueContext thisRef = *copyData->arguments[0];
+            thisRef.isRef = false;
+            copyData->body->expressions.emplace_back(new LabeledValueConstructionContext{thisRef});
+            copyData->body->expressions.emplace_back(new AssignmentContext{
+                new LabeledValueReferenceContext(*copyData->arguments[0]),
+                new LabeledValueReferenceContext{*copyData->arguments[1]}
+            });
+
+            popDoc(copyData);
 
             arguments.insert(
                 arguments.begin(),
@@ -1675,6 +1719,7 @@ namespace BraneScript
             lambdaCtx->captureType = lambdaCaptureStruct;
             lambdaCtx->captures = std::move(captures);
             lambdaCtx->func = func;
+            lambdaCtx->copyFunc = copyData;
 
             popDoc(lambdaCtx);
             RETURN_EXPR(lambdaCtx);
@@ -1700,6 +1745,7 @@ namespace BraneScript
 
         enum class ConstructorType
         {
+            None,
             Default,
             Copy,
             Move,
@@ -1742,10 +1788,35 @@ namespace BraneScript
             func->arguments = std::move(args);
             func->body = std::make_unique<ScopeContext>();
 
+            appendDefaultConstructorOperations(func, type);
+
+            switch(type)
+            {
+                case ConstructorType::Default:
+                    structCtx->constructor = func;
+                    break;
+                case ConstructorType::Copy:
+                    structCtx->copyConstructor = func;
+                    break;
+                case ConstructorType::Move:
+                    structCtx->moveConstructor = func;
+                    break;
+                case ConstructorType::Destructor:
+                    structCtx->destructor = func;
+                    break;
+            }
+            return func;
+        }
+
+        void appendDefaultConstructorOperations(FunctionContext* func, ConstructorType type)
+        {
             size_t varIndex = 0;
+            assert(func->arguments.size() >= 1);
+            assert(func->arguments.size() <= 2);
+            auto structCtx = func->arguments[0]->type.structCtx;
             for(auto& var : structCtx->variables)
             {
-                if(var->type.storageType == ValueType::Struct)
+                if(var->type.storageType == ValueType::Struct && !var->isRef)
                 {
                     auto memberAccess = new MemberAccessContext{};
                     memberAccess->member = varIndex;
@@ -1785,7 +1856,7 @@ namespace BraneScript
                     }
                     if(!constructCall->function)
                         recordError(structCtx->identifier.range,
-                                    "Could not find " + operationName + " for struct \"" +
+                                    "Could not find " + func->identifier.text + " for struct \"" +
                                         var->type.structCtx->longId() + "\"");
 
                     func->body->expressions.emplace_back(constructCall);
@@ -1810,23 +1881,6 @@ namespace BraneScript
                 }
                 varIndex++;
             }
-
-            switch(type)
-            {
-                case ConstructorType::Default:
-                    structCtx->constructor = func;
-                    break;
-                case ConstructorType::Copy:
-                    structCtx->copyConstructor = func;
-                    break;
-                case ConstructorType::Move:
-                    structCtx->moveConstructor = func;
-                    break;
-                case ConstructorType::Destructor:
-                    structCtx->destructor = func;
-                    break;
-            }
-            return func;
         }
 
         std::any visitStructDef(braneParser::StructDefContext* ctx) override
@@ -2307,6 +2361,19 @@ namespace BraneScript
             return NULL_EXPR;
         }
 
+        std::any visitNot(braneParser::NotContext* ctx) override
+        {
+            EXPR_ASSERT_EXISTS(ctx->value, "expression expected");
+            auto value = asExpr(visit(ctx->value));
+            if(value->returnType.type.storageType == ValueType::Bool)
+                    RETURN_EXPR(new NativeNotContext(value.release()));
+            std::string error;
+            if(auto callCtx = resolveOperator("!", error, std::move(value)))
+                RETURN_EXPR(callCtx);
+            recordError(ctx, error);
+            return NULL_EXPR;
+        }
+
         std::any visitLogic(braneParser::LogicContext* ctx) override
         {
             EXPR_ASSERT_EXISTS(ctx->left, "expression expected");
@@ -2315,7 +2382,13 @@ namespace BraneScript
 
             auto left = asExpr(visit(ctx->left));
             auto right = asExpr(visit(ctx->right));
-            assert(false); // TODO implement this
+            if(left->returnType.type.storageType == ValueType::Bool && right->returnType.type.storageType == ValueType::Bool)
+            {
+                    std::string op = ctx->opr->getText();
+                    RETURN_EXPR(new NativeLogicContext((op == "||") ? NativeLogicContext::OR : NativeLogicContext::AND,
+                                                       left.release(),
+                                                       right.release()));
+            }
 
             std::string error;
             if(auto callCtx = resolveOperator("&&", error, std::move(left), std::move(right)))
@@ -2329,6 +2402,7 @@ namespace BraneScript
             EXPR_ASSERT_EXISTS(ctx->left, "expression expected");
             EXPR_ASSERT_EXISTS(ctx->opr, "operator expected");
             EXPR_ASSERT_EXISTS(ctx->right, "expression expected");
+            std::is_same<int, int>::value;
 
             auto left = asExpr(visit(ctx->left));
             auto right = asExpr(visit(ctx->right));
@@ -2525,6 +2599,7 @@ namespace BraneScript
 
             auto source = asExpr(visit(ctx->expression()));
             auto overridesCtx = source->as<FunctionOverridesContext>();
+            std::string id;
 
             if(source->returnType.type.structCtx && source->returnType.type.storageType == ValueType::Struct)
             {
@@ -2535,6 +2610,7 @@ namespace BraneScript
                     popDoc(callCtx);
                     RETURN_EXPR(callCtx);
                 }
+                id = source->longId();
                 callCtx->arguments.emplace(callCtx->arguments.begin(), source.release());
             }
 
@@ -2576,7 +2652,9 @@ namespace BraneScript
 
                 if(!callCtx->function)
                 {
-                    std::string error = "Could not find override of function \"" + source->longId();
+                    if(source)
+                        id = source->longId();
+                    std::string error = "Could not find override of function \"" + id;
                     error += "\" with arguments: ";
                     for(auto& arg : argTypes)
                         error += arg.signature() + ", ";

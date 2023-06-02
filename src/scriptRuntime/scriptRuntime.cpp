@@ -121,12 +121,12 @@ namespace BraneScript
         unsafeLib.addFunction("unsafe::malloc(uint)", (FuncRef<void*, int>)[](int size){
             _scriptMallocDiff++;
             auto ptr = ::operator new(size);
-            printf("Allocating %d bytes at %p\n", size, ptr);
+            //printf("Allocating %d bytes at %p\n", size, ptr);
             return ptr;
         });
         unsafeLib.addFunction("unsafe::free(ref void)", (FuncRef<void, void*>)[](void* ptr){
             _scriptMallocDiff--;
-            printf("Freeing %p\n", ptr);
+            //printf("Freeing %p\n", ptr);
             ::operator delete(ptr);
         });
         loadLibrary(unsafeLib);

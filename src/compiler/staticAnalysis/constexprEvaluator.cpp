@@ -266,6 +266,31 @@ namespace BraneScript
             }
         }
 
+        Value visitNativeLogicContext(const NativeLogicContext* ctx)
+        {
+            Value l = visitExpression(ctx->lValue.get());
+            Value r = visitExpression(ctx->rValue.get());
+            assert(l.value->is<ConstBoolContext>() && r.value->is<ConstBoolContext>());
+            switch(ctx->op)
+            {
+                case NativeLogicContext::AND:
+                    return {"", std::make_unique<ConstBoolContext>(
+                                    visitExpression(ctx->lValue.get()).value->as<ConstBoolContext>()->value &&
+                                    visitExpression(ctx->rValue.get()).value->as<ConstBoolContext>()->value)};
+                case NativeLogicContext::OR:
+                    return {"", std::make_unique<ConstBoolContext>(
+                                    visitExpression(ctx->lValue.get()).value->as<ConstBoolContext>()->value ||
+                                    visitExpression(ctx->rValue.get()).value->as<ConstBoolContext>()->value)};
+            }
+        }
+
+        Value visitNativeNotContext(const NativeNotContext* ctx)
+        {
+            Value v = visitExpression(ctx->value.get());
+            assert(v.value->is<ConstBoolContext>());
+            return {"", std::make_unique<ConstBoolContext>(!v.value->as<ConstBoolContext>()->value)};
+        }
+
         Value visitNativeCompareContext(const NativeCompareContext* ctx)
         {
             Value l = visitExpression(ctx->lValue.get());
@@ -431,6 +456,10 @@ namespace BraneScript
                 return visitConst(node);
             if(auto* node = dynamic_cast<const NativeArithmeticContext*>(ctx))
                 return visitNativeArithmeticContext(node);
+            if(auto* node = dynamic_cast<const NativeNotContext*>(ctx))
+                return visitNativeNotContext(node);
+            if(auto* node = dynamic_cast<const NativeLogicContext*>(ctx))
+                return visitNativeLogicContext(node);
             if(auto* node = dynamic_cast<const NativeCompareContext*>(ctx))
                 return visitNativeCompareContext(node);
             if(auto* node = dynamic_cast<const NativeCastContext*>(ctx))

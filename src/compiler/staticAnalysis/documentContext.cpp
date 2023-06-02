@@ -591,6 +591,17 @@ namespace BraneScript
     {
         if(!value)
         {
+            assert(ctx.func->getReturnType()->isVoidTy());
+            ctx.destructStack();
+            ctx.currentBlock = nullptr;
+            return ctx.builder.CreateRetVoid();
+        }
+
+        //TEMPORARY WORKAROUND until we have a proper metaprogramming system
+        if(value->returnType.type.storageType == ValueType::Void)
+        {
+            assert(ctx.func->getReturnType()->isVoidTy());
+            value->createAST(ctx);
             ctx.destructStack();
             ctx.currentBlock = nullptr;
             return ctx.builder.CreateRetVoid();
@@ -602,6 +613,7 @@ namespace BraneScript
         assert(retValue);
         if(!parentFunc->returnType.isRef && parentFunc->returnType.type.structCtx)
         {
+            assert(ctx.func->getReturnType()->isVoidTy());
             // If we are returning a value from a function, it will have detected this node as a parent and returned
             // the value directly.
             if(value->is<FunctionCallContext>())
@@ -624,6 +636,7 @@ namespace BraneScript
             return nullptr;
         }
 
+        assert(!ctx.func->getReturnType()->isVoidTy());
         bool isRefType = parentFunc->returnType.isRef || parentFunc->returnType.type.storageType == ValueType::FuncRef;
         retValue = ctx.dereferenceToDepth(retValue, isRefType ? 1 : 0);
         assert(retValue->getType() == ctx.func->getReturnType());
@@ -1168,7 +1181,7 @@ namespace BraneScript
         using CastOps = llvm::Instruction::CastOps;
         if(sourceExpr->returnType.isRef && returnType.isRef)
         {
-            auto* sourceValue = sourceExpr->createAST(ctx);
+            auto* sourceValue = ctx.dereferenceToDepth(sourceExpr->createAST(ctx), 1);
             assert(sourceValue->getType()->isPointerTy());
             llvm::Type* endType = ctx.getLLVMType(returnType);
             return ctx.builder.CreateCast(CastOps::BitCast, sourceValue, endType);
@@ -1418,6 +1431,71 @@ namespace BraneScript
             op, (ExpressionContext*)lValue->deepCopy(), (ExpressionContext*)rValue->deepCopy());
     }
 
+    NativeNotContext::NativeNotContext(ExpressionContext* value) : value(value)
+    {
+        assert(value->returnType.type.storageType == ValueType::Bool);
+        returnType = ValueContext{{"bool", ValueType::Bool, nullptr}, false, false, false};
+    }
+
+    bool NativeNotContext::isConstexpr() const {
+        return value->isConstexpr();
+    }
+
+    llvm::Value* NativeNotContext::createAST(ASTContext& ctx) const
+    {
+        auto v = ctx.dereferenceToDepth(value->createAST(ctx), 0);
+        assert(v->getType()->isIntegerTy());
+        return ctx.builder.CreateNot(v);
+    }
+
+    DocumentContext* NativeNotContext::deepCopy(const std::function<DocumentContext*(DocumentContext*)>& callback) const
+    {
+        auto copy = new NativeNotContext((ExpressionContext*)value->deepCopy(callback));
+        value->parent = copy;
+        return callback(copy);
+    }
+
+    NativeLogicContext::NativeLogicContext(NativeLogicContext::Operation op,
+                                           ExpressionContext* lValue,
+                                           ExpressionContext* rValue) : op(op), lValue(lValue), rValue(rValue)
+    {
+        assert(lValue->returnType.type.storageType == ValueType::Bool);
+        assert(rValue->returnType.type.storageType == ValueType::Bool);
+        returnType.type = {"bool", ValueType::Bool, nullptr};
+    }
+
+    bool NativeLogicContext::isConstexpr() const
+    {
+        return lValue->isConstexpr() && rValue->isConstexpr();
+    }
+
+    llvm::Value* NativeLogicContext::createAST(ASTContext& ctx) const
+    {
+        auto l = ctx.dereferenceToDepth(lValue->createAST(ctx), 0);
+        assert(l->getType()->isIntegerTy());
+        auto r = ctx.dereferenceToDepth(rValue->createAST(ctx), 0);
+        assert(r->getType()->isIntegerTy());
+        switch(op)
+        {
+            case AND:
+                return ctx.builder.CreateAnd(l, r);
+            case OR:
+                return ctx.builder.CreateOr(l, r);
+        }
+        assert(false);
+        return nullptr;
+    }
+
+    DocumentContext*
+    NativeLogicContext::deepCopy(const std::function<DocumentContext*(DocumentContext*)>& callback) const
+    {
+        auto copy = new NativeLogicContext(
+            op, (ExpressionContext*)lValue->deepCopy(callback), (ExpressionContext*)rValue->deepCopy(callback));
+        lValue->parent = copy;
+        rValue->parent = copy;
+        return callback(copy);
+    }
+
     bool NativeCompareContext::validCompare(const ValueContext& left, const ValueContext& right)
     {
         if(left.type.storageType == ValueType::Struct || right.type.storageType == ValueType::Struct)
@@ -1575,6 +1653,8 @@ namespace BraneScript
             assert(functionRef);
 
             std::vector<llvm::Type*> argTypes;
+            if(argRet)
+                argTypes.push_back(args[0]->getType());
             for(auto& arg : arguments)
             {
                 argTypes.push_back(ctx.getLLVMType(arg->returnType));
@@ -1645,9 +1725,9 @@ namespace BraneScript
             auto l = ctx.builder.CreateStructGEP(dataType, _data, captureIndex);
             auto r = capture->createAST(ctx);
 
-            if(!capture->returnType.type.structCtx)
+            if(!capture->returnType.type.structCtx || captureType->variables[captureIndex]->isRef)
             {
-                bool isRefType = capture->returnType.isRef || capture->returnType.type.storageType == ValueType::FuncRef;
+                bool isRefType = captureType->variables[captureIndex]->isRef || captureType->variables[captureIndex]->type.storageType == ValueType::FuncRef;
                 ctx.builder.CreateStore(ctx.dereferenceToDepth(r, isRefType ? 1 : 0), l);
                 continue;
             }
@@ -1674,7 +1754,7 @@ namespace BraneScript
         ctx.builder.CreateStore(dataDestructor, _dataDestructor);
 
         auto _dataCopyConstructor = ctx.builder.CreateStructGEP(lt, lambdaInstance, 3);
-        llvm::Value* dataCopyConstructor = ctx.functions.at(captureType->copyConstructor->signature());
+        llvm::Value* dataCopyConstructor = ctx.functions.at(copyFunc->signature());
         dataCopyConstructor = ctx.builder.CreatePointerCast(dataCopyConstructor, _dataCopyConstructor->getType()->getContainedType(0));
         ctx.builder.CreateStore(dataCopyConstructor, _dataCopyConstructor);
 
@@ -2248,4 +2328,6 @@ namespace BraneScript
     }
 
     bool ConstValueContext::isConstexpr() const { return true; }
+
+
 } // namespace BraneScript

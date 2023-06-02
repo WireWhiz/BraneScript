@@ -207,6 +207,10 @@ public:
     return visitChildren(ctx);
   }
 
+  virtual std::any visitNot(braneParser::NotContext *ctx) override {
+    return visitChildren(ctx);
+  }
+
   virtual std::any visitParen(braneParser::ParenContext *ctx) override {
     return visitChildren(ctx);
   }
