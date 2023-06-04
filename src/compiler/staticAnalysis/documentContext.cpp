@@ -715,9 +715,9 @@ namespace BraneScript
         if(!value)
         {
             assert(ctx.func->getReturnType()->isVoidTy());
-            ctx.setDebugLocation(this);
             ctx.destructStack();
             ctx.currentBlock = nullptr;
+            ctx.setDebugLocation(this);
             return ctx.builder.CreateRetVoid();
         }
 
@@ -726,9 +726,9 @@ namespace BraneScript
         {
             assert(ctx.func->getReturnType()->isVoidTy());
             value->createAST(ctx);
-            ctx.setDebugLocation(this);
             ctx.destructStack();
             ctx.currentBlock = nullptr;
+            ctx.setDebugLocation(this);
             return ctx.builder.CreateRetVoid();
         }
 
@@ -746,6 +746,7 @@ namespace BraneScript
             {
                 ctx.destructStack();
                 ctx.currentBlock = nullptr;
+                ctx.setDebugLocation(this);
                 return ctx.builder.CreateRetVoid();
             }
             auto retRef = ctx.findValue("-retRef");
@@ -757,6 +758,7 @@ namespace BraneScript
             std::vector<llvm::Value*> args = {retRef, ctx.dereferenceToDepth(retValue, 1)};
             ctx.builder.CreateCall(copy->second, args);
             ctx.destructStack();
+            ctx.setDebugLocation(this);
             ctx.builder.CreateRetVoid();
             ctx.currentBlock = nullptr;
             return nullptr;
@@ -768,6 +770,7 @@ namespace BraneScript
         assert(retValue->getType() == ctx.func->getReturnType());
 
         ctx.destructStack();
+        ctx.setDebugLocation(this);
         ctx.builder.CreateRet(retValue);
         ctx.currentBlock = nullptr;
         return nullptr;
@@ -798,7 +801,6 @@ namespace BraneScript
 
     llvm::Value* IfContext::createAST(ASTContext& ctx) const
     {
-        ctx.setDebugLocation(this);
         auto* cond = ctx.dereferenceToDepth(condition->createAST(ctx), 0);
         assert(cond->getType()->getIntegerBitWidth() == 1);
 
@@ -845,7 +847,6 @@ namespace BraneScript
         ctx.setInsertPoint(header);
 
         auto* cond = condition->createAST(ctx);
-        ctx.setDebugLocation(this);
         ctx.builder.CreateCondBr(cond, bodyBlock, end);
 
         ctx.setInsertPoint(bodyBlock);
@@ -1255,10 +1256,10 @@ namespace BraneScript
 
     llvm::Value* MemberAccessContext::createAST(ASTContext& ctx) const
     {
-        ctx.setDebugLocation(this);
         auto baseValue = ctx.dereferenceToDepth(baseExpression->createAST(ctx), 1);
 
         assert(baseValue->getType()->getContainedType(0)->isStructTy());
+        ctx.setDebugLocation(this);
         return ctx.builder.CreateStructGEP(baseValue->getType()->getContainedType(0), baseValue, member);
     }
 
@@ -1579,8 +1580,8 @@ namespace BraneScript
 
     llvm::Value* NativeNotContext::createAST(ASTContext& ctx) const
     {
-        ctx.setDebugLocation(this);
         auto v = ctx.dereferenceToDepth(value->createAST(ctx), 0);
+        ctx.setDebugLocation(this);
         assert(v->getType()->isIntegerTy());
         return ctx.builder.CreateNot(v);
     }
@@ -1606,10 +1607,11 @@ namespace BraneScript
 
     llvm::Value* NativeLogicContext::createAST(ASTContext& ctx) const
     {
-        ctx.setDebugLocation(this);
         auto l = ctx.dereferenceToDepth(lValue->createAST(ctx), 0);
         assert(l->getType()->isIntegerTy());
         auto r = ctx.dereferenceToDepth(rValue->createAST(ctx), 0);
+
+        ctx.setDebugLocation(this);
         assert(r->getType()->isIntegerTy());
         switch(op)
         {
@@ -1764,6 +1766,7 @@ namespace BraneScript
                 auto constructor = ctx.functions.find(returnType.type.structCtx->constructor->signature());
                 assert(constructor != ctx.functions.end());
 
+                ctx.setDebugLocation(this);
                 ctx.builder.CreateCall(constructor->second, args[0]);
             }
         }
@@ -1812,6 +1815,7 @@ namespace BraneScript
             else if(funcRef->getType()->getContainedType(0)->isFunctionTy())
                 funcRef = ctx.builder.CreateBitCast(funcRef, llvm::PointerType::get(funcType, 0));
 
+            ctx.setDebugLocation(this);
             retVal = ctx.builder.CreateCall(funcType, funcRef, args);
         }
 
@@ -1838,7 +1842,6 @@ namespace BraneScript
 
     llvm::Value* LambdaInstanceContext::createAST(ASTContext& ctx) const
     {
-        ctx.setDebugLocation(this);
         auto lt = ctx.getLLVMType(returnType);
         auto lambdaInstance = ctx.builder.CreateAlloca(lt, nullptr, "lambda");
         ctx.addValue(lambdaInstance, returnType);
@@ -1900,6 +1903,8 @@ namespace BraneScript
         auto _f = ctx.builder.CreateStructGEP(lt, lambdaInstance, 1);
         llvm::Value* f = ctx.functions.at(func->signature());
         f = ctx.builder.CreatePointerCast(f, _f->getType()->getContainedType(0));
+
+        ctx.setDebugLocation(this);
         ctx.builder.CreateStore(f, _f);
 
         return lambdaInstance;
@@ -2096,12 +2101,19 @@ namespace BraneScript
                 dArgs.push_back(argType);
             }
 
+            llvm::DIFile* file = ctx.diFile;
+            if(isTemplateInstance)
+            {
+                auto source = std::filesystem::canonical(getParent<ScriptContext>()->source);
+                file = ctx.dBuilder->createFile(source.filename().string(), source.parent_path().string());
+            }
+
             auto subType = ctx.dBuilder->createSubroutineType(ctx.dBuilder->getOrCreateTypeArray(dArgs));
-            llvm::DIScope* fCtx = ctx.diFile;
+            llvm::DIScope* fCtx = file;
             llvm::DISubprogram* sp = ctx.dBuilder->createFunction(fCtx,
                                                                   identifier.text,
                                                                   signature(),
-                                                                  ctx.diFile,
+                                                                  file,
                                                                   range.start.line,
                                                                   subType,
                                                                   range.start.line,

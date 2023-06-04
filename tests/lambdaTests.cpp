@@ -32,7 +32,7 @@ TEST(BraneScript, Lambdas)
     analyzer.validate(path);
     checkCompileErrors(analyzer, path);
 
-    auto ir = analyzer.compile(path, CompileFlags_DebugInfo);
+    auto ir = analyzer.compile(path, CompileFlags_DebugInfo | CompileFlags_PrintIR);
     ASSERT_TRUE(ir.modules.contains("tests"));
 
     ScriptRuntime rt;
