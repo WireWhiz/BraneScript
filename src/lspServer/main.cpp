@@ -62,12 +62,10 @@ int main()
                 auto range = TextRange::fromJson(change["range"]);
                 auto bounds = range.getBoundsForText(document);
                 std::string newText = change["text"].asString();
-                std::cout << "[" << std::string{document.begin() + std::max<int>(bounds.first - 5, 0), document.begin() + std::min<int>(bounds.second + 5, document.size())} << "] <- before. " << std::endl;
                 if(bounds.first != bounds.second)
                     document.erase(document.begin() + bounds.first, document.begin() + bounds.second);
                 if(!newText.empty())
                     document.insert(document.begin() + bounds.first, newText.begin(), newText.end());
-                std::cout << "[" << std::string{document.begin() + std::max<int>(bounds.first - 5, 0), document.begin() + std::min<int>(bounds.second + 5, document.size())} << "] <- result" << std::endl;
             }
         }
         session->analyzer.reload(path);
@@ -99,9 +97,6 @@ int main()
     });
     server.addListener("textDocument/didClose", [&](lsp::LspSession* session, lsp::LspMessageRequest* req, lsp::LspResponseMessage* res) {
         std::string path = uriToPath(req->params["textDocument"]["uri"].asString());
-        auto* ctx = session->analyzer.getCtx(path);
-        std::scoped_lock lock(ctx->lock);
-        ctx->document.clear();
         std::cout << "Closed " << path << std::endl;
     });
     server.addListener("textDocument/semanticTokens/full",

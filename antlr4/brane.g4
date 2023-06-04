@@ -19,7 +19,7 @@ ADD     : '+';
 SUB     : '-';
 LOGIC   : '&&'|'||';
 
-program     : (module+ EOF? | EOF?);
+modules       : module* EOF?;
 
 link          : isPublic='public'? 'link' library=STRING ('as' alias=STRING)?;
 linkList      : link*;

@@ -24,7 +24,7 @@ public:
   };
 
   enum {
-    RuleProgram = 0, RuleLink = 1, RuleLinkList = 2, RuleTags = 3, RuleModule = 4, 
+    RuleModules = 0, RuleLink = 1, RuleLinkList = 2, RuleTags = 3, RuleModule = 4, 
     RuleModuleComponent = 5, RuleGlobal = 6, RuleTemplateDefArgument = 7, 
     RuleTemplateDef = 8, RuleTemplateArg = 9, RuleTemplateArgs = 10, RuleScopedID = 11, 
     RuleType = 12, RuleDeclaration = 13, RuleArgumentListItem = 14, RuleArgumentList = 15, 
@@ -51,7 +51,7 @@ public:
   antlr4::atn::SerializedATNView getSerializedATN() const override;
 
 
-  class ProgramContext;
+  class ModulesContext;
   class LinkContext;
   class LinkListContext;
   class TagsContext;
@@ -80,9 +80,9 @@ public:
   class StatementContext;
   class ExpressionContext; 
 
-  class  ProgramContext : public antlr4::ParserRuleContext {
+  class  ModulesContext : public antlr4::ParserRuleContext {
   public:
-    ProgramContext(antlr4::ParserRuleContext *parent, size_t invokingState);
+    ModulesContext(antlr4::ParserRuleContext *parent, size_t invokingState);
     virtual size_t getRuleIndex() const override;
     std::vector<ModuleContext *> module();
     ModuleContext* module(size_t i);
@@ -93,7 +93,7 @@ public:
    
   };
 
-  ProgramContext* program();
+  ModulesContext* modules();
 
   class  LinkContext : public antlr4::ParserRuleContext {
   public:

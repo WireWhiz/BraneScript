@@ -16,41 +16,15 @@ struct TestStruct
 TEST(BraneScript, UnsafeTests)
 {
 
-    std::string testString = R"(
-    module "tests"
-    link "unsafe"
-    {
-        struct TestStruct
-        {
-            int x;
-            float y;
-        }
-
-        ref TestStruct allocStruct()
-        {
-            ref TestStruct ts <- malloc<TestStruct>();
-            TestStruct::_construct(ts);
-            ts.x = 2;
-            ts.y = 2.0f;
-            return ts;
-        }
-
-        void deleteStruct(ref TestStruct ts)
-        {
-            free(ts);
-        }
-    }
-)";
     StaticAnalyzer analyzer;
-    analyzer.load("test", testString);
-    analyzer.validate("test", false);
-    EXPECT_GT(analyzer.getCtx("test")->errors.size(), 0);
+    std::string path = "testScripts/unsafeTests.bs";
+    analyzer.load(path);
+    analyzer.validate(path, false);
+    EXPECT_GT(analyzer.getCtx(path)->errors.size(), 0);
+    analyzer.validate(path, true);
+    checkCompileErrors(analyzer, path)
 
-    analyzer.validate("test", true);
-    checkCompileErrors(analyzer, testString)
-
-    llvm::LLVMContext ctx;
-    auto ir = analyzer.getCtx("test")->scriptContext->compile(&ctx, true, true);
+    auto ir = analyzer.compile(path, CompileFlags_DebugInfo);
     ASSERT_TRUE(ir.modules.contains("tests"));
 
     ScriptRuntime rt;

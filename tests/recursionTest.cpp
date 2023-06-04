@@ -8,33 +8,13 @@ using namespace BraneScript;
 
 TEST(BraneScript, Recursion)
 {
-    std::string testString = R"(
-    module "tests"
-    {
-        int called1(int in)
-        {
-            return in;
-        }
-        int caller1(int in)
-        {
-            return called1(in);
-        }
-
-        //recursively calculate x to the nth power
-        int pow(int x, int n)
-        {
-            if(n == 1)
-                return x;
-            return x * pow(x, n - 1);
-        }
-    }
-)";
     StaticAnalyzer analyzer;
-    analyzer.load("test", testString);
-    analyzer.validate("test");
-    checkCompileErrors(analyzer, testString);
+    std::string path = "testScripts/recursionTest.bs";
+    analyzer.load(path);
+    analyzer.validate(path);
+    checkCompileErrors(analyzer, path);
 
-    auto ir = analyzer.compile("test");
+    auto ir = analyzer.compile(path, CompileFlags_DebugInfo);
     ASSERT_TRUE(ir.modules.contains("tests"));
 
     ScriptRuntime rt;

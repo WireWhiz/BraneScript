@@ -1,0 +1,19 @@
+module "tests"
+{
+    int called1(int in)
+    {
+        return in;
+    }
+    int caller1(int in)
+    {
+        return called1(in);
+    }
+
+    //recursively calculate x to the nth power
+    int pow(int x, int n)
+    {
+        if(n == 1)
+            return x;
+        return x * pow(x, n - 1);
+    }
+}

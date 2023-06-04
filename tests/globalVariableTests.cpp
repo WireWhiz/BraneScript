@@ -10,49 +10,13 @@ using namespace BraneScript;
 
 TEST(BraneScript, GlobalVariables)
 {
-    std::string testString = R"(
-    module "tests"
-    {
-        int globalInt;
-        float globalFloat;
-        struct GlobalStruct
-        {
-            int var;
-        }
-        GlobalStruct globalStruct;
-
-        void setInt(int v)
-        {
-            globalInt = v;
-        }
-        void setFloat(float v)
-        {
-            globalFloat = v;
-        }
-        void setStructVar(int v)
-        {
-            globalStruct.var = v;
-        }
-        int getInt()
-        {
-            return globalInt;
-        }
-        float getFloat()
-        {
-            return globalFloat;
-        }
-        int getStructVar()
-        {
-            return globalStruct.var;
-        }
-    }
-)";
     StaticAnalyzer analyzer;
-    analyzer.load("test", testString);
-    analyzer.validate("test");
-    checkCompileErrors(analyzer, testString);
+    std::string path = "testScripts/globalVariableTests.bs";
+    analyzer.load(path);
+    analyzer.validate(path);
+    checkCompileErrors(analyzer, path);
 
-    auto ir = analyzer.compile("test");
+    auto ir = analyzer.compile(path, CompileFlags_DebugInfo);
     ASSERT_TRUE(ir.modules.contains("tests"));
 
     ScriptRuntime rt;

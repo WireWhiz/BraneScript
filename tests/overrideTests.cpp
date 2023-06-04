@@ -10,33 +10,13 @@ using namespace BraneScript;
 
 TEST(BraneScript, Overrides)
 {
-    std::string testString = R"(
-    module "tests"
-    {
-        bool func(int a, float b, bool c)
-        {
-            return true;
-        }
-        int func(int a)
-        {
-            return 1;
-        }
-        int func()
-        {
-            return 0;
-        }
-        int func(int a, float b)
-        {
-            return 2;
-        }
-    }
-)";
     StaticAnalyzer analyzer;
-    analyzer.load("test", testString);
-    analyzer.validate("test");
-    checkCompileErrors(analyzer, testString);
+    std::string path = "testScripts/overrideTests.bs";
+    analyzer.load(path);
+    analyzer.validate(path);
+    checkCompileErrors(analyzer, path);
 
-    auto ir = analyzer.compile("test");
+    auto ir = analyzer.compile(path, CompileFlags_DebugInfo);
     ASSERT_TRUE(ir.modules.contains("tests"));
 
     ScriptRuntime rt;

@@ -9,42 +9,13 @@ using namespace BraneScript;
 
 TEST(BraneScript, Refs)
 {
-
-    std::string testString = R"(
-
-    module "tests"
-    {
-        int testValue;
-
-        ref int getInt()
-        {
-            return testValue;
-        }
-
-        void addOne(ref int value)
-        {
-            value = value + 1;
-        }
-
-        int addOneCall()
-        {
-            int localTestValue = 0;
-            addOne(localTestValue);
-            return localTestValue;
-        }
-
-        void addOneToRef(ref int value)
-        {
-            addOne(value);
-        }
-    }
-)";
     StaticAnalyzer analyzer;
-    analyzer.load("test", testString);
-    analyzer.validate("test");
-    checkCompileErrors(analyzer, testString);
+    std::string path = "testScripts/refTests.bs";
+    analyzer.load(path);
+    analyzer.validate(path);
+    checkCompileErrors(analyzer, path);
 
-    auto ir = analyzer.compile("test");
+    auto ir = analyzer.compile(path, CompileFlags_DebugInfo);
     ASSERT_TRUE(ir.modules.contains("tests"));
 
     ScriptRuntime rt;

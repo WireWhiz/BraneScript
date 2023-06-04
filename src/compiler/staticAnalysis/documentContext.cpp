@@ -12,6 +12,7 @@
 #include "llvm/IR/Verifier.h"
 #include "llvm/Passes/PassBuilder.h"
 #include "llvm/Transforms/Scalar.h"
+#include "llvm/Support/Host.h"
 
 namespace BraneScript
 {
@@ -152,9 +153,52 @@ namespace BraneScript
             st = llvm::StructType::create(llvmTypes, id, structCtx->packed);
 
         entry.llvmType = st;
-        entry.isExported = structCtx->getParent<ModuleContext>();
 
         definedStructs.insert({std::move(id), std::move(entry)});
+        if(dBuilder)
+        {
+            llvm::SmallVector<llvm::Metadata*, 8> members;
+            auto& source = structCtx->getLast<const ScriptContext>()->source;
+            auto* sourceFile = dBuilder->createFile(module->getSourceFileName(), module->getSourceFileName());
+            size_t structSize = 0;
+            size_t largestAlignment = 0;
+
+            for(auto& m : structCtx->variables)
+            {
+                auto* type = getDebugType(*m);
+                auto typeSize = type->getSizeInBits();
+                auto padding = structSize % typeSize;
+                if(padding)
+                    structSize += typeSize - padding;
+                members.push_back(dBuilder->createMemberType(diFile,
+                                                             m->identifier.text,
+                                                             diFile,
+                                                             m->range.start.line,
+                                                             typeSize,
+                                                             type->getAlignInBits(),
+                                                             structSize,
+                                                             llvm::DINode::DIFlags::FlagZero,
+                                                             type));
+                if(type->getAlignInBits() > largestAlignment)
+                    largestAlignment = type->getAlignInBits();
+                structSize += typeSize;
+            }
+            if(largestAlignment)
+            {
+                auto padding = structSize % largestAlignment;
+                if(padding)
+                    structSize += largestAlignment - padding;
+            }
+            auto* dStruct = dBuilder->createStructType(diFile,
+                                                       structCtx->identifier.text,
+                                                       diFile,
+                                                       structCtx->range.start.line,
+                                                       structSize,
+                                                       largestAlignment,
+                                                       llvm::DINode::DIFlags::FlagZero,
+                                                       nullptr, dBuilder->getOrCreateArray(members));
+            debugTypes.insert({structCtx->longId(), dStruct});
+        }
 
         return st;
     }
@@ -260,6 +304,23 @@ namespace BraneScript
         return nullptr;
     }
 
+
+    bool ASTContext::setValue(llvm::Value* old, llvm::Value* newValue)
+    {
+        for(auto itr = scopes.rbegin(); itr != scopes.rend(); ++itr)
+        {
+            for(auto& value : itr->values)
+            {
+                if(value.second.value == old)
+                {
+                    value.second.value = newValue;
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
     void ASTContext::addValue(std::string id, llvm::Value* value, ValueContext context)
     {
         scopes.back().values.insert({std::move(id), {value, std::move(context)}});
@@ -338,6 +399,65 @@ namespace BraneScript
         return 1 + pointerDepth(type->getContainedType(0));
     }
 
+    //Passing value context as value is intentional here to make sure .signature() does not inclulde a variable name
+    llvm::DIType* ASTContext::getDebugType(ValueContext valueCtx)
+    {
+        valueCtx.isConst = false;
+        std::string sig = valueCtx.signature();
+        auto itr = debugTypes.find(sig);
+        if(itr != debugTypes.end())
+            return itr->second;
+
+        if(valueCtx.isRef)
+        {
+            auto baseType = valueCtx;
+            baseType.isRef = false;
+            auto* type = getDebugType(baseType);
+            auto* debugType = dBuilder->createPointerType(type, sizeof(void*) * 8);
+            debugTypes.insert({sig, debugType});
+            return debugType;
+        }
+
+        if(valueCtx.type.storageType == ValueType::FuncRef)
+        {
+            auto* debugType = dBuilder->createPointerType(debugTypes.at("void"), sizeof(void*) * 8);
+            debugTypes.insert({sig, debugType});
+            return debugType;
+        }
+        assert(false);
+        return nullptr;
+    }
+
+    void ASTContext::setDebugScope(llvm::DIScope* scope) {
+        assert(!scopes.empty());
+        assert(!scopes.back().debugScope);
+        scopes.back().debugScope = scope;
+    }
+
+    llvm::DIScope* ASTContext::debugScope() const
+    {
+        for(auto itr = scopes.rbegin(); itr != scopes.rend(); ++itr)
+        {
+            auto scope = itr->debugScope;
+            if(scope)
+                return scope;
+        }
+        return diCompileUnit;
+    }
+
+    void ASTContext::setDebugLocation(const StatementContext* ctx)
+    {
+        if(!dBuilder)
+            return;
+        if(!ctx)
+        {
+            builder.SetCurrentDebugLocation(llvm::DebugLoc());
+            return;
+        }
+        auto scope = debugScope();
+        builder.SetCurrentDebugLocation(llvm::DILocation::get(scope->getContext(), ctx->range.start.line + 1, ctx->range.start.charPos, scope));
+    }
+
     ASTContext::~ASTContext() = default;
 
     DocumentContext* DocumentContext::getNodeAtChar(TextPos pos)
@@ -380,11 +500,13 @@ namespace BraneScript
         return deepCopy([](auto _) { return _; });
     }
 
-    DocumentContext* DocumentContext::findIdentifier(const std::string& identifier) {
+    DocumentContext* DocumentContext::findIdentifier(const std::string& identifier)
+    {
         return findIdentifier(identifier, 0);
     }
 
-    void DocumentContext::getFunction(const std::string& identifier, FunctionOverridesContext* overrides) {
+    void DocumentContext::getFunction(const std::string& identifier, FunctionOverridesContext* overrides)
+    {
         getFunction(identifier, overrides, 0);
     }
 
@@ -532,6 +654,7 @@ namespace BraneScript
         ctx.pushScope();
         if(!ctx.currentBlock)
             ctx.setInsertPoint(llvm::BasicBlock::Create(*ctx.llvmCtx, "", ctx.func));
+        ctx.setDebugLocation(this);
         for(auto& var : localVariables)
         {
             auto varValue = ctx.builder.CreateAlloca(ctx.getLLVMType(*var), nullptr, var->identifier.text);
@@ -592,16 +715,18 @@ namespace BraneScript
         if(!value)
         {
             assert(ctx.func->getReturnType()->isVoidTy());
+            ctx.setDebugLocation(this);
             ctx.destructStack();
             ctx.currentBlock = nullptr;
             return ctx.builder.CreateRetVoid();
         }
 
-        //TEMPORARY WORKAROUND until we have a proper metaprogramming system
+        // TEMPORARY WORKAROUND until we have a proper metaprogramming system
         if(value->returnType.type.storageType == ValueType::Void)
         {
             assert(ctx.func->getReturnType()->isVoidTy());
             value->createAST(ctx);
+            ctx.setDebugLocation(this);
             ctx.destructStack();
             ctx.currentBlock = nullptr;
             return ctx.builder.CreateRetVoid();
@@ -610,6 +735,7 @@ namespace BraneScript
         auto parentFunc = getParent<FunctionContext>();
         assert(parentFunc);
         auto retValue = value->createAST(ctx);
+        ctx.setDebugLocation(this);
         assert(retValue);
         if(!parentFunc->returnType.isRef && parentFunc->returnType.type.structCtx)
         {
@@ -672,51 +798,58 @@ namespace BraneScript
 
     llvm::Value* IfContext::createAST(ASTContext& ctx) const
     {
+        ctx.setDebugLocation(this);
         auto* cond = ctx.dereferenceToDepth(condition->createAST(ctx), 0);
         assert(cond->getType()->getIntegerBitWidth() == 1);
 
         llvm::BasicBlock* trueBranch = llvm::BasicBlock::Create(*ctx.llvmCtx, "", ctx.func);
-        llvm::BasicBlock* mergeBlock = llvm::BasicBlock::Create(*ctx.llvmCtx, "", ctx.func);
+        llvm::BasicBlock* mergeBlock = elseBody ? nullptr : llvm::BasicBlock::Create(*ctx.llvmCtx, "", ctx.func);
         llvm::BasicBlock* falseBranch = elseBody ? llvm::BasicBlock::Create(*ctx.llvmCtx, "", ctx.func) : mergeBlock;
-
 
         ctx.builder.CreateCondBr(cond, trueBranch, falseBranch);
         ctx.setInsertPoint(trueBranch);
         body->createAST(ctx);
         if(ctx.currentBlock)
+        {
+            if(!mergeBlock)
+                mergeBlock = llvm::BasicBlock::Create(*ctx.llvmCtx, "", ctx.func);
             ctx.builder.CreateBr(mergeBlock);
-        trueBranch = ctx.builder.GetInsertBlock();
+        }
 
         if(elseBody)
         {
             ctx.setInsertPoint(falseBranch);
             elseBody->createAST(ctx);
             if(ctx.currentBlock)
+            {
+                if(!mergeBlock)
+                    mergeBlock = llvm::BasicBlock::Create(*ctx.llvmCtx, "", ctx.func);
                 ctx.builder.CreateBr(mergeBlock);
-            falseBranch = ctx.builder.GetInsertBlock();
+            }
         }
-        else
-            falseBranch = mergeBlock;
 
-        ctx.setInsertPoint(mergeBlock);
+        if(mergeBlock)
+            ctx.setInsertPoint(mergeBlock);
 
         return nullptr;
     }
 
     llvm::Value* WhileContext::createAST(ASTContext& ctx) const
     {
-        ctx.builder.GetInsertBlock();
 
-        auto* header = llvm::BasicBlock::Create(*ctx.llvmCtx, "while", ctx.func);
-        auto* bodyBlock = llvm::BasicBlock::Create(*ctx.llvmCtx, "whileBdy", ctx.func);
+        auto* header = llvm::BasicBlock::Create(*ctx.llvmCtx, "whileHeader", ctx.func);
+        auto* bodyBlock = llvm::BasicBlock::Create(*ctx.llvmCtx, "whileBody", ctx.func);
         auto* end = llvm::BasicBlock::Create(*ctx.llvmCtx, "whileEnd", ctx.func);
 
+        ctx.builder.CreateBr(header);
         ctx.setInsertPoint(header);
+
         auto* cond = condition->createAST(ctx);
+        ctx.setDebugLocation(this);
         ctx.builder.CreateCondBr(cond, bodyBlock, end);
+
         ctx.setInsertPoint(bodyBlock);
         body->createAST(ctx);
-
         ctx.builder.CreateBr(header);
 
         ctx.setInsertPoint(end);
@@ -747,6 +880,7 @@ namespace BraneScript
         {
             r = ctx.dereferenceToDepth(r, lValue->returnType.type.storageType == ValueType::FuncRef ? 1 : 0);
             assert(l->getType()->getContainedType(0) == r->getType());
+            ctx.setDebugLocation(this);
             ctx.builder.CreateStore(r, l);
             return nullptr;
         }
@@ -758,6 +892,7 @@ namespace BraneScript
         structPointerType.isRef = true;
 
         std::vector<llvm::Value*> args = {l, ctx.dereferenceToDepth(r, 1)};
+        ctx.setDebugLocation(this);
         ctx.builder.CreateCall(cc->second, args);
         return nullptr;
     }
@@ -806,6 +941,7 @@ namespace BraneScript
 
     llvm::Value* RefAssignmentContext::createAST(ASTContext& ctx) const
     {
+        ctx.setDebugLocation(this);
         llvm::Value* l = ctx.dereferenceToDepth(lValue->createAST(ctx), 2);
         llvm::Value* r = ctx.dereferenceToDepth(rValue->createAST(ctx), 1);
 
@@ -835,7 +971,7 @@ namespace BraneScript
         auto* type = ctx.getLLVMType(value);
         auto nullValue = llvm::ConstantPointerNull::get(llvm::PointerType::get(type, 0));
         auto* offset = ctx.builder.CreateGEP(type, nullValue, llvm::ConstantInt::get(*ctx.llvmCtx, llvm::APInt(16, 1)));
-        return ctx.builder.CreatePtrToInt(offset,  ctx.getLLVMType(returnType), "typeSize");
+        return ctx.builder.CreatePtrToInt(offset, ctx.getLLVMType(returnType), "typeSize");
     }
 
     bool TypeSizeContext::isConstexpr() const { return !value.isRef; }
@@ -1052,7 +1188,6 @@ namespace BraneScript
         return callback(copy);
     }
 
-
     llvm::Value* FunctionOverridesContext::createAST(ASTContext& ctx) const
     {
         assert(false);
@@ -1085,6 +1220,7 @@ namespace BraneScript
 
     llvm::Value* FunctionReferenceContext::createAST(ASTContext& ctx) const
     {
+        ctx.setDebugLocation(this);
         auto func = ctx.functions.at(function->signature());
         return llvm::ConstantExpr::getBitCast(func, ctx.getLLVMType(returnType));
     }
@@ -1119,6 +1255,7 @@ namespace BraneScript
 
     llvm::Value* MemberAccessContext::createAST(ASTContext& ctx) const
     {
+        ctx.setDebugLocation(this);
         auto baseValue = ctx.dereferenceToDepth(baseExpression->createAST(ctx), 1);
 
         assert(baseValue->getType()->getContainedType(0)->isStructTy());
@@ -1383,6 +1520,7 @@ namespace BraneScript
     {
         auto l = ctx.dereferenceToDepth(lValue->createAST(ctx), 0);
         auto r = ctx.dereferenceToDepth(rValue->createAST(ctx), 0);
+        ctx.setDebugLocation(this);
         auto type = returnType.type.storageType;
         switch(type)
         {
@@ -1437,12 +1575,11 @@ namespace BraneScript
         returnType = ValueContext{{"bool", ValueType::Bool, nullptr}, false, false, false};
     }
 
-    bool NativeNotContext::isConstexpr() const {
-        return value->isConstexpr();
-    }
+    bool NativeNotContext::isConstexpr() const { return value->isConstexpr(); }
 
     llvm::Value* NativeNotContext::createAST(ASTContext& ctx) const
     {
+        ctx.setDebugLocation(this);
         auto v = ctx.dereferenceToDepth(value->createAST(ctx), 0);
         assert(v->getType()->isIntegerTy());
         return ctx.builder.CreateNot(v);
@@ -1457,20 +1594,19 @@ namespace BraneScript
 
     NativeLogicContext::NativeLogicContext(NativeLogicContext::Operation op,
                                            ExpressionContext* lValue,
-                                           ExpressionContext* rValue) : op(op), lValue(lValue), rValue(rValue)
+                                           ExpressionContext* rValue)
+        : op(op), lValue(lValue), rValue(rValue)
     {
         assert(lValue->returnType.type.storageType == ValueType::Bool);
         assert(rValue->returnType.type.storageType == ValueType::Bool);
         returnType.type = {"bool", ValueType::Bool, nullptr};
     }
 
-    bool NativeLogicContext::isConstexpr() const
-    {
-        return lValue->isConstexpr() && rValue->isConstexpr();
-    }
+    bool NativeLogicContext::isConstexpr() const { return lValue->isConstexpr() && rValue->isConstexpr(); }
 
     llvm::Value* NativeLogicContext::createAST(ASTContext& ctx) const
     {
+        ctx.setDebugLocation(this);
         auto l = ctx.dereferenceToDepth(lValue->createAST(ctx), 0);
         assert(l->getType()->isIntegerTy());
         auto r = ctx.dereferenceToDepth(rValue->createAST(ctx), 0);
@@ -1514,8 +1650,9 @@ namespace BraneScript
 
     llvm::Value* NativeCompareContext::createAST(ASTContext& ctx) const
     {
-        auto l = lValue->createAST(ctx);
-        auto r = rValue->createAST(ctx);
+        auto l = ctx.dereferenceToDepth(lValue->createAST(ctx), 0);
+        auto r = ctx.dereferenceToDepth(rValue->createAST(ctx), 0);
+        ctx.setDebugLocation(this);
         auto type = lValue->returnType.type.storageType;
         switch(type)
         {
@@ -1612,7 +1749,7 @@ namespace BraneScript
 
     llvm::Value* FunctionCallContext::createAST(ASTContext& ctx) const
     {
-
+        ctx.setDebugLocation(this);
         bool argRet = !returnType.isRef && returnType.type.structCtx;
         std::vector<llvm::Value*> args;
         if(argRet)
@@ -1638,7 +1775,8 @@ namespace BraneScript
             size_t argIndex = 0;
             for(auto& arg : arguments)
             {
-                bool isRefType = function->arguments[argIndex]->isRef || function->arguments[argIndex]->type.storageType == ValueType::FuncRef;
+                bool isRefType = function->arguments[argIndex]->isRef ||
+                                 function->arguments[argIndex]->type.storageType == ValueType::FuncRef;
                 args.push_back(ctx.dereferenceToDepth(arg->createAST(ctx), isRefType ? 1 : 0));
                 argIndex++;
             }
@@ -1683,12 +1821,10 @@ namespace BraneScript
         return retVal;
     }
 
-    bool LambdaInstanceContext::isConstexpr() const
-    {
-        return false;
-    }
+    bool LambdaInstanceContext::isConstexpr() const { return false; }
 
-    DocumentContext* LambdaInstanceContext::deepCopy(const std::function<DocumentContext*(DocumentContext*)>& callback) const
+    DocumentContext*
+    LambdaInstanceContext::deepCopy(const std::function<DocumentContext*(DocumentContext*)>& callback) const
     {
         auto* copy = new LambdaInstanceContext{};
         copyBase(this, copy);
@@ -1702,6 +1838,7 @@ namespace BraneScript
 
     llvm::Value* LambdaInstanceContext::createAST(ASTContext& ctx) const
     {
+        ctx.setDebugLocation(this);
         auto lt = ctx.getLLVMType(returnType);
         auto lambdaInstance = ctx.builder.CreateAlloca(lt, nullptr, "lambda");
         ctx.addValue(lambdaInstance, returnType);
@@ -1710,55 +1847,67 @@ namespace BraneScript
         assert(lambdaConstructor);
         ctx.builder.CreateCall(lambdaConstructor, {lambdaInstance});
 
-        auto allocateCaptureMem = ctx.functions.at(allocFunc->signature());
-        assert(allocateCaptureMem);
-        ctx.builder.CreateCall(allocateCaptureMem, {lambdaInstance});
-
-        auto dataType = ctx.getLLVMType({{"", ValueType::Struct, captureType}, true, false, false});
-        auto _data = ctx.builder.CreateStructGEP(lt, lambdaInstance, 0);
-        _data = ctx.builder.CreateLoad(_data->getType()->getContainedType(0), _data);
-        _data = ctx.builder.CreatePointerCast(_data, llvm::PointerType::get(dataType, 0));
-
-        size_t captureIndex = 0;
-        for(auto& capture : captures)
+        if(allocFunc)
         {
-            auto l = ctx.builder.CreateStructGEP(dataType, _data, captureIndex);
-            auto r = capture->createAST(ctx);
+            auto allocateCaptureMem = ctx.functions.at(allocFunc->signature());
+            assert(allocateCaptureMem);
+            ctx.builder.CreateCall(allocateCaptureMem, {lambdaInstance});
 
-            if(!capture->returnType.type.structCtx || captureType->variables[captureIndex]->isRef)
+            auto dataType = ctx.getLLVMType({{"", ValueType::Struct, captureType}, true, false, false});
+            auto _data = ctx.builder.CreateStructGEP(lt, lambdaInstance, 0);
+            _data = ctx.builder.CreateLoad(_data->getType()->getContainedType(0), _data);
+            _data = ctx.builder.CreatePointerCast(_data, llvm::PointerType::get(dataType, 0));
+
+            size_t captureIndex = 0;
+            for(auto& capture : captures)
             {
-                bool isRefType = captureType->variables[captureIndex]->isRef || captureType->variables[captureIndex]->type.storageType == ValueType::FuncRef;
-                ctx.builder.CreateStore(ctx.dereferenceToDepth(r, isRefType ? 1 : 0), l);
-                continue;
+                auto l = ctx.builder.CreateStructGEP(dataType, _data, captureIndex);
+                auto r = capture->createAST(ctx);
+
+                if(!capture->returnType.type.structCtx || captureType->variables[captureIndex]->isRef)
+                {
+                    bool isRefType = captureType->variables[captureIndex]->isRef ||
+                                     captureType->variables[captureIndex]->type.storageType == ValueType::FuncRef;
+                    ctx.builder.CreateStore(ctx.dereferenceToDepth(r, isRefType ? 1 : 0), l);
+                    continue;
+                }
+
+                auto cc = ctx.functions.find(capture->returnType.type.structCtx->copyConstructor->signature());
+                assert(cc != ctx.functions.end());
+                assert(cc->second->arg_size() == 2);
+                auto structPointerType = *captureType->variables[captureIndex];
+                structPointerType.isRef = true;
+
+                std::vector<llvm::Value*> args = {ctx.dereferenceToDepth(l, 1), ctx.dereferenceToDepth(r, 1)};
+                ctx.builder.CreateCall(cc->second, args);
+                captureIndex++;
             }
 
-            auto cc = ctx.functions.find(capture->returnType.type.structCtx->copyConstructor->signature());
-            assert(cc != ctx.functions.end());
-            assert(cc->second->arg_size() == 2);
-            auto structPointerType = *captureType->variables[captureIndex];
-            structPointerType.isRef = true;
+            auto _dataDestructor = ctx.builder.CreateStructGEP(lt, lambdaInstance, 2);
+            llvm::Value* dataDestructor = ctx.functions.at(captureType->destructor->signature());
+            dataDestructor =
+                ctx.builder.CreatePointerCast(dataDestructor, _dataDestructor->getType()->getContainedType(0));
+            ctx.builder.CreateStore(dataDestructor, _dataDestructor);
 
-            std::vector<llvm::Value*> args = {ctx.dereferenceToDepth(l, 1), ctx.dereferenceToDepth(r, 1)};
-            ctx.builder.CreateCall(cc->second, args);
-            captureIndex++;
+            auto _dataCopyConstructor = ctx.builder.CreateStructGEP(lt, lambdaInstance, 3);
+            llvm::Value* dataCopyConstructor = ctx.functions.at(copyFunc->signature());
+            dataCopyConstructor = ctx.builder.CreatePointerCast(dataCopyConstructor,
+                                                                _dataCopyConstructor->getType()->getContainedType(0));
+            ctx.builder.CreateStore(dataCopyConstructor, _dataCopyConstructor);
         }
+
 
         auto _f = ctx.builder.CreateStructGEP(lt, lambdaInstance, 1);
         llvm::Value* f = ctx.functions.at(func->signature());
         f = ctx.builder.CreatePointerCast(f, _f->getType()->getContainedType(0));
         ctx.builder.CreateStore(f, _f);
 
-        auto _dataDestructor = ctx.builder.CreateStructGEP(lt, lambdaInstance, 2);
-        llvm::Value* dataDestructor = ctx.functions.at(captureType->destructor->signature());
-        dataDestructor = ctx.builder.CreatePointerCast(dataDestructor, _dataDestructor->getType()->getContainedType(0));
-        ctx.builder.CreateStore(dataDestructor, _dataDestructor);
-
-        auto _dataCopyConstructor = ctx.builder.CreateStructGEP(lt, lambdaInstance, 3);
-        llvm::Value* dataCopyConstructor = ctx.functions.at(copyFunc->signature());
-        dataCopyConstructor = ctx.builder.CreatePointerCast(dataCopyConstructor, _dataCopyConstructor->getType()->getContainedType(0));
-        ctx.builder.CreateStore(dataCopyConstructor, _dataCopyConstructor);
-
         return lambdaInstance;
+    }
+
+    DocumentContext* LambdaInstanceContext::findIdentifier(const std::string& identifier, uint8_t searchOptions)
+    {
+        return captureType->findIdentifier(identifier, 0);
     }
 
     DocumentContext* FunctionContext::findIdentifier(const std::string& identifier, uint8_t searchOptions)
@@ -1845,26 +1994,37 @@ namespace BraneScript
 
         ctx.pushScope();
 
-        bool argReturn = !returnType.isRef && returnType.type.structCtx;
-        size_t index = argReturn ? -1 : 0;
-        for(auto& arg : ctx.func->args())
-        {
-            if(index == -1)
-            {
-                std::string id = "-retRef";
-                arg.setName(id);
-                ctx.addValue(id, &arg, returnType);
-                index++;
-                continue;
-            }
-            assert(index < arguments.size());
-            std::string& id = arguments[index]->identifier.text;
-            arg.setName(id);
-            ctx.addValue(id, &arg, *arguments[index++]);
-        }
+        if(ctx.dBuilder)
+            ctx.setDebugScope(ctx.debugSubprograms.at(signature()));
 
         if(body)
         {
+            ctx.currentBlock = llvm::BasicBlock::Create(*ctx.llvmCtx, "entry", ctx.func);
+            ctx.builder.SetInsertPoint(ctx.currentBlock);
+            ctx.setDebugLocation(body.get());
+            bool argReturn = !returnType.isRef && returnType.type.structCtx;
+            size_t index = argReturn ? -1 : 0;
+            for(auto& arg : ctx.func->args())
+            {
+                if(index == -1)
+                {
+                    std::string id = "-retRef";
+                    arg.setName(id);
+                    ctx.addValue(id, &arg, returnType);
+                    index++;
+                    continue;
+                }
+                assert(index < arguments.size());
+                //Using raw registers as values that might be set is more work than its worth when optimization can just take care of it for us (I'm not dealing with phi nodes right now!)
+                auto argValue =  ctx.builder.CreateAlloca(arg.getType(), nullptr, arguments[index]->identifier.text);
+                ctx.builder.CreateStore(&arg, argValue);
+                std::string& id = arguments[index]->identifier.text;
+                arg.setName(id);
+                ctx.addValue(id, argValue, *arguments[index++]);
+            }
+
+            if(ctx.dBuilder)
+                ctx.builder.SetCurrentDebugLocation(llvm::DebugLoc());
             body->createAST(ctx);
             if(returnType.type.storageType == ValueType::Void)
             {
@@ -1877,6 +2037,9 @@ namespace BraneScript
         }
 
         ctx.popScope();
+
+        if(ctx.dBuilder)
+            ctx.dBuilder->finalizeSubprogram(ctx.debugSubprograms.at(signature()));
 
         std::string funcError;
         llvm::raw_string_ostream funcErrStr(funcError);
@@ -1922,6 +2085,31 @@ namespace BraneScript
         std::string sig = signature();
         auto func = llvm::Function::Create(funcType, linkage, sig, ctx.module.get());
         ctx.functions.insert({sig, func});
+
+        if(!isLinked && ctx.dBuilder)
+        {
+            std::vector<llvm::Metadata*> dArgs;
+            size_t argIndex = 0;
+            for(auto& arg : arguments)
+            {
+                auto* argType = ctx.getDebugType(ValueContext{*arg});
+                dArgs.push_back(argType);
+            }
+
+            auto subType = ctx.dBuilder->createSubroutineType(ctx.dBuilder->getOrCreateTypeArray(dArgs));
+            llvm::DIScope* fCtx = ctx.diFile;
+            llvm::DISubprogram* sp = ctx.dBuilder->createFunction(fCtx,
+                                                                  identifier.text,
+                                                                  signature(),
+                                                                  ctx.diFile,
+                                                                  range.start.line,
+                                                                  subType,
+                                                                  range.start.line,
+                                                                  llvm::DINode::FlagPrototyped,
+                                                                  llvm::DISubprogram::SPFlagDefinition);
+            func->setSubprogram(sp);
+            ctx.debugSubprograms.insert({sig, sp});
+        }
     }
 
     DocumentContext* StructContext::getNodeAtChar(TextPos pos)
@@ -2016,10 +2204,7 @@ namespace BraneScript
         throw std::runtime_error("TemplateHandle can not create AST!");
     }
 
-    std::string TemplateHandle::longId() const
-    {
-        return parent->longId() + "::" + identifier.text;
-    }
+    std::string TemplateHandle::longId() const { return parent->longId() + "::" + identifier.text; }
 
     DocumentContext* TemplateHandle::deepCopy(const std::function<DocumentContext*(DocumentContext*)>& callback) const
     {
@@ -2078,8 +2263,7 @@ namespace BraneScript
         return DocumentContext::findIdentifier(id, searchOptions);
     }
 
-    void
-    ModuleContext::getFunction(const std::string& id, FunctionOverridesContext* overrides, uint8_t searchOptions)
+    void ModuleContext::getFunction(const std::string& id, FunctionOverridesContext* overrides, uint8_t searchOptions)
     {
         DocumentContext::getFunction(id, overrides, searchOptions);
         for(auto& f : functions)
@@ -2151,7 +2335,7 @@ namespace BraneScript
         return nullptr;
     }
 
-    IRModule ModuleContext::compile(llvm::LLVMContext* ctx, bool optimize, bool print)
+    IRModule ModuleContext::compile(llvm::LLVMContext* ctx, uint8_t flags) const
     {
         IRModule module;
         module.id = identifier.text;
@@ -2159,7 +2343,8 @@ namespace BraneScript
         llvm::CGSCCAnalysisManager CGAM;
 
         ASTContext cc(ctx, identifier.text);
-        if(optimize)
+        cc.flags = flags;
+        if(flags & CompileFlags_Optimize)
         {
             cc.fam = std::make_unique<llvm::FunctionAnalysisManager>();
             cc.mam = std::make_unique<llvm::ModuleAnalysisManager>();
@@ -2180,6 +2365,30 @@ namespace BraneScript
             cc.fpm = std::make_unique<llvm::FunctionPassManager>(PB.buildFunctionSimplificationPipeline(
                 llvm::PassBuilder::OptimizationLevel::O2, llvm::ThinOrFullLTOPhase::None));
         }
+        if(flags & CompileFlags_DebugInfo)
+        {
+            cc.module->addModuleFlag(llvm::Module::Warning, "Debug Info Version",
+                                     llvm::DEBUG_METADATA_VERSION);
+
+            if (llvm::Triple(llvm::sys::getProcessTriple()).isOSDarwin())
+                cc.module->addModuleFlag(llvm::Module::Warning, "Dwarf Version", 2);
+
+            cc.dBuilder = std::make_unique<llvm::DIBuilder>(*cc.module);
+            auto source = std::filesystem::canonical(getParent<ScriptContext>()->source);
+            cc.diFile = cc.dBuilder->createFile(source.filename().string(), source.parent_path().string());
+            cc.diCompileUnit = cc.dBuilder->createCompileUnit(
+                llvm::dwarf::DW_LANG_C, cc.diFile, "Brane Script Runtime", flags & CompileFlags_Optimize, "", 0);
+
+            cc.debugTypes.insert({"void", cc.dBuilder->createBasicType("void", 0, llvm::dwarf::DW_ATE_signed)});
+            cc.debugTypes.insert({"bool", cc.dBuilder->createBasicType("bool", 1, llvm::dwarf::DW_ATE_boolean)});
+            cc.debugTypes.insert({"char", cc.dBuilder->createBasicType("char", 8, llvm::dwarf::DW_ATE_unsigned_char)});
+            cc.debugTypes.insert({"uint", cc.dBuilder->createBasicType("uint", 32, llvm::dwarf::DW_ATE_unsigned)});
+            cc.debugTypes.insert({"int", cc.dBuilder->createBasicType("int", 32, llvm::dwarf::DW_ATE_signed)});
+            cc.debugTypes.insert({"uint64", cc.dBuilder->createBasicType("uint64", 64, llvm::dwarf::DW_ATE_unsigned)});
+            cc.debugTypes.insert({"int64", cc.dBuilder->createBasicType("int64", 64, llvm::dwarf::DW_ATE_signed)});
+            cc.debugTypes.insert({"float", cc.dBuilder->createBasicType("float", 32, llvm::dwarf::DW_ATE_float)});
+            cc.debugTypes.insert({"double", cc.dBuilder->createBasicType("double", 64, llvm::dwarf::DW_ATE_float)});
+        }
 
         createAST(cc);
 
@@ -2195,7 +2404,10 @@ namespace BraneScript
         if(cc.mpm)
             cc.mpm->run(*cc.module, *cc.mam);
 
-        if(print)
+        if(cc.dBuilder)
+            cc.dBuilder->finalize();
+
+        if(flags & CompileFlags_PrintIR)
             cc.printModule();
 
         llvm::raw_string_ostream bitcodeStream(module.bitcode);
@@ -2208,24 +2420,19 @@ namespace BraneScript
         module.functions = std::move(cc.exportedFunctions);
         module.globals = std::move(cc.exportedGlobals);
         for(auto& s : cc.definedStructs)
-        {
-            if(!s.second.isExported)
-                continue;
             module.structs.push_back(std::move(s.second.def));
-        }
 
         return std::move(module);
     }
 
-
-    IRScript ScriptContext::compile(llvm::LLVMContext* ctx, bool optimize, bool print)
+    IRScript ScriptContext::compile(llvm::LLVMContext* ctx, uint8_t flags)
     {
         IRScript script;
-        script.id = id;
+        script.id = source;
 
         for(auto& mod : modules)
         {
-            auto module = mod.second->compile(ctx, optimize, print);
+            auto module = mod.second->compile(ctx, flags);
             script.modules.insert({module.id, std::move(module)});
         }
 
@@ -2256,9 +2463,7 @@ namespace BraneScript
     void ScriptContext::getFunction(const std::string& identifier,
                                     FunctionOverridesContext* overrides,
                                     uint8_t searchOptions)
-    {
-
-    }
+    {}
 
     llvm::Value* ScriptContext::createAST(ASTContext& ctx) const
     {

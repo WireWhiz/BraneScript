@@ -8,11 +8,11 @@
 #include <gtest/gtest.h>
 #include "staticAnalysis/staticAnalyzer.h"
 
-#define checkCompileErrors(analyzer, testString) \
+#define checkCompileErrors(analyzer, path) \
     {\
-        if(!analyzer.getCtx("test")->errors.empty())\
+        if(!analyzer.getCtx(path)->errors.empty())\
         {\
-            for(auto& error : analyzer.getCtx("test")->errors)\
+            for(auto& error : analyzer.getCtx(path)->errors)\
             {\
                 auto bounds = error.range;\
                 std::cerr << "(" << bounds.start.line << ", " << bounds.start.charPos << ") " << error.message << std::endl;\

@@ -19,7 +19,7 @@ public:
   /**
    * Visit parse trees produced by braneParser.
    */
-    virtual std::any visitProgram(braneParser::ProgramContext *context) = 0;
+    virtual std::any visitModules(braneParser::ModulesContext *context) = 0;
 
     virtual std::any visitLink(braneParser::LinkContext *context) = 0;
 

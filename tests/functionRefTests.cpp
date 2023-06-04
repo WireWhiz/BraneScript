@@ -18,71 +18,13 @@ int addTwo(int a)
 
 TEST(BraneScript, FunctionRefs)
 {
-
-    std::string testString = R"(
-
-    module "tests"
-    {
-        FuncRef<int, int> globalFunc;
-
-        void setGlobalFuncExt(FuncRef<int, int> func)
-        {
-            globalFunc = func;
-        }
-
-        FuncRef<int, int> getGlobalFunc()
-        {
-            return globalFunc;
-        }
-
-        int callGlobalFunc(int value)
-        {
-            return globalFunc(value);
-        }
-
-        // Add multiple functions with the same name, to test function pointer selection
-        float addOne(float value)
-        {
-            return value + 1.0f;
-        }
-
-        int addOne(int value)
-        {
-            return value + 1;
-        }
-
-        void setGlobalFuncLoc()
-        {
-            globalFunc = addOne;
-        }
-
-        struct TestStruct
-        {
-            int value;
-        }
-
-        TestStruct getStruct(int value)
-        {
-            TestStruct testStruct;
-            testStruct.value = value;
-            return testStruct;
-        }
-
-        int testStructRet()
-        {
-            FuncRef<TestStruct, int> func = getStruct;
-            TestStruct testStruct = func(5);
-            return testStruct.value;
-        }
-    }
-)";
     StaticAnalyzer analyzer;
-    analyzer.load("test", testString);
-    analyzer.validate("test");
-    checkCompileErrors(analyzer, testString);
+    std::string path = "testScripts/functionRefTests.bs";
+    analyzer.load(path);
+    analyzer.validate(path);
+    checkCompileErrors(analyzer, path);
 
-    llvm::LLVMContext ctx;
-    auto ir = analyzer.getCtx("test")->scriptContext->compile(&ctx, false, true);
+    auto ir = analyzer.compile(path, CompileFlags_DebugInfo);
     ASSERT_TRUE(ir.modules.contains("tests"));
 
     ScriptRuntime rt;

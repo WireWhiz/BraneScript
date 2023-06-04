@@ -26,67 +26,13 @@ TEST(BraneScript, Lambdas)
     ASSERT_EQ(testLambda(), 5);
     ASSERT_EQ(testLambda2(), 5);
 
-    std::string testString = R"(
-    module "tests"
-    link "lambda"
-    link "string"
-    {
-        int testSimpleRefCapture(int value)
-        {
-            int testValue = 0;
-            void Lambda[ref testValue](int v)
-            {
-                testValue = v;
-            }(value);
-            return testValue;
-        }
-
-        string testStructRefCapture(ref string value)
-        {
-            string testValue = "";
-            void Lambda[ref testValue](ref string v)
-            {
-                testValue = v;
-            }(value);
-            return testValue;
-        }
-
-        Lambda<int> returnInt(int value)
-        {
-            float capturedValue = value;
-            return int Lambda[capturedValue]()
-            {
-                return capturedValue;
-            };
-        }
-
-        int callIntLambda(ref Lambda<int> lambda)
-        {
-            return lambda();
-        }
-
-        Lambda<string> returnString(ref string value)
-        {
-            return string Lambda[value]()
-            {
-                return value;
-            };
-        }
-
-        string callStringLambda(ref Lambda<string> lambda)
-        {
-            return lambda();
-        }
-    }
-)";
-
     StaticAnalyzer analyzer;
-    analyzer.load("test", testString);
-    analyzer.validate("test");
-    checkCompileErrors(analyzer, testString);
+    std::string path = "testScripts/lambdaTests.bs";
+    analyzer.load(path);
+    analyzer.validate(path);
+    checkCompileErrors(analyzer, path);
 
-    llvm::LLVMContext ctx;
-    auto ir = analyzer.getCtx("test")->scriptContext->compile(&ctx, false, true);
+    auto ir = analyzer.compile(path, CompileFlags_DebugInfo);
     ASSERT_TRUE(ir.modules.contains("tests"));
 
     ScriptRuntime rt;

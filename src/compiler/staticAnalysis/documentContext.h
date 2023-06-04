@@ -6,6 +6,7 @@
 #define BRANESCRIPT_FUNCTIONCONTEXT_H
 
 #include <cstdarg>
+#include <filesystem>
 #include <list>
 #include <ParserRuleContext.h>
 #include <string>
@@ -18,6 +19,7 @@
 #include <llvm/IR/PassManager.h>
 
 #include "irScript.h"
+#include "llvm/IR/DIBuilder.h"
 #include "llvm/IR/IRBuilder.h"
 #include "llvm/IR/LLVMContext.h"
 
@@ -136,12 +138,27 @@ namespace BraneScript
     };
 
     struct ScriptContext;
+    struct StatementContext;
+
+    enum CompileFlags : uint8_t
+    {
+        CompileFlags_None        = 0,
+        CompileFlags_Optimize    = 1 << 0,
+        CompileFlags_DebugInfo   = 1 << 1,
+        CompileFlags_PrintIR     = 1 << 2,
+    };
 
     struct ASTContext
     {
         llvm::LLVMContext* llvmCtx;
         llvm::IRBuilder<> builder;
         std::unique_ptr<llvm::Module> module;
+
+        std::unique_ptr<llvm::DIBuilder> dBuilder;
+        llvm::DICompileUnit* diCompileUnit = nullptr;
+        llvm::DIFile* diFile = nullptr;
+
+        uint8_t flags = CompileFlags_None;
 
         std::unique_ptr<llvm::FunctionAnalysisManager> fam;
         std::unique_ptr<llvm::ModuleAnalysisManager> mam;
@@ -155,8 +172,8 @@ namespace BraneScript
         {
             IRStructDef def;
             llvm::StructType* llvmType = nullptr;
-            bool isExported = false;
         };
+
         robin_hood::unordered_map<std::string, StructEntry> definedStructs;
 
         robin_hood::unordered_map<std::string, llvm::Constant*> globals;
@@ -165,6 +182,10 @@ namespace BraneScript
         std::vector<IRGlobal> exportedGlobals;
 
         robin_hood::unordered_set<std::string> linkedModules;
+
+
+        robin_hood::unordered_map<std::string, llvm::DIType*> debugTypes;
+        robin_hood::unordered_map<std::string, llvm::DISubprogram*> debugSubprograms;
 
         struct Scope
         {
@@ -175,17 +196,26 @@ namespace BraneScript
             };
             robin_hood::unordered_map<std::string, ScopeEntry> values;
             std::vector<ScopeEntry> unnamedValues;
+            llvm::DIScope* debugScope = nullptr;
         };
         std::list<Scope> scopes;
 
         void pushScope();
         void popScope();
+
+        void setDebugScope(llvm::DIScope* scope);
+        llvm::DIScope* debugScope() const;
+        void setDebugLocation(const StatementContext* ctx);
+
         void addValue(std::string id, llvm::Value* value, ValueContext context);
         void addValue(llvm::Value* value, ValueContext context);
         llvm::Value* findValue(const std::string& id);
+        //Very rare usage, only for function arguments at the moment
+        bool setValue(llvm::Value* old, llvm::Value* newValue);
 
         ASTContext(llvm::LLVMContext* llvmCtx, std::string moduleSource);
         llvm::Type* getLLVMType(const ValueContext& valueCtx);
+        llvm::DIType* getDebugType(ValueContext valueCtx);
         llvm::StructType* getStructDef(const StructContext* structCtx);
 
         std::function<llvm::GlobalVariable*()> makeGlobalVariable(LabeledValueContext& valueContext, bool shouldExport);
@@ -233,6 +263,14 @@ namespace BraneScript
         }
 
         template<typename T>
+        T* as() const
+        {
+            static_assert(std::is_base_of<DocumentContext, T>::value, "T must be a subclass of DocumentContext");
+            auto* r = dynamic_cast<T*>(this);
+            return r;
+        }
+
+        template<typename T>
         bool is()
         {
             return dynamic_cast<T*>(this);
@@ -248,9 +286,17 @@ namespace BraneScript
                 return p;
             return parent->getParent<T>();
         }
-
         template<typename T>
         T* getLast()
+        {
+            auto o = this->as<T>();
+            if(o)
+                return o;
+            return getParent<T>();
+        }
+
+        template<typename T>
+        T* getLast() const
         {
             auto o = this->as<T>();
             if(o)
@@ -746,6 +792,7 @@ namespace BraneScript
         FunctionContext* allocFunc = nullptr;
         FunctionContext* copyFunc = nullptr;
 
+        DocumentContext* findIdentifier(const std::string &identifier, uint8_t searchOptions) override;
         bool isConstexpr() const override;
         llvm::Value* createAST(ASTContext& ctx) const override;
         DocumentContext* deepCopy(const std::function<DocumentContext*(DocumentContext*)>& callback) const override;
@@ -832,14 +879,14 @@ namespace BraneScript
         void getFunction(const std::string& identifier, FunctionOverridesContext* overrides,
                          uint8_t searchOptions) override;
         llvm::Value* createAST(ASTContext& ctx) const override;
-        IRModule compile(llvm::LLVMContext* ctx, bool optimize = true, bool print = false);
+        IRModule compile(llvm::LLVMContext* ctx, uint8_t flags = CompileFlags_Optimize) const;
         std::string longId() const override;
         DocumentContext* deepCopy(const std::function<DocumentContext*(DocumentContext*)>& callback) const override;
     };
 
     struct ScriptContext : public DocumentContext
     {
-        std::string id;
+        std::filesystem::path source;
         LabeledNodeMap<ModuleContext> modules;
 
         DocumentContext* getNodeAtChar(TextPos pos) override;
@@ -849,7 +896,7 @@ namespace BraneScript
 
         llvm::Value* createAST(ASTContext& ctx) const override;
 
-        IRScript compile(llvm::LLVMContext* ctx, bool optimize = true, bool print = false);
+        IRScript compile(llvm::LLVMContext* ctx, uint8_t flags);
 
         DocumentContext* deepCopy(const std::function<DocumentContext*(DocumentContext*)>& callback) const override;
     };

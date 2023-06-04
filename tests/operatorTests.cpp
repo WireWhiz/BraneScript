@@ -111,12 +111,13 @@ TEST(BraneScript, Operators)
     testString += "}";
 
     StaticAnalyzer analyzer;
-    analyzer.load("test", testString);
-    analyzer.validate("test");
-    checkCompileErrors(analyzer, testString);
+    std::string path = "testScripts/operatorTests.bs";
+    analyzer.load(path, testString);
+    analyzer.validate(path);
+    checkCompileErrors(analyzer, path);
 
     llvm::LLVMContext ctx;
-    auto ir = analyzer.getCtx("test")->scriptContext->compile(&ctx, true, false);
+    auto ir = analyzer.getCtx(path)->scriptContext->compile(&ctx, CompileFlags_DebugInfo);
     ASSERT_TRUE(ir.modules.contains("tests"));
 
     ScriptRuntime rt;

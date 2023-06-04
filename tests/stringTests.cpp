@@ -10,39 +10,13 @@ using namespace BraneScript;
 
 TEST(BraneScript, Strings)
 {
-    std::string testString = R"(
-    module "tests"
-    link "string"
-    {
-        string testConst()
-        {
-            return "Hello World!";
-        }
-        char returnE()
-        {
-            return "ABCDE"[4];
-        }
-        string concat(ref string a, ref string b)
-        {
-            return a + b;
-        }
-        bool strEQ(ref string a, ref string b)
-        {
-            return a == b;
-        }
-        bool strNEQ(ref string a, ref string b)
-        {
-            return a != b;
-        }
-    }
-    )";
-
     StaticAnalyzer analyzer;
-    analyzer.load("test", testString);
-    analyzer.validate("test");
-    checkCompileErrors(analyzer, testString);
+    std::string path = "testScripts/stringTests.bs";
+    analyzer.load(path);
+    analyzer.validate(path);
+    checkCompileErrors(analyzer, path);
 
-    auto ir = analyzer.compile("test");
+    auto ir = analyzer.compile(path, CompileFlags_DebugInfo);
     ASSERT_TRUE(ir.modules.contains("tests"));
 
     ScriptRuntime rt;

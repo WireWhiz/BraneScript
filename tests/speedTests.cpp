@@ -36,28 +36,15 @@ TEST(BraneScript, Speed)
 {
 
     std::string testString = R"(
-    module "tests"
-    {
-        int iFib(int n)
-        {
-            if(n < 2)
-                return n;
-            return iFib(n-1) + iFib(n-2);
-        }
-        float fFib(float n)
-        {
-            if(n < 2f)
-                return n;
-            return fFib(n-1) + fFib(n-2);
-        }
-    }
+
 )";
     StaticAnalyzer analyzer;
-    analyzer.load("test", testString);
-    analyzer.validate("test");
-    checkCompileErrors(analyzer, testString);
+    std::string path = "testScripts/speedTests.bs";
+    analyzer.load(path);
+    analyzer.validate(path);
+    checkCompileErrors(analyzer, path);
 
-    auto ir = analyzer.compile("test");
+    auto ir = analyzer.compile(path, CompileFlags_DebugInfo);
     ASSERT_TRUE(ir.modules.contains("tests"));
 
     ScriptRuntime rt;

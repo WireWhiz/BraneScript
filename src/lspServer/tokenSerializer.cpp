@@ -62,7 +62,7 @@ namespace lsp
 
       public:
 
-        virtual std::any visitScopedID(braneParser::ScopedIDContext* ctx) override
+        std::any visitScopedID(braneParser::ScopedIDContext* ctx) override
         {
             if(ctx->child)
             {
@@ -74,7 +74,7 @@ namespace lsp
             return ctx;
         }
 
-        virtual std::any visitType(braneParser::TypeContext* ctx) override
+        std::any visitType(braneParser::TypeContext* ctx) override
         {
             auto typeName = std::any_cast<braneParser::ScopedIDContext*>(visitScopedID(ctx->name));
             appendToken(typeName->id, TokenType::Type);
@@ -83,20 +83,20 @@ namespace lsp
             return {};
         }
 
-        virtual std::any visitDeclaration(braneParser::DeclarationContext* ctx) override
+        std::any visitDeclaration(braneParser::DeclarationContext* ctx) override
         {
             visitChildren(ctx);
             appendToken(ctx->id, TokenType::Variable, TokenModifiers_Declaration);
             return {};
         }
 
-        virtual std::any visitGlobal(braneParser::GlobalContext *ctx) override {
+        std::any visitGlobal(braneParser::GlobalContext *ctx) override {
             visitChildren(ctx);
             appendToken(ctx->id, TokenType::Variable, TokenModifiers_Declaration);
             return {};
         }
 
-        virtual std::any visitStructDef(braneParser::StructDefContext* ctx) override
+        std::any visitStructDef(braneParser::StructDefContext* ctx) override
         {
             visit(ctx->template_);
             appendToken(ctx->id, TokenType::Type);
@@ -105,53 +105,43 @@ namespace lsp
             return {};
         }
 
-        virtual std::any visitConstString(braneParser::ConstStringContext* ctx) override
+        std::any visitConstString(braneParser::ConstStringContext* ctx) override
         {
             appendToken(ctx->getStart(), TokenType::String);
             return visitChildren(ctx);
         }
 
-        virtual std::any visitMemberFunctionCall(braneParser::MemberFunctionCallContext* ctx) override
-        {
-            visit(ctx->base);
-            appendToken(ctx->name, TokenType::Function);
-            visit(ctx->argumentPack());
-            return {};
-        }
-        virtual std::any visitMemberAccess(braneParser::MemberAccessContext *ctx) override {
+        std::any visitMemberAccess(braneParser::MemberAccessContext *ctx) override {
             visit(ctx->base);
             appendToken(ctx->member, TokenType::Variable);
             return {};
         }
 
-        virtual std::any visitFunctionCall(braneParser::FunctionCallContext* ctx) override
+        std::any visitFunctionCall(braneParser::FunctionCallContext* ctx) override
         {
-            auto typeName = std::any_cast<braneParser::ScopedIDContext*>(visitScopedID(ctx->id));
-            appendToken(typeName->id, TokenType::Function);
-            if(typeName->template_)
-                visit(typeName->template_);
+            visit(ctx->overrides);
             return visitChildren(ctx);
         }
 
-        virtual std::any visitConstFloat(braneParser::ConstFloatContext* ctx) override
+        std::any visitConstFloat(braneParser::ConstFloatContext* ctx) override
         {
             appendToken(ctx->getStart(), TokenType::Number);
             return visitChildren(ctx);
         }
 
-        virtual std::any visitId(braneParser::IdContext* ctx) override
+        std::any visitId(braneParser::IdContext* ctx) override
         {
             appendToken(ctx->getStart(), TokenType::Variable);
             return visitChildren(ctx);
         }
 
-        virtual std::any visitConstChar(braneParser::ConstCharContext* ctx) override
+        std::any visitConstChar(braneParser::ConstCharContext* ctx) override
         {
             appendToken(ctx->getStart(), TokenType::String);
             return visitChildren(ctx);
         }
 
-        virtual std::any visitFunction(braneParser::FunctionContext* ctx) override
+        std::any visitFunction(braneParser::FunctionContext* ctx) override
         {
             visit(ctx->sig);
             appendToken(ctx->sig->id, TokenType::Function, TokenModifiers_Definition);
@@ -161,9 +151,12 @@ namespace lsp
             return {};
         }
 
-        virtual std::any visitTemplateArgument(braneParser::TemplateArgumentContext* ctx) override
+        std::any visitTemplateDefArgument(braneParser::TemplateDefArgumentContext* ctx) override
         {
-            appendToken(ctx->id, TokenType::Type);
+            if(ctx->isTypedef)
+                appendToken(ctx->id, TokenType::Type);
+            else
+                visitType(ctx->exprType);
             return {};
         }
 

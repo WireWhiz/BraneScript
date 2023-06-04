@@ -1588,86 +1588,69 @@ namespace BraneScript
                 lambdaTemplateArgs.addArg(*arg);
 
             std::string lambdaID = "-Lambda" + std::to_string(_lambdaCounter++);
-            StructContext* lambdaCaptureStruct = getNode(_currentModule->structs, lambdaID + "Capture");
-            initDoc(lambdaCaptureStruct, ctx);
-            for(auto& var : ctx->capture->capturedVar())
+            StructContext* lambdaCaptureStruct = nullptr;
+            FunctionContext* copyData = nullptr;
+
+            if(ctx->capture)
             {
-                auto node = getIdentifierContext(var->id);
-                if(!node)
+                lambdaCaptureStruct = getNode(_currentModule->structs, lambdaID + "Capture");
+                initDoc(lambdaCaptureStruct, ctx);
+
+                for(auto& var : ctx->capture->capturedVar())
                 {
-                    recordError(var->id, "Unknown variable " + var->id->getText() + " was not found");
-                    continue;
+                    auto node = getIdentifierContext(var->id);
+                    if(!node)
+                    {
+                        recordError(var->id, "Unknown variable " + var->id->getText() + " was not found");
+                        continue;
+                    }
+                    auto capVar = node->as<LabeledValueContext>();
+                    if(!capVar)
+                    {
+                        recordError(var->id, "Identifier " + var->id->getText() + " is not a variable!");
+                        continue;
+                    }
+                    LabeledValueContext member = *capVar;
+                    member.isLValue = true;
+                    member.isRef = var->isRef;
+                    member.parent = lambdaCaptureStruct;
+                    lambdaCaptureStruct->variables.push_back(std::make_unique<LabeledValueContext>(std::move(member)));
+                    captures.emplace_back(new LabeledValueReferenceContext{*capVar});
                 }
-                auto capVar = node->as<LabeledValueContext>();
-                if(!capVar)
-                {
-                    recordError(var->id, "Identifier " + var->id->getText() + " is not a variable!");
-                    continue;
-                }
-                LabeledValueContext member = *capVar;
-                member.isLValue = true;
-                member.isRef = var->isRef;
-                member.parent = lambdaCaptureStruct;
-                lambdaCaptureStruct->variables.push_back(std::make_unique<LabeledValueContext>(std::move(member)));
-                captures.emplace_back(new LabeledValueReferenceContext{*capVar});
+
+                auto* parentFunc = getLast<FunctionContext>();
+                buildDefaultConstructor(lambdaCaptureStruct, ConstructorType::Default);
+                buildDefaultConstructor(lambdaCaptureStruct, ConstructorType::Copy);
+                buildDefaultConstructor(lambdaCaptureStruct, ConstructorType::Move);
+                buildDefaultConstructor(lambdaCaptureStruct, ConstructorType::Destructor);
+
+                std::vector<std::unique_ptr<LabeledValueContext>> captureArgs;
+                captureArgs.emplace_back(new LabeledValueContext{"this", ValueContext{{lambdaCaptureStruct->longId(), ValueType::Struct, lambdaCaptureStruct}, true, false, true}});
+                captureArgs.emplace_back(new LabeledValueContext{"other", ValueContext{{lambdaCaptureStruct->longId(), ValueType::Struct, lambdaCaptureStruct}, true, true, true}});
+                copyData = getFunctionNode(lambdaID + "CopyData", arguments);
+                initDoc(copyData, ctx);
+                copyData->arguments = std::move(captureArgs);
+                copyData->body = std::make_unique<ScopeContext>();
+                LabeledValueContext thisRef = *copyData->arguments[0];
+                thisRef.isRef = false;
+                copyData->body->expressions.emplace_back(new LabeledValueConstructionContext{thisRef});
+                copyData->body->expressions.emplace_back(new AssignmentContext{
+                    new LabeledValueReferenceContext(*copyData->arguments[0]),
+                    new LabeledValueReferenceContext{*copyData->arguments[1]}
+                });
+
+                popDoc(copyData);
+
+                arguments.insert(
+                    arguments.begin(),
+                    std::make_unique<LabeledValueContext>(
+                        "this",
+                        ValueContext{
+                            {lambdaCaptureStruct->longId(), ValueType::Struct, lambdaCaptureStruct}, false, false, true}));
+                popDoc(lambdaCaptureStruct);
             }
-            auto* parentFunc = getLast<FunctionContext>();
-            buildDefaultConstructor(lambdaCaptureStruct, ConstructorType::Default);
-            buildDefaultConstructor(lambdaCaptureStruct, ConstructorType::Copy);
-            buildDefaultConstructor(lambdaCaptureStruct, ConstructorType::Move);
-            buildDefaultConstructor(lambdaCaptureStruct, ConstructorType::Destructor);
 
-            std::vector<std::unique_ptr<LabeledValueContext>> captureArgs;
-            captureArgs.emplace_back(new LabeledValueContext{"this", ValueContext{{lambdaCaptureStruct->longId(), ValueType::Struct, lambdaCaptureStruct}, true, false, true}});
-            captureArgs.emplace_back(new LabeledValueContext{"other", ValueContext{{lambdaCaptureStruct->longId(), ValueType::Struct, lambdaCaptureStruct}, true, true, true}});
-            FunctionContext* copyData = getFunctionNode(lambdaID + "CopyData", arguments);
-            initDoc(copyData, ctx);
-            copyData->arguments = std::move(captureArgs);
-            copyData->body = std::make_unique<ScopeContext>();
-            LabeledValueContext thisRef = *copyData->arguments[0];
-            thisRef.isRef = false;
-            copyData->body->expressions.emplace_back(new LabeledValueConstructionContext{thisRef});
-            copyData->body->expressions.emplace_back(new AssignmentContext{
-                new LabeledValueReferenceContext(*copyData->arguments[0]),
-                new LabeledValueReferenceContext{*copyData->arguments[1]}
-            });
 
-            popDoc(copyData);
-
-            arguments.insert(
-                arguments.begin(),
-                std::make_unique<LabeledValueContext>(
-                    "this",
-                    ValueContext{
-                        {lambdaCaptureStruct->longId(), ValueType::Struct, lambdaCaptureStruct}, false, false, true}));
-
-            FunctionContext* func = getFunctionNode(lambdaID + "Body", arguments);
-            initDoc(func, ctx);
-            func->arguments = std::move(arguments);
-            func->returnType = std::any_cast<ValueContext>(visitType(ctx->returnType));
-
-            bool cachedFHR = _functionHasReturn;
-            bool cachedConstexpr = _enforceConstexpr;
-            _functionHasReturn = false;
-            _enforceConstexpr = func->isConstexpr;
-            func->body = std::make_unique<ScopeContext>();
-            initDoc(func->body.get(), ctx);
-            for(auto stmt : ctx->statement())
-            {
-                auto statement = asStmt(visit(stmt));
-                if(statement)
-                    func->body->expressions.push_back(std::move(statement));
-            }
-            popDoc(func->body.get());
-
-            if(!_functionHasReturn && func->returnType.type.storageType != ValueType::Void)
-                recordError(ctx->label, "Lambda never returns " + func->returnType.type.identifier);
-            popDoc(func);
-
-            _functionHasReturn = cachedFHR;
-            _enforceConstexpr = cachedConstexpr;
-
-            popDoc(lambdaCaptureStruct);
 
             auto lambdaLib = getIdentifierContext("lambda");
             if(!lambdaLib)
@@ -1698,28 +1681,59 @@ namespace BraneScript
                 RETURN_EXPR(lambdaCtx);
             }
 
-            TemplateArgs captureAllocArg;
-            captureAllocArg.addArg(
-                {{lambdaCaptureStruct->longId(), ValueType::Struct, lambdaCaptureStruct}, false, false, false});
-
-            auto allocFuncTemplate = lambdaType->templates.find("_allocCaptureData");
-            if(allocFuncTemplate == lambdaType->templates.end() || !allocFuncTemplate->second->is<TemplateHandle>())
+            if(lambdaCaptureStruct)
             {
-                recordError(ctx->label,
-                            "Lambda alloc function could not be constructed, native libraries may be damaged!");
-                popDoc(lambdaCtx);
-                RETURN_EXPR(lambdaCtx);
+                TemplateArgs captureAllocArg;
+                captureAllocArg.addArg(
+                    {{lambdaCaptureStruct->longId(), ValueType::Struct, lambdaCaptureStruct}, false, false, false});
+
+                auto allocFuncTemplate = lambdaType->templates.find("_allocCaptureData");
+                if(allocFuncTemplate == lambdaType->templates.end() || !allocFuncTemplate->second->is<TemplateHandle>())
+                {
+                    recordError(ctx->label,
+                                "Lambda alloc function could not be constructed, native libraries may be damaged!");
+                    popDoc(lambdaCtx);
+                    RETURN_EXPR(lambdaCtx);
+                }
+                lambdaCtx->allocFunc =
+                    getInstance(allocFuncTemplate->second->as<TemplateHandle>(), captureAllocArg)->as<FunctionContext>();
+                assert(lambdaCtx->allocFunc);
             }
-            lambdaCtx->allocFunc =
-                getInstance(allocFuncTemplate->second->as<TemplateHandle>(), captureAllocArg)->as<FunctionContext>();
-            assert(lambdaCtx->allocFunc);
 
             lambdaCtx->returnType = {{lambdaType->longId(), ValueType::Struct, lambdaType}, true, false, false};
             lambdaCtx->lambdaType = lambdaType;
             lambdaCtx->captureType = lambdaCaptureStruct;
             lambdaCtx->captures = std::move(captures);
-            lambdaCtx->func = func;
             lambdaCtx->copyFunc = copyData;
+
+            FunctionContext* func = getFunctionNode(lambdaID + "Body", arguments);
+            initDoc(func, ctx);
+            func->arguments = std::move(arguments);
+            func->returnType = std::any_cast<ValueContext>(visitType(ctx->returnType));
+
+            bool cachedFHR = _functionHasReturn;
+            bool cachedConstexpr = _enforceConstexpr;
+            _functionHasReturn = false;
+            _enforceConstexpr = func->isConstexpr;
+            func->body = std::make_unique<ScopeContext>();
+            initDoc(func->body.get(), ctx);
+            for(auto stmt : ctx->statement())
+            {
+                auto statement = asStmt(visit(stmt));
+                if(statement)
+                    func->body->expressions.push_back(std::move(statement));
+            }
+            popDoc(func->body.get());
+
+            if(!_functionHasReturn && func->returnType.type.storageType != ValueType::Void)
+                recordError(ctx->label, "Lambda never returns " + func->returnType.type.identifier);
+            popDoc(func);
+
+            _functionHasReturn = cachedFHR;
+            _enforceConstexpr = cachedConstexpr;
+
+
+            lambdaCtx->func = func;
 
             popDoc(lambdaCtx);
             RETURN_EXPR(lambdaCtx);
@@ -2735,9 +2749,10 @@ namespace BraneScript
             RETURN_EXPR(callCtx);
         }
 
-        std::any visitProgram(braneParser::ProgramContext* ctx) override
+        std::any visitModules(braneParser::ModulesContext* ctx) override
         {
-            visitChildren(ctx);
+            for(auto* module : ctx->module())
+                visit(module);
             return {};
         }
 
@@ -2778,17 +2793,20 @@ namespace BraneScript
             _result.parseCtx.parser = std::make_unique<braneParser>(_result.parseCtx.tokenStream.get());
             _result.parseCtx.parser->removeErrorListeners();
 
+
             _result.parseCtx.lexErrorListener = std::make_unique<BraneErrorListener>();
             auto* lexErrorListener = dynamic_cast<BraneErrorListener*>(_result.parseCtx.lexErrorListener.get());
             lexErrorListener->setAnalyzer(this);
             _result.parseCtx.lexer->addErrorListener(_result.parseCtx.lexErrorListener.get());
+
             _result.parseCtx.parseErrorListener = std::make_unique<BraneErrorListener>();
             auto* parseErrorListener = dynamic_cast<BraneErrorListener*>(_result.parseCtx.parseErrorListener.get());
             parseErrorListener->setAnalyzer(this);
             _result.parseCtx.parser->addErrorListener(_result.parseCtx.parseErrorListener.get());
 
             _documentContext.push(_result.scriptContext.get());
-            visit(_result.parseCtx.parser->program());
+            auto* modules = _result.parseCtx.parser->modules();
+            visit(modules);
             _documentContext.pop();
 
             // Trim modules that were no longer defined this pass
@@ -2845,7 +2863,7 @@ namespace BraneScript
         if(!context->scriptContext)
             context->scriptContext = std::make_unique<ScriptContext>();
         context->complete = false;
-        context->scriptContext->id = path;
+        context->scriptContext->source = path;
 
         Analyzer(*this, *context, true, allowUnsafe).analyze();
 
@@ -2944,12 +2962,12 @@ namespace BraneScript
         return _analyzationContexts.at(path)->errors.empty();
     }
 
-    IRScript StaticAnalyzer::compile(const std::string& path)
+    IRScript StaticAnalyzer::compile(const std::string& path, uint8_t flags)
     {
         assert(isValid(path));
         assert(_analyzationContexts.at(path)->complete); // validate() must be called before compile()
         llvm::LLVMContext llvmContext;
-        return _analyzationContexts.at(path)->scriptContext->compile(&llvmContext);
+        return _analyzationContexts.at(path)->scriptContext->compile(&llvmContext, flags);
     }
 
     StaticAnalyzer::~StaticAnalyzer() = default;

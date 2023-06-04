@@ -1,0 +1,26 @@
+module "tests"
+{
+    int testValue;
+
+    ref int getInt()
+    {
+        return testValue;
+    }
+
+    void addOne(ref int value)
+    {
+        value = value + 1;
+    }
+
+    int addOneCall()
+    {
+        int localTestValue = 0;
+        addOne(localTestValue);
+        return localTestValue;
+    }
+
+    void addOneToRef(ref int value)
+    {
+        addOne(value);
+    }
+}

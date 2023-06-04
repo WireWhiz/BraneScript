@@ -1,0 +1,22 @@
+module "tests"
+    {
+        bool testBoolCast(int a, int b)
+        {
+            return a > b;
+        }
+
+        bool testAnd(bool a, bool b)
+        {
+            return a && b;
+        }
+
+        bool testOr(bool a, bool b)
+        {
+            return a || b;
+        }
+
+        bool testNot(bool a)
+        {
+            return !a;
+        }
+        //This gets appended to in the test

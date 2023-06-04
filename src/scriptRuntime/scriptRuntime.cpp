@@ -66,6 +66,8 @@ namespace BraneScript
 
         _linkingLayer = std::make_unique<llvm::orc::RTDyldObjectLinkingLayer>(
             *_session, []() { return std::make_unique<llvm::SectionMemoryManager>(); });
+        _linkingLayer->registerJITEventListener(*llvm::JITEventListener::createGDBRegistrationListener());
+        _linkingLayer->setProcessAllSections(true);
         _compileLayer = std::make_unique<llvm::orc::IRCompileLayer>(
             *_session, *_linkingLayer, std::make_unique<llvm::orc::ConcurrentIRCompiler>(jtmb));
         std::shared_ptr<llvm::TargetMachine> tm;
@@ -83,6 +85,8 @@ namespace BraneScript
                     fprintf(stderr, "%s", module.c_str());
                     throw std::runtime_error("Module verification failed: " + modErrStr.str());
                 }
+
+                return std::move(m); //TODO make this a switch on debug/release mode
 
                 llvm::LoopAnalysisManager lam;
                 llvm::FunctionAnalysisManager fam;
@@ -115,7 +119,6 @@ namespace BraneScript
 
                 return std::move(m);
             });
-
 
         NativeLibrary unsafeLib("unsafe");
         unsafeLib.addFunction("unsafe::malloc(uint)", (FuncRef<void*, int>)[](int size){

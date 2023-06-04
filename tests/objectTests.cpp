@@ -44,110 +44,7 @@ struct NestedStructBase
 TEST(BraneScript, Objects)
 {
     std::string testString = R"(
-    module "tests"
-    link "BraneScript"
-    {
-        float getMember1(ref TestStruct1 s)
-        {
-            return s.a;
-        }
-        int getMember2(ref TestStruct1 s)
-        {
-            return s.b;
-        }
-        bool getMember3(ref TestStruct1 s)
-        {
-            return s.c;
-        }
 
-        TestStruct1 createStruct()
-        {
-            TestStruct1 output;
-            output.a = 6.9f;
-            output.b = 420;
-            output.c = false;
-            TestStruct1 notOut = output;
-            notOut.a = 43;
-            return output;
-        }
-
-        TestStruct1 createStructClean()
-        {
-            TestStruct1 output;
-            output.a = 6.9f;
-            output.b = 420;
-            output.c = false;
-            return output;
-        }
-
-        TestStruct1 testReturnThroughArg()
-        {
-            return createStructClean();
-        }
-
-        void testDestruct()
-        {
-            TestStruct1 temp = createStruct();
-        }
-
-        struct TestStruct2
-        {
-            int a;
-            bool b;
-            float c;
-            void _construct()
-            {
-                a = 5;
-                b = true;
-                c = 3.2f;
-            }
-            float sum()
-            {
-                return a + c;
-            }
-        }
-
-        TestStruct2 testScriptStruct()
-        {
-            TestStruct2 output;
-            return output;
-        }
-
-        void modStruct(ref TestStruct2 s)
-        {
-              s.c = 4.2f;
-        }
-
-        float testMemberFunc(ref TestStruct2 s)
-        {
-            return s.sum();
-        }
-
-        struct NestedStructBase
-        {
-            float a;
-            TestStruct1 b;
-            float c;
-            void _construct()
-            {
-                a = 5;
-            }
-            void _destruct()
-            {
-            }
-        }
-
-        NestedStructBase nestedTest()
-        {
-            NestedStructBase base;
-            base.c = 42;
-            base.b.b = 4;
-            NestedStructBase copied = base;
-            return copied;
-        }
-
-
-    }
 )";
 
     std::string header = R"(
@@ -197,12 +94,12 @@ TEST(BraneScript, Objects)
 
     StaticAnalyzer analyzer;
     analyzer.load("header", header);
-    analyzer.load("test", testString);
-    analyzer.validate("test");
-    checkCompileErrors(analyzer, testString);
+    std::string path = "testScripts/objectTests.bs";
+    analyzer.load(path);
+    analyzer.validate(path);
+    checkCompileErrors(analyzer, path);
 
-    llvm::LLVMContext ctx;
-    auto ir = analyzer.getCtx("test")->scriptContext->compile(&ctx, true, false);
+    auto ir = analyzer.compile(path, CompileFlags_DebugInfo);
     ASSERT_TRUE(ir.modules.contains("tests"));
 
     ScriptRuntime rt;

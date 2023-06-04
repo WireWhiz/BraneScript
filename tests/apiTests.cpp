@@ -15,18 +15,8 @@ void BS_API_CALL setRef(int newVal)
 
 TEST(BraneScript, API)
 {
-    std::string testString = R"(
-    module "tests"
-    link "testLib" as "lib"
-    {
-        void setRef(int v)
-        {
-            lib::setRef(v);
-        }
-    }
-)";
 
-    std::string testLibString = R"(
+    std::string header = R"(
     module "testLib"
     {
         void setRef(int v) ext;
@@ -37,13 +27,14 @@ TEST(BraneScript, API)
     testLib.addFunction("testLib::setRef(int)", setRef);
 
     StaticAnalyzer analyzer;
-    analyzer.load("test", testString);
-    analyzer.load("testLib", testLibString);
-    analyzer.validate("test");
-    checkCompileErrors(analyzer, testString)
+    std::string path = "testScripts/apiTests.bs";
+    analyzer.load(path);
+    analyzer.load("header", header);
+    analyzer.validate(path);
+    checkCompileErrors(analyzer, path);
 
     llvm::LLVMContext ctx;
-    auto ir = analyzer.getCtx("test")->scriptContext->compile(&ctx, true, true);
+    auto ir = analyzer.getCtx(path)->scriptContext->compile(&ctx, CompileFlags_DebugInfo);
     ASSERT_TRUE(ir.modules.contains("tests"));
 
     ScriptRuntime rt;

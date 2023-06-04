@@ -1,0 +1,51 @@
+module "tests"
+link "lambda"
+link "string"
+{
+    int testSimpleRefCapture(int value)
+    {
+        int testValue = 0;
+        void Lambda[ref testValue](int v)
+        {
+            testValue = v;
+        }(value);
+        return testValue;
+    }
+
+    string testStructRefCapture(ref string value)
+    {
+        string testValue = "";
+        void Lambda[ref testValue](ref string v)
+        {
+            testValue = v;
+        }(value);
+        return testValue;
+    }
+
+    Lambda<int> returnInt(int value)
+    {
+        float capturedValue = value;
+        return int Lambda[capturedValue]()
+        {
+            return capturedValue;
+        };
+    }
+
+    int callIntLambda(ref Lambda<int> lambda)
+    {
+        return lambda();
+    }
+
+    Lambda<string> returnString(ref string value)
+    {
+        return string Lambda[value]()
+        {
+            return value;
+        };
+    }
+
+    string callStringLambda(ref Lambda<string> lambda)
+    {
+        return lambda();
+    }
+}

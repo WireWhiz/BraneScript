@@ -78,7 +78,7 @@ namespace BraneScript
         void reload(const std::string& path);
 
         bool isValid(const std::string& path);
-        IRScript compile(const std::string& path);
+        IRScript compile(const std::string& path, uint8_t flags = CompileFlags_Optimize);
 
         AnalyzationContext* getCtx(const std::string& path);
 

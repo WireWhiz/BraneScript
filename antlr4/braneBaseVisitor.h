@@ -15,7 +15,7 @@
 class  braneBaseVisitor : public braneVisitor {
 public:
 
-  virtual std::any visitProgram(braneParser::ProgramContext *ctx) override {
+  virtual std::any visitModules(braneParser::ModulesContext *ctx) override {
     return visitChildren(ctx);
   }
 
