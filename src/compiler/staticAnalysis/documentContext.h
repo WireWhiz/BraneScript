@@ -168,6 +168,8 @@ namespace BraneScript
         llvm::Function* func = nullptr;
         llvm::BasicBlock* currentBlock = nullptr;
 
+        llvm::DISubprogram* diFunction = nullptr;
+
         struct StructEntry
         {
             IRStructDef def;

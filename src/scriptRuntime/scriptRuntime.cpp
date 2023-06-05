@@ -39,7 +39,7 @@ namespace BraneScript
     int64_t ScriptRuntime::_scriptMallocDiff = 0;
     bool llvmInitialized = false;
 
-    ScriptRuntime::ScriptRuntime()
+    ScriptRuntime::ScriptRuntime(ScriptRuntimeMode mode) : _mode(mode)
     {
         if(!llvmInitialized)
         {
@@ -66,14 +66,19 @@ namespace BraneScript
 
         _linkingLayer = std::make_unique<llvm::orc::RTDyldObjectLinkingLayer>(
             *_session, []() { return std::make_unique<llvm::SectionMemoryManager>(); });
-        _linkingLayer->registerJITEventListener(*llvm::JITEventListener::createGDBRegistrationListener());
-        _linkingLayer->setProcessAllSections(true);
+
+        if(_mode == ScriptRuntimeMode_Debug)
+        {
+            _linkingLayer->registerJITEventListener(*llvm::JITEventListener::createGDBRegistrationListener());
+            _linkingLayer->setProcessAllSections(true);
+        }
+
         _compileLayer = std::make_unique<llvm::orc::IRCompileLayer>(
             *_session, *_linkingLayer, std::make_unique<llvm::orc::ConcurrentIRCompiler>(jtmb));
         std::shared_ptr<llvm::TargetMachine> tm;
         if(auto etm = jtmb.createTargetMachine())
             tm = std::move(*etm);
-        _transformLayer = std::make_unique<llvm::orc::IRTransformLayer>(*_session, *_compileLayer, [tm](llvm::orc::ThreadSafeModule m, const auto& r) {
+        _transformLayer = std::make_unique<llvm::orc::IRTransformLayer>(*_session, *_compileLayer, [this, tm](llvm::orc::ThreadSafeModule m, const auto& r) {
                 // Add some optimizations.
                 std::string moduleErr;
                 llvm::raw_string_ostream modErrStr(moduleErr);
@@ -86,7 +91,8 @@ namespace BraneScript
                     throw std::runtime_error("Module verification failed: " + modErrStr.str());
                 }
 
-                return std::move(m); //TODO make this a switch on debug/release mode
+                if(_mode == ScriptRuntimeMode_Debug)
+                    return std::move(m);
 
                 llvm::LoopAnalysisManager lam;
                 llvm::FunctionAnalysisManager fam;

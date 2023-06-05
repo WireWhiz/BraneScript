@@ -76,10 +76,10 @@ namespace lsp
 
         std::any visitType(braneParser::TypeContext* ctx) override
         {
-            auto typeName = std::any_cast<braneParser::ScopedIDContext*>(visitScopedID(ctx->name));
-            appendToken(typeName->id, TokenType::Type);
-            if(typeName->template_)
-                visit(typeName->template_);
+            appendToken(ctx->name->id, TokenType::Type);
+            if(ctx->name->template_)
+                visit(ctx->name->template_);
+            visitScopedID(ctx->name);
             return {};
         }
 
@@ -98,7 +98,8 @@ namespace lsp
 
         std::any visitStructDef(braneParser::StructDefContext* ctx) override
         {
-            visit(ctx->template_);
+            if(ctx->template_)
+                visit(ctx->template_);
             appendToken(ctx->id, TokenType::Type);
             for(auto m : ctx->structMember())
                 visit(m);
@@ -120,7 +121,8 @@ namespace lsp
         std::any visitFunctionCall(braneParser::FunctionCallContext* ctx) override
         {
             visit(ctx->overrides);
-            return visitChildren(ctx);
+            visit(ctx->argumentPack());
+            return {};
         }
 
         std::any visitConstFloat(braneParser::ConstFloatContext* ctx) override
@@ -169,7 +171,7 @@ namespace lsp
 
             braneParser parser(&tokenStream);
             parser.removeErrorListeners();
-            visit(parser.program());
+            visit(parser.modules());
 
             return std::move(tokens);
         }

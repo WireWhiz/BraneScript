@@ -11,8 +11,8 @@
 #include "llvm/IR/PassManager.h"
 #include "llvm/IR/Verifier.h"
 #include "llvm/Passes/PassBuilder.h"
-#include "llvm/Transforms/Scalar.h"
 #include "llvm/Support/Host.h"
+#include "llvm/Transforms/Scalar.h"
 
 namespace BraneScript
 {
@@ -196,7 +196,8 @@ namespace BraneScript
                                                        structSize,
                                                        largestAlignment,
                                                        llvm::DINode::DIFlags::FlagZero,
-                                                       nullptr, dBuilder->getOrCreateArray(members));
+                                                       nullptr,
+                                                       dBuilder->getOrCreateArray(members));
             debugTypes.insert({structCtx->longId(), dStruct});
         }
 
@@ -304,7 +305,6 @@ namespace BraneScript
         return nullptr;
     }
 
-
     bool ASTContext::setValue(llvm::Value* old, llvm::Value* newValue)
     {
         for(auto itr = scopes.rbegin(); itr != scopes.rend(); ++itr)
@@ -399,7 +399,7 @@ namespace BraneScript
         return 1 + pointerDepth(type->getContainedType(0));
     }
 
-    //Passing value context as value is intentional here to make sure .signature() does not inclulde a variable name
+    // Passing value context as value is intentional here to make sure .signature() does not inclulde a variable name
     llvm::DIType* ASTContext::getDebugType(ValueContext valueCtx)
     {
         valueCtx.isConst = false;
@@ -428,7 +428,8 @@ namespace BraneScript
         return nullptr;
     }
 
-    void ASTContext::setDebugScope(llvm::DIScope* scope) {
+    void ASTContext::setDebugScope(llvm::DIScope* scope)
+    {
         assert(!scopes.empty());
         assert(!scopes.back().debugScope);
         scopes.back().debugScope = scope;
@@ -455,7 +456,8 @@ namespace BraneScript
             return;
         }
         auto scope = debugScope();
-        builder.SetCurrentDebugLocation(llvm::DILocation::get(scope->getContext(), ctx->range.start.line + 1, ctx->range.start.charPos, scope));
+        builder.SetCurrentDebugLocation(
+            llvm::DILocation::get(scope->getContext(), ctx->range.start.line + 1, ctx->range.start.charPos, scope));
     }
 
     ASTContext::~ASTContext() = default;
@@ -654,11 +656,34 @@ namespace BraneScript
         ctx.pushScope();
         if(!ctx.currentBlock)
             ctx.setInsertPoint(llvm::BasicBlock::Create(*ctx.llvmCtx, "", ctx.func));
-        ctx.setDebugLocation(this);
+        if(ctx.dBuilder)
+        {
+            auto newScope = ctx.dBuilder->createLexicalBlock(ctx.debugScope(), ctx.diFunction->getFile(),
+                                                             range.start.line, range.start.charPos);
+            ctx.setDebugScope(newScope);
+            ctx.setDebugLocation(this);
+        }
+        size_t varIndex = 0;
         for(auto& var : localVariables)
         {
             auto varValue = ctx.builder.CreateAlloca(ctx.getLLVMType(*var), nullptr, var->identifier.text);
             ctx.addValue(var->identifier.text, varValue, *var);
+            if(ctx.dBuilder)
+            {
+                auto* dType = ctx.getDebugType(*var);
+                auto line = var->range.start.line;
+                auto charPos = var->range.start.charPos;
+                llvm::DILocalVariable* dVar = ctx.dBuilder->createAutoVariable(
+                    ctx.debugScope(), var->identifier.text, ctx.diFunction->getFile(), line, dType, true);
+
+                //TODO move this to where the variable is declared in the grammar to make debug info cleaner
+                ctx.dBuilder->insertDeclare(
+                    varValue,
+                    dVar,
+                    ctx.dBuilder->createExpression(),
+                    llvm::DILocation::get(ctx.debugScope()->getContext(), line, charPos, ctx.debugScope()),
+                    ctx.currentBlock);
+            }
         }
         for(auto& expression : expressions)
         {
@@ -873,7 +898,8 @@ namespace BraneScript
 
     llvm::Value* AssignmentContext::createAST(ASTContext& ctx) const
     {
-        llvm::Value* l = ctx.dereferenceToDepth(lValue->createAST(ctx), lValue->returnType.type.storageType == ValueType::FuncRef ? 2 : 1);
+        llvm::Value* l = ctx.dereferenceToDepth(lValue->createAST(ctx),
+                                                lValue->returnType.type.storageType == ValueType::FuncRef ? 2 : 1);
         llvm::Value* r = rValue->createAST(ctx);
 
         assert(l->getType()->isPointerTy());
@@ -2000,7 +2026,10 @@ namespace BraneScript
         ctx.pushScope();
 
         if(ctx.dBuilder)
-            ctx.setDebugScope(ctx.debugSubprograms.at(signature()));
+        {
+            ctx.diFunction = ctx.debugSubprograms.at(signature());
+            ctx.setDebugScope(ctx.diFunction);
+        }
 
         if(body)
         {
@@ -2020,12 +2049,30 @@ namespace BraneScript
                     continue;
                 }
                 assert(index < arguments.size());
-                //Using raw registers as values that might be set is more work than its worth when optimization can just take care of it for us (I'm not dealing with phi nodes right now!)
-                auto argValue =  ctx.builder.CreateAlloca(arg.getType(), nullptr, arguments[index]->identifier.text);
+                // Using raw registers as values that might be set is more work than its worth when optimization can
+                // just take care of it for us (I'm not dealing with phi nodes right now!)
+                auto argValue = ctx.builder.CreateAlloca(arg.getType(), nullptr, arguments[index]->identifier.text);
                 ctx.builder.CreateStore(&arg, argValue);
                 std::string& id = arguments[index]->identifier.text;
                 arg.setName(id);
-                ctx.addValue(id, argValue, *arguments[index++]);
+                ctx.addValue(id, argValue, *arguments[index]);
+
+                if(ctx.dBuilder)
+                {
+                    auto* dType = ctx.getDebugType(*arguments[index]);
+                    auto line = arguments[index]->range.start.line;
+                    auto charPos = arguments[index]->range.start.charPos;
+                    llvm::DILocalVariable* dArg = ctx.dBuilder->createParameterVariable(
+                        ctx.debugScope(), arguments[index]->identifier.text, index, ctx.diFunction->getFile(), line, dType, true);
+
+                    ctx.dBuilder->insertDeclare(
+                        argValue,
+                        dArg,
+                        ctx.dBuilder->createExpression(),
+                        llvm::DILocation::get(ctx.debugScope()->getContext(), line, charPos, ctx.debugScope()),
+                        ctx.currentBlock);
+                }
+                index++;
             }
 
             if(ctx.dBuilder)
@@ -2044,16 +2091,16 @@ namespace BraneScript
         ctx.popScope();
 
         if(ctx.dBuilder)
-            ctx.dBuilder->finalizeSubprogram(ctx.debugSubprograms.at(signature()));
+            ctx.dBuilder->finalizeSubprogram(ctx.diFunction);
 
         std::string funcError;
         llvm::raw_string_ostream funcErrStr(funcError);
         if(llvm::verifyFunction(*ctx.func, &funcErrStr))
         {
-            ctx.printModule();
-            fprintf(stderr, "Invalid function IR generated:\n%s\n", funcErrStr.str().c_str());
+                ctx.printModule();
+                fprintf(stderr, "Invalid function IR generated:\n%s\n", funcErrStr.str().c_str());
 
-            throw std::runtime_error("Invalid function IR generated");
+                throw std::runtime_error("Invalid function IR generated");
         }
         // Only run optimization if verification succeeds
         else if(ctx.fpm)
@@ -2379,10 +2426,9 @@ namespace BraneScript
         }
         if(flags & CompileFlags_DebugInfo)
         {
-            cc.module->addModuleFlag(llvm::Module::Warning, "Debug Info Version",
-                                     llvm::DEBUG_METADATA_VERSION);
+            cc.module->addModuleFlag(llvm::Module::Warning, "Debug Info Version", llvm::DEBUG_METADATA_VERSION);
 
-            if (llvm::Triple(llvm::sys::getProcessTriple()).isOSDarwin())
+            if(llvm::Triple(llvm::sys::getProcessTriple()).isOSDarwin())
                 cc.module->addModuleFlag(llvm::Module::Warning, "Dwarf Version", 2);
 
             cc.dBuilder = std::make_unique<llvm::DIBuilder>(*cc.module);

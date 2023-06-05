@@ -32,8 +32,18 @@ namespace BraneScript
     class IRModule;
     class StructDef;
 
+    enum ScriptRuntimeMode
+    {
+        // Debug mode will keep debug info and turn off optimization
+        ScriptRuntimeMode_Debug,
+        // Release mode will turn on optimization and remove debug info
+        ScriptRuntimeMode_Release
+    };
+
     class ScriptRuntime
     {
+        ScriptRuntimeMode _mode;
+
         robin_hood::unordered_map<std::string, std::unique_ptr<Module>> _modules;
         robin_hood::unordered_map<std::string, llvm::orc::JITDylib*> _libraries;
 
@@ -48,7 +58,7 @@ namespace BraneScript
         static int64_t _scriptMallocDiff;
 
       public:
-        ScriptRuntime();
+        ScriptRuntime(ScriptRuntimeMode mode = ScriptRuntimeMode_Debug);
         ~ScriptRuntime();
 
         llvm::orc::JITDylib& loadLibrary(const NativeLibrary& lib);
