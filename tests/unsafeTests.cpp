@@ -3,7 +3,7 @@
 #include <iostream>
 #include "script.h"
 #include "scriptRuntime.h"
-#include "staticAnalysis/staticAnalyzer.h"
+#include "analyzer.h"
 
 using namespace BraneScript;
 
@@ -16,7 +16,7 @@ struct TestStruct
 TEST(BraneScript, UnsafeTests)
 {
 
-    StaticAnalyzer analyzer;
+    Analyzer analyzer;
     std::string path = "testScripts/unsafeTests.bs";
     analyzer.load(path);
     analyzer.validate(path, false);

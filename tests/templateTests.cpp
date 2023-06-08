@@ -2,15 +2,15 @@
 
 #include "script.h"
 #include "scriptRuntime.h"
-#include "staticAnalysis/constexprEvaluator.h"
-#include "staticAnalysis/staticAnalyzer.h"
+#include "constexprEvaluator.h"
+#include "analyzer.h"
 
 using namespace BraneScript;
 
 TEST(BraneScript, Templates)
 {
     ConstexprEvaluator evaluator;
-    StaticAnalyzer analyzer;
+    Analyzer analyzer;
     analyzer.setConstexprEvaluator(&evaluator);
     std::string path = "testScripts/templateTests.bs";
     analyzer.load(path);

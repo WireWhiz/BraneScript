@@ -3,14 +3,14 @@
 
 #include "script.h"
 #include "scriptRuntime.h"
-#include "staticAnalysis/staticAnalyzer.h"
+#include "analyzer.h"
 #include "nativeTypes/BSString.h"
 
 using namespace BraneScript;
 
 TEST(BraneScript, Strings)
 {
-    StaticAnalyzer analyzer;
+    Analyzer analyzer;
     std::string path = "testScripts/stringTests.bs";
     analyzer.load(path);
     analyzer.validate(path);

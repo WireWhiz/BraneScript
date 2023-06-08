@@ -3,7 +3,7 @@
 #include "nativeTypes.h"
 #include "script.h"
 #include "scriptRuntime.h"
-#include "staticAnalysis/staticAnalyzer.h"
+#include "analyzer.h"
 
 using namespace BraneScript;
 
@@ -92,7 +92,7 @@ TEST(BraneScript, Objects)
         destructorCalled++;
     });
 
-    StaticAnalyzer analyzer;
+    Analyzer analyzer;
     analyzer.load("header", header);
     std::string path = "testScripts/objectTests.bs";
     analyzer.load(path);

@@ -2,9 +2,9 @@
 // Created by wirewhiz on 1/23/23.
 //
 
-#include "staticAnalyzer.h"
 #include <memory>
 #include <typeinfo>
+#include "analyzer.h"
 #include "antlr4/braneBaseVisitor.h"
 #include "antlr4/braneLexer.h"
 #include "constexprEvaluator.h"
@@ -32,13 +32,11 @@ namespace BraneScript
         return (StatementContext*)new StatementErrorContext{message, __LINE__};                                        \
     }
 
-    class Analyzer;
-
-    class Analyzer : public braneBaseVisitor
+    class AnalyzerCore : public braneBaseVisitor
     {
         class BraneErrorListener : public antlr4::BaseErrorListener
         {
-            Analyzer* _analyzer = nullptr;
+            AnalyzerCore* _analyzer = nullptr;
 
           public:
             void syntaxError(antlr4::Recognizer* recognizer,
@@ -61,11 +59,11 @@ namespace BraneScript
                     _analyzer->recordError({line, charPositionInLine}, msg);
             }
 
-            void setAnalyzer(Analyzer* analyzer) { _analyzer = analyzer; }
+            void setAnalyzer(AnalyzerCore* analyzer) { _analyzer = analyzer; }
         };
 
-        StaticAnalyzer& _analyzer;
-        StaticAnalyzer::AnalyzationContext& _result;
+        Analyzer& _analyzer;
+        Analyzer::AnalyzationContext& _result;
         std::stack<DocumentContext*> _documentContext;
         bool _extractOnlyIdentifiers;
         bool _allowUnsafe;
@@ -830,8 +828,8 @@ namespace BraneScript
         }
 
       public:
-        Analyzer(StaticAnalyzer& analyzer,
-                 StaticAnalyzer::AnalyzationContext& result,
+        AnalyzerCore(Analyzer& analyzer,
+                 Analyzer::AnalyzationContext& result,
                  bool extractOnlyIdentifiers,
                  bool allowUnsafe)
             : _analyzer(analyzer), _result(result), _extractOnlyIdentifiers(extractOnlyIdentifiers),
@@ -2828,9 +2826,9 @@ namespace BraneScript
         }
     };
 
-    StaticAnalyzer::StaticAnalyzer() { addWorkspace("include", true); }
+    Analyzer::Analyzer() { addWorkspace("include", true); }
 
-    bool StaticAnalyzer::isLoaded(const std::string& path) { return _analyzationContexts.contains(path); }
+    bool Analyzer::isLoaded(const std::string& path) { return _analyzationContexts.contains(path); }
 
     std::string readDocument(const std::string& path)
     {
@@ -2845,12 +2843,12 @@ namespace BraneScript
         return std::move(document);
     }
 
-    void StaticAnalyzer::load(const std::string& path, bool cacheDocument, bool allowUnsafe)
+    void Analyzer::load(const std::string& path, bool cacheDocument, bool allowUnsafe)
     {
         load(path, readDocument(path), cacheDocument, allowUnsafe);
     }
 
-    void StaticAnalyzer::load(const std::string& path, std::string document, bool cacheDocument, bool allowUnsafe)
+    void Analyzer::load(const std::string& path, std::string document, bool cacheDocument, bool allowUnsafe)
     {
         if(!_analyzationContexts.contains(path))
         {
@@ -2865,13 +2863,13 @@ namespace BraneScript
         context->complete = false;
         context->scriptContext->source = path;
 
-        Analyzer(*this, *context, true, allowUnsafe).analyze();
+        AnalyzerCore(*this, *context, true, allowUnsafe).analyze();
 
         if(!cacheDocument)
             context->document.clear();
     }
 
-    void StaticAnalyzer::reload(const std::string& path)
+    void Analyzer::reload(const std::string& path)
     {
         assert(_analyzationContexts.contains(path));
         auto& context = _analyzationContexts.at(path);
@@ -2881,29 +2879,29 @@ namespace BraneScript
         if(!cacheDocument)
             context->document = readDocument(path);
 
-        Analyzer(*this, *context, true, false).analyze();
+        AnalyzerCore(*this, *context, true, false).analyze();
         context->complete = false;
 
         if(!cacheDocument)
             context->document.clear();
     }
 
-    bool StaticAnalyzer::validate(const std::string& path, bool allowUnsafe)
+    bool Analyzer::validate(const std::string& path, bool allowUnsafe)
     {
         assert(_analyzationContexts.contains(path));
         auto& context = _analyzationContexts.at(path);
         std::scoped_lock lock(context->lock);
-        Analyzer(*this, *context, false, allowUnsafe).analyze();
+        AnalyzerCore(*this, *context, false, allowUnsafe).analyze();
         context->complete = true;
         return context->errors.empty();
     }
 
-    StaticAnalyzer::AnalyzationContext* StaticAnalyzer::getCtx(const std::string& path)
+    Analyzer::AnalyzationContext* Analyzer::getCtx(const std::string& path)
     {
         return _analyzationContexts.at(path).get();
     }
 
-    void StaticAnalyzer::addWorkspace(const std::string& path, bool allowUnsafe)
+    void Analyzer::addWorkspace(const std::string& path, bool allowUnsafe)
     {
         std::cout << "Loading workspace " << path << std::endl;
         assert(std::filesystem::exists(path));
@@ -2928,7 +2926,7 @@ namespace BraneScript
         _workspaceRoots.push_back(path);
     }
 
-    bool StaticAnalyzer::registerModule(ModuleContext* lib)
+    bool Analyzer::registerModule(ModuleContext* lib)
     {
         if(_modules.contains(lib->identifier.text))
             return false;
@@ -2936,14 +2934,14 @@ namespace BraneScript
         return true;
     }
 
-    void StaticAnalyzer::deregisterModule(ModuleContext* lib)
+    void Analyzer::deregisterModule(ModuleContext* lib)
     {
         auto module = _modules.find(lib->identifier.text);
         assert(module != _modules.end());
         _modules.erase(module);
     }
 
-    ModuleContext* StaticAnalyzer::getModule(const std::string& id) const
+    ModuleContext* Analyzer::getModule(const std::string& id) const
     {
         auto modCtx = _modules.find(id);
         if(modCtx == _modules.end())
@@ -2951,18 +2949,18 @@ namespace BraneScript
         return modCtx->second;
     }
 
-    void StaticAnalyzer::setConstexprEvaluator(ConstexprEvaluator* evaluator) { _evaluator = evaluator; }
+    void Analyzer::setConstexprEvaluator(ConstexprEvaluator* evaluator) { _evaluator = evaluator; }
 
-    ConstexprEvaluator* StaticAnalyzer::constexprEvaluator() const { return _evaluator; }
+    ConstexprEvaluator* Analyzer::constexprEvaluator() const { return _evaluator; }
 
-    bool StaticAnalyzer::isValid(const std::string& path)
+    bool Analyzer::isValid(const std::string& path)
     {
         if(!_analyzationContexts.contains(path))
             return false;
         return _analyzationContexts.at(path)->errors.empty();
     }
 
-    IRScript StaticAnalyzer::compile(const std::string& path, uint8_t flags)
+    IRScript Analyzer::compile(const std::string& path, uint8_t flags)
     {
         assert(isValid(path));
         assert(_analyzationContexts.at(path)->complete); // validate() must be called before compile()
@@ -2970,7 +2968,7 @@ namespace BraneScript
         return _analyzationContexts.at(path)->scriptContext->compile(&llvmContext, flags);
     }
 
-    StaticAnalyzer::~StaticAnalyzer() = default;
+    Analyzer::~Analyzer() = default;
 
 
 } // namespace BraneScript

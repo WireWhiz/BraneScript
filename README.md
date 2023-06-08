@@ -6,13 +6,8 @@ Embeddable scripting language in development with and intended for use in [Brane
 
 Brane script is being developed with the goal of creating a high performance embeddable 
 statically typed scripting system for ECS based game engines. BS functions are AOT optimized
-to a cross-platform byte code and jit compiled to allow native speeds. With a focus on runtime 
-loading and linking for highly modular use cases. 
-
-### Todo
-* Templating system for arrays/vectors
-* Constexpr folding refactor (need way to run functions at compile time)
-* Separate function for printing out opcode debugging
+to a cross-platform IR and jit compiled to allow native speeds. With a focus on runtime 
+loading and linking for highly modular use cases.
 
 ## Building
 We use the conan package manager version 1.x, we will update to conan 2.x once all our dependencies supported by the new version, for now install it with:

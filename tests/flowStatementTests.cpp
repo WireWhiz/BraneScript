@@ -3,13 +3,13 @@
 
 #include "src/scriptRuntime/script.h"
 #include "src/scriptRuntime/scriptRuntime.h"
-#include "staticAnalysis/staticAnalyzer.h"
+#include "analyzer.h"
 
 using namespace BraneScript;
 
 TEST(BraneScript, FlowStatements)
 {
-    StaticAnalyzer analyzer;
+    Analyzer analyzer;
     std::string path = "testScripts/flowStatementTests.bs";
     analyzer.load(path);
     analyzer.validate(path);

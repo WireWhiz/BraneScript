@@ -36,7 +36,7 @@ namespace llvm
 
 namespace BraneScript
 {
-    class StaticAnalyzer;
+    class Analyzer;
     struct FunctionContext;
     struct StructContext;
     class TypeDef;

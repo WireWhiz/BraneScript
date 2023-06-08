@@ -1,5 +1,5 @@
-#ifndef BRANESCRIPT_STATICANALYZER_H
-#define BRANESCRIPT_STATICANALYZER_H
+#ifndef BRANESCRIPT_ANALYZER_H
+#define BRANESCRIPT_ANALYZER_H
 
 #include "documentContext.h"
 #include "textPos.h"
@@ -30,7 +30,7 @@ namespace BraneScript
         std::string message;
     };
 
-    class StaticAnalyzer
+    class Analyzer
     {
       public:
         struct AnalyzationContext
@@ -63,8 +63,8 @@ namespace BraneScript
 
         ConstexprEvaluator* _evaluator = nullptr;
       public:
-        StaticAnalyzer();
-        ~StaticAnalyzer();
+        Analyzer();
+        ~Analyzer();
 
         /** @brief Register a workspace
          * This folder and it's children will be searched for brane script related files and scanned so that references
@@ -99,4 +99,4 @@ namespace BraneScript
 
 } // namespace BraneScript
 
-#endif // BRANESCRIPT_STATICANALYZER_H
+#endif // BRANESCRIPT_ANALYZER_H

@@ -8,12 +8,10 @@
 
 #include <string>
 #include <vector>
-#include "funcRef.h"
+#include "scriptRuntime/funcRef.h"
 
 namespace BraneScript
 {
-    class Linker;
-    void addNativeFunctions(Linker& linker);
 
     struct NativeLibrary
     {

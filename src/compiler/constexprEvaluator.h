@@ -14,8 +14,6 @@ namespace BraneScript
 
     class ConstexprEvaluator
     {
-        Linker* _linker;
-
         static robin_hood::unordered_map<std::string, std::unique_ptr<ConstexprFunction>> _inlineFunctions;
 
       public:

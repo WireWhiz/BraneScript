@@ -4,13 +4,13 @@
 
 #include "script.h"
 #include "scriptRuntime.h"
-#include "staticAnalysis/staticAnalyzer.h"
+#include "analyzer.h"
 
 using namespace BraneScript;
 
 TEST(BraneScript, GlobalVariables)
 {
-    StaticAnalyzer analyzer;
+    Analyzer analyzer;
     std::string path = "testScripts/globalVariableTests.bs";
     analyzer.load(path);
     analyzer.validate(path);

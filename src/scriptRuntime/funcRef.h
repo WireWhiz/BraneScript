@@ -12,7 +12,6 @@
 
 namespace BraneScript
 {
-    class Linker;
 #if _WIN32
 #define BS_API_CALL __cdecl
 #elif __unix__

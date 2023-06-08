@@ -3,13 +3,13 @@
 #include <iostream>
 #include "script.h"
 #include "scriptRuntime.h"
-#include "staticAnalysis/staticAnalyzer.h"
+#include "analyzer.h"
 
 using namespace BraneScript;
 
 TEST(BraneScript, Refs)
 {
-    StaticAnalyzer analyzer;
+    Analyzer analyzer;
     std::string path = "testScripts/refTests.bs";
     analyzer.load(path);
     analyzer.validate(path);

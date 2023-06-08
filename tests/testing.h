@@ -6,7 +6,7 @@
 #define BRANESCRIPT_TESTING_H
 
 #include <gtest/gtest.h>
-#include "staticAnalysis/staticAnalyzer.h"
+#include "analyzer.h"
 
 #define checkCompileErrors(analyzer, path) \
     {\

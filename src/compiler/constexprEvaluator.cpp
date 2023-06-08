@@ -583,8 +583,6 @@ namespace BraneScript
 
     ConstexprEvaluator::ConstexprEvaluator()
     {
-        _linker = nullptr;
-
         if(!_inlineFunctions.empty())
             return;
         // Define our native operators as inline functions, to be inserted directly into the Aot tree

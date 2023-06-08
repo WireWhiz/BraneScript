@@ -7,7 +7,7 @@
 #include <iostream>
 #include "script.h"
 #include "scriptRuntime.h"
-#include "staticAnalysis/staticAnalyzer.h"
+#include "analyzer.h"
 
 using namespace BraneScript;
 
@@ -18,7 +18,7 @@ int addTwo(int a)
 
 TEST(BraneScript, FunctionRefs)
 {
-    StaticAnalyzer analyzer;
+    Analyzer analyzer;
     std::string path = "testScripts/functionRefTests.bs";
     analyzer.load(path);
     analyzer.validate(path);

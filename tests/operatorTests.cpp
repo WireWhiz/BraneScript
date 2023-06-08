@@ -4,7 +4,7 @@
 #include <limits>
 #include "script.h"
 #include "scriptRuntime.h"
-#include "staticAnalysis/staticAnalyzer.h"
+#include "analyzer.h"
 
 using namespace BraneScript;
 
@@ -110,7 +110,7 @@ TEST(BraneScript, Operators)
 
     testString += "}";
 
-    StaticAnalyzer analyzer;
+    Analyzer analyzer;
     std::string path = "testScripts/operatorTests.bs";
     analyzer.load(path, testString);
     analyzer.validate(path);

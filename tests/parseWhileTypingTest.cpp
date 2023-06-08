@@ -1,7 +1,7 @@
 #include "testing.h"
 
-#include "staticAnalysis/constexprEvaluator.h"
-#include "staticAnalysis/staticAnalyzer.h"
+#include "constexprEvaluator.h"
+#include "analyzer.h"
 
 using namespace BraneScript;
 
@@ -173,7 +173,7 @@ link "string"
     std::string testString;
 
     ConstexprEvaluator evaluator;
-    StaticAnalyzer analyzer;
+    Analyzer analyzer;
     analyzer.setConstexprEvaluator(&evaluator);
     analyzer.load(path, testString);
 
