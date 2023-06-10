@@ -242,8 +242,10 @@ namespace BraneScript
             auto sMoveConstructor = module->getFunction<void, void*, void*>(s.moveConstructorSig);
             if(!sConstructor || !sDestructor || !sCopyConstructor || !sMoveConstructor)
                 throw std::runtime_error("Module load failed, missing constructors for: " + s.name);
-            newStructs.emplace(s.name,
-                               new StructDef(s.name, sConstructor, sCopyConstructor, sMoveConstructor, sDestructor));
+            auto sDef = new StructDef(s.name, sConstructor, sCopyConstructor, sMoveConstructor, sDestructor);
+            for(auto& tag : s.tags)
+                sDef->tags.insert(tag);
+            newStructs.emplace(s.name, sDef);
         }
 
         for(auto& ns : newStructs)
