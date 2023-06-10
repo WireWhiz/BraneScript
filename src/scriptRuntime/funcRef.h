@@ -19,7 +19,7 @@ namespace BraneScript
 #endif
 
     template<typename Ret, typename... Args>
-    using FuncRef = Ret (BS_API_CALL*)(Args...);
+    using FuncRef = Ret (*)(Args...);
 
     /**
      * @brief Class for extracting data about arguments from a function definition.

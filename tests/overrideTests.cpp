@@ -21,8 +21,7 @@ TEST(BraneScript, Overrides)
 
     ScriptRuntime rt;
     rt.resetMallocDiff();
-    Module* testScript = rt.loadModule(ir.modules.at("tests"));
-    ASSERT_TRUE(testScript);
+    auto testScript = rt.loadModule(ir.modules.at("tests"));
 
     auto f0 = testScript->getFunction<int>("tests::func");
     ASSERT_TRUE(f0);

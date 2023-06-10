@@ -7,16 +7,20 @@
 
 #include <cstdint>
 #include <string>
+#include <vector>
 #include "valueIndex.h"
+
 namespace BraneScript
 {
-    class TypeDef
+    struct TypeDef
     {
-    public:
+        std::string name = "void";
+        ValueType storageType = ValueType::Void;
+        size_t size = 0;
+        TypeDef() = default;
+        TypeDef(std::string name, ValueType storageType, size_t size)
+            : name(std::move(name)), storageType(storageType), size(size) {}
         virtual ~TypeDef() = default;
-        virtual const char* name() const = 0;
-        virtual uint16_t size() const = 0;
-        virtual ValueType type() const = 0;
     };
 }
 

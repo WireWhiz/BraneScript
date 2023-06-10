@@ -5,15 +5,17 @@
 #ifndef BRANESCRIPT_SCRIPTRUNTIME_H
 #define BRANESCRIPT_SCRIPTRUNTIME_H
 
-#include <memory>
+#include "utility/DependencyGraph.h"
 #include <vector>
 #include "funcRef.h"
 #include "nativeLibrary.h"
 #include "robin_hood.h"
+#include "varType.h"
 
 namespace llvm
 {
     class DataLayout;
+    class Type;
 
     namespace orc
     {
@@ -31,6 +33,7 @@ namespace BraneScript
     class Module;
     class IRModule;
     class StructDef;
+    class TypeDef;
 
     enum ScriptRuntimeMode
     {
@@ -44,8 +47,8 @@ namespace BraneScript
     {
         ScriptRuntimeMode _mode;
 
-        robin_hood::unordered_map<std::string, std::unique_ptr<Module>> _modules;
-        robin_hood::unordered_map<std::string, llvm::orc::JITDylib*> _libraries;
+        DependencyGraph<std::string, Module> _modules;
+        robin_hood::unordered_map<std::string, TypeDef*> _types;
 
         std::unique_ptr<llvm::orc::ExecutionSession> _session;
         std::unique_ptr<llvm::DataLayout> _layout;
@@ -57,14 +60,16 @@ namespace BraneScript
 
         static int64_t _scriptMallocDiff;
 
+        VarType getVarType(llvm::Type* type) const;
       public:
         ScriptRuntime(ScriptRuntimeMode mode = ScriptRuntimeMode_Debug);
         ~ScriptRuntime();
 
-        llvm::orc::JITDylib& loadLibrary(const NativeLibrary& lib);
+        llvm::orc::JITDylib& loadLibrary(NativeLibrary&& lib);
 
-        Module* loadModule(const IRModule& irModule);
+        ResourceHandle<Module> loadModule(const IRModule& irModule);
         void unloadModule(const std::string& id);
+
         int64_t mallocDiff() const;
         void resetMallocDiff();
     };

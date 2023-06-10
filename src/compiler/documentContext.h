@@ -13,7 +13,7 @@
 #include <vector>
 #include "robin_hood.h"
 #include "src/scriptRuntime/valueIndex.h"
-#include "structDefinition.h"
+#include "structDef.h"
 #include "textPos.h"
 #include <json/json.h>
 #include <llvm/IR/PassManager.h>
@@ -174,6 +174,7 @@ namespace BraneScript
         {
             IRStructDef def;
             llvm::StructType* llvmType = nullptr;
+            bool exported = false;
         };
 
         robin_hood::unordered_map<std::string, StructEntry> definedStructs;

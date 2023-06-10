@@ -20,8 +20,7 @@ TEST(BraneScript, Refs)
 
     ScriptRuntime rt;
     rt.resetMallocDiff();
-    Module* testScript = rt.loadModule(ir.modules.at("tests"));
-    ASSERT_TRUE(testScript);
+    auto testScript = rt.loadModule(ir.modules.at("tests"));
 
     auto getInt = testScript->getFunction<int*>("tests::getInt()");
     ASSERT_TRUE(getInt);

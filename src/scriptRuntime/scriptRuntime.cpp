@@ -5,7 +5,7 @@
 #include "scriptRuntime.h"
 #include "irScript.h"
 #include "script.h"
-#include "structDefinition.h"
+#include "structDef.h"
 #include "valueIndex.h"
 
 #include "llvm/Analysis/CGSCCPassManager.h"
@@ -39,8 +39,25 @@ namespace BraneScript
     int64_t ScriptRuntime::_scriptMallocDiff = 0;
     bool llvmInitialized = false;
 
+    std::vector<std::unique_ptr<TypeDef>> nativeTypes;
+
     ScriptRuntime::ScriptRuntime(ScriptRuntimeMode mode) : _mode(mode)
     {
+        if(nativeTypes.empty())
+        {
+            nativeTypes.emplace_back(new TypeDef("void", ValueType::Void, 0));
+            nativeTypes.emplace_back(new TypeDef("bool", ValueType::Bool, 1));
+            nativeTypes.emplace_back(new TypeDef("uint", ValueType::UInt32, 4));
+            nativeTypes.emplace_back(new TypeDef("int", ValueType::Int32, 4));
+            nativeTypes.emplace_back(new TypeDef("uint64", ValueType::UInt64, 8));
+            nativeTypes.emplace_back(new TypeDef("int64", ValueType::Int64, 8));
+            nativeTypes.emplace_back(new TypeDef("float", ValueType::Float32, 4));
+            nativeTypes.emplace_back(new TypeDef("double", ValueType::Float64, 8));
+            nativeTypes.emplace_back(new TypeDef("FuncRef", ValueType::FuncRef, sizeof(void(*))));
+        }
+        for(auto& t : nativeTypes)
+            _types.emplace(t->name, t.get());
+
         if(!llvmInitialized)
         {
             llvm::InitializeNativeTarget();
@@ -138,10 +155,10 @@ namespace BraneScript
             //printf("Freeing %p\n", ptr);
             ::operator delete(ptr);
         });
-        loadLibrary(unsafeLib);
+        loadLibrary(std::move(unsafeLib));
     }
 
-    Module* ScriptRuntime::loadModule(const IRModule& irModule)
+    ResourceHandle<Module> ScriptRuntime::loadModule(const IRModule& irModule)
     {
         if(_modules.contains(irModule.id))
             throw std::runtime_error("Module with id \"" + irModule.id + "\" already loaded");
@@ -159,17 +176,32 @@ namespace BraneScript
         auto& lib = _session->createBareJITDylib(irModule.id);
         for(auto& importedModule : irModule.links)
         {
-            auto providers = _libraries.find(importedModule);
-            if(providers == _libraries.end())
+            if(!_modules.contains(importedModule))
                 throw std::runtime_error(irModule.id + " Could not link to required module: " + importedModule);
-            lib.addToLinkOrder(*providers->second);
+            lib.addToLinkOrder(*_modules.at(importedModule)->lib);
         }
 
-        auto* script = new Module(lib);
-        script->rt = lib.getDefaultResourceTracker();
+        auto module = new Module(lib);
+        module->rt = lib.getDefaultResourceTracker();
+
+        printf("Loading module %s with structs:\n", irModule.id.c_str());
+        for(auto& s : (*deserializedModule)->getIdentifiedStructTypes())
+        {
+            printf("  %s\n", s->getName().str().c_str());
+        }
+
+        std::vector<const llvm::StructLayout*> exportedStructLayouts;
+        for(auto& s : irModule.structs)
+        {
+            auto structType = llvm::StructType::getTypeByName(*ctx, s.name);
+            if(!structType)
+                throw std::runtime_error("Module load failed, unable to find struct metadata: " + s.name);
+            const llvm::StructLayout* structLayout = _layout->getStructLayout(structType);
+            exportedStructLayouts.push_back(structLayout);
+        }
 
         if(llvm::Error res = _transformLayer->add(
-               script->rt, llvm::orc::ThreadSafeModule(std::move(*deserializedModule), std::move(ctx))))
+               module->rt, llvm::orc::ThreadSafeModule(std::move(*deserializedModule), std::move(ctx))))
             throw std::runtime_error("Unable to add script: " + toString(std::move(res)));
 
         for(auto& glob : irModule.globals)
@@ -177,8 +209,8 @@ namespace BraneScript
             auto globSymbol = _session->lookup({&lib}, (*_mangler)(glob.name));
             if(!globSymbol)
                 throw std::runtime_error("Unable to find exported global: " + toString(globSymbol.takeError()));
-            script->globalNames.insert({glob.name, script->globalVars.size()});
-            script->globalVars.push_back((void*)globSymbol->getAddress());
+            module->globalNames.insert({glob.name, module->globalVars.size()});
+            module->globalVars.push_back((void*)globSymbol->getAddress());
         }
 
         for(auto& func : irModule.functions)
@@ -186,8 +218,8 @@ namespace BraneScript
             auto functionSym = _session->lookup({&lib}, (*_mangler)(func.name));
             if(!functionSym)
                 throw std::runtime_error("Unable to find exported function: " + toString(functionSym.takeError()));
-            script->functionNames.insert({func.name, script->functions.size()});
-            script->functions.push_back((void*)functionSym->getAddress());
+            module->functionNames.insert({func.name, module->functions.size()});
+            module->functions.push_back((void*)functionSym->getAddress());
         }
 
         auto constructor = _session->lookup({&lib}, (*_mangler)("_construct"));
@@ -196,28 +228,77 @@ namespace BraneScript
 
         auto destructor = _session->lookup({&lib}, (*_mangler)("_construct"));
         if(destructor)
-            script->destructor = FuncRef<void>(destructor->getAddress());
+            module->destructor = FuncRef<void>(destructor->getAddress());
 
-        // TODO extract structs
 
-        _modules.emplace(irModule.id, script);
-        _libraries.emplace(irModule.id, &script->lib);
+        std::unordered_map<std::string, std::unique_ptr<StructDef>> newStructs;
+        //Extract all structs before populating members, so we can resolve out of order dependencies.
 
-        return script;
+        for(auto& s : irModule.structs)
+        {
+            auto sConstructor = module->getFunction<void, void*>(s.constructorSig);
+            auto sDestructor = module->getFunction<void, void*>(s.destructorSig);
+            auto sCopyConstructor = module->getFunction<void, void*, const void*>(s.copyConstructorSig);
+            auto sMoveConstructor = module->getFunction<void, void*, void*>(s.moveConstructorSig);
+            if(!sConstructor || !sDestructor || !sCopyConstructor || !sMoveConstructor)
+                throw std::runtime_error("Module load failed, missing constructors for: " + s.name);
+            newStructs.emplace(s.name,
+                               new StructDef(s.name, sConstructor, sCopyConstructor, sMoveConstructor, sDestructor));
+        }
+
+        for(auto& ns : newStructs)
+        {
+            if(_types.contains(ns.first))
+                throw std::runtime_error("Module load failed, cannot load a type twice: " + ns.first);
+            _types.insert({ns.first, ns.second.get()});
+        }
+
+        size_t structIndex = 0;
+        for(auto& ns : newStructs)
+        {
+            auto structLayout = exportedStructLayouts[structIndex];
+            auto& srcStruct = irModule.structs[structIndex];
+            ns.second->size = structLayout->getSizeInBytes();
+            for(size_t i = 0; i < srcStruct.members.size(); i++)
+            {
+                auto& src = srcStruct.members[i];
+                auto memberOffset = structLayout->getElementOffset(i);
+                auto memberType = _types.find(src.type);
+                if(memberType == _types.end())
+                    throw std::runtime_error("Module load failed, unable to find type metadata: " + src.type);
+                ns.second->memberVars.push_back(StructVar{src.name, VarType{memberType->second, src.isRef}, memberOffset});
+            }
+
+            printf("Adding struct %s\n", ns.first.c_str());
+            printf("Size: %zu\n", ns.second->size);
+            printf("Members:\n");
+            for(auto& m : ns.second->memberVars)
+                printf("  %s %s, offset: %zu\n", m.type.def->name.c_str(), m.name.c_str(), m.offset);
+
+            module->structDefinitions.insert({ns.first, std::move(ns.second)});
+            ++structIndex;
+        }
+
+        _modules.insert(irModule.id, module);
+        for(auto& dep : irModule.links)
+            _modules.addDependency(irModule.id, dep);
+
+        return _modules.at(irModule.id);
     }
 
     void ScriptRuntime::unloadModule(const std::string& id)
     {
         // TODO assert that no scripts depend on this one
         assert(_modules.contains(id));
-
-        _libraries.erase(id);
+        auto module = _modules.at(id);
+        for(auto& s : module->structDefinitions)
+            _types.erase(s.first);
         _modules.erase(id);
     }
 
     ScriptRuntime::~ScriptRuntime() { _modules.clear(); }
 
-    llvm::orc::JITDylib& ScriptRuntime::loadLibrary(const NativeLibrary& lib)
+    llvm::orc::JITDylib& ScriptRuntime::loadLibrary(NativeLibrary&& lib)
     {
         auto& newLib = _session->createBareJITDylib(lib.identifier);
         llvm::orc::SymbolMap symbols;
@@ -231,12 +312,76 @@ namespace BraneScript
         }
         if(auto err = newLib.define(llvm::orc::absoluteSymbols(symbols)))
             throw std::runtime_error("Unable to load native library: " + toString(std::move(err)));
-        _libraries.emplace(lib.identifier, &newLib);
+
+        auto nativeModule = new Module(newLib);
+        for(auto& structDef : lib.structDefinitions)
+        {
+            if(_types.contains(structDef->name))
+                throw std::runtime_error("Cannot load a struct multiple times: " + structDef->name);
+            _types.insert({structDef->name, structDef.get()});
+            nativeModule->structDefinitions.insert({structDef->name, std::move(structDef)});
+        }
+        _modules.insert(lib.identifier, nativeModule);
         return newLib;
     }
 
     int64_t ScriptRuntime::mallocDiff() const { return _scriptMallocDiff; }
 
     void ScriptRuntime::resetMallocDiff() { _scriptMallocDiff = 0; }
+
+    VarType ScriptRuntime::getVarType(llvm::Type* type) const
+    {
+        VarType output;
+        if(type->isPointerTy())
+        {
+            output = getVarType(type->getPointerElementType());
+            output.isRef = true;
+            return output;
+        }
+        if(type->isStructTy())
+        {
+            auto structType = _types.find(type->getStructName().str());
+            if(structType == _types.end())
+                return output;
+            output.def = structType->second;
+            return output;
+        }
+        if(type->isIntegerTy())
+        {
+            switch(type->getScalarSizeInBits())
+            {
+                case 1:
+                    output.def = _types.at("bool");
+                    return output;
+                case 8:
+                    output.def = _types.at("char");
+                    return output;
+                case 32:
+                    output.def = _types.at("int");
+                    return output;
+                case 64:
+                    output.def = _types.at("int64");
+                    return output;
+            }
+            assert(false);
+            return output;
+        }
+        if(type->isFloatTy())
+        {
+            switch(type->getScalarSizeInBits())
+            {
+                case 32:
+                output.def = _types.at("float");
+                return output;
+                case 64:
+                output.def = _types.at("double");
+                return output;
+            }
+            assert(false);
+            return output;
+        }
+        assert(false);
+        return output;
+    }
 
 } // namespace BraneScript

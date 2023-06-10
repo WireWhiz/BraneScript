@@ -1,6 +1,5 @@
 #include "testing.h"
 
-#include "nativeTypes.h"
 #include "script.h"
 #include "scriptRuntime.h"
 #include "analyzer.h"
@@ -63,34 +62,27 @@ TEST(BraneScript, Objects)
     }
 )";
 
-    StructDef testStruct1Def("BraneScript::TestStruct1");
-
-    testStruct1Def.addMemberVar("c", getNativeTypeDef(ValueType::Bool));
-    testStruct1Def.addMemberVar("a", getNativeTypeDef(ValueType::Float32));
-    testStruct1Def.addMemberVar("b", getNativeTypeDef(ValueType::Int32));
-    testStruct1Def.padMembers();
-
-    EXPECT_EQ(testStruct1Def.memberVars()[0].offset, offsetof(TestStruct1, c));
-    EXPECT_EQ(testStruct1Def.memberVars()[1].offset, offsetof(TestStruct1, a));
-    EXPECT_EQ(testStruct1Def.memberVars()[2].offset, offsetof(TestStruct1, b));
-
     NativeLibrary constructors("BraneScript");
-    constructors.addFunction("BraneScript::TestStruct1::_construct(ref BraneScript::TestStruct1)",  (void*)(FuncRef<void, void*>)[](void* data) {
-        new(data) TestStruct1();
-        constructorCalled++;
-    });
-    constructors.addFunction("BraneScript::TestStruct1::_copy(ref BraneScript::TestStruct1,const ref BraneScript::TestStruct1)", (void*)(FuncRef<void, void*, const void*>)[](void* dest, const void* src) {
-        *((TestStruct1*)dest) = *((TestStruct1*)src);
-        copyConstructorCalled++;
-    });
-    constructors.addFunction("BraneScript::TestStruct1::_move(ref BraneScript::TestStruct1,ref BraneScript::TestStruct1)", (void*)(FuncRef<void, void*, void*>)[](void* dest, void* src) {
-        *((TestStruct1*)dest) = std::move(*((TestStruct1*)src));
-        moveConstructorCalled++;
-    });
-    constructors.addFunction("BraneScript::TestStruct1::_destruct(ref BraneScript::TestStruct1)", (void*)(FuncRef<void, void*>)[](void* data) {
-        ((TestStruct1*)data)->~TestStruct1();
-        destructorCalled++;
-    });
+
+    auto testStruct1Def = new StructDef(
+        "BraneScript::TestStruct1",
+        [](void* data) {
+            new(data) TestStruct1();
+            constructorCalled++;
+        },
+        [](void* dest, const void* src) {
+            *((TestStruct1*)dest) = *((TestStruct1*)src);
+            copyConstructorCalled++;
+        },
+        [](void* dest, void* src) {
+            *((TestStruct1*)dest) = std::move(*((TestStruct1*)src));
+            moveConstructorCalled++;
+        },
+        [](void* data) {
+            ((TestStruct1*)data)->~TestStruct1();
+            destructorCalled++;
+        });
+    constructors.addStruct(std::unique_ptr<StructDef>(testStruct1Def));
 
     Analyzer analyzer;
     analyzer.load("header", header);
@@ -104,9 +96,8 @@ TEST(BraneScript, Objects)
 
     ScriptRuntime rt;
     rt.resetMallocDiff();
-    rt.loadLibrary(constructors);
-    Module* testScript = rt.loadModule(ir.modules.at("tests"));
-    ASSERT_TRUE(testScript);
+    rt.loadLibrary(std::move(constructors));
+    auto testScript = rt.loadModule(ir.modules.at("tests"));
 
     TestStruct1 testStruct1{true, 23.3, 45};
 

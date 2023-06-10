@@ -21,8 +21,7 @@ TEST(BraneScript, GlobalVariables)
 
     ScriptRuntime rt;
     rt.resetMallocDiff();
-    Module* testScript = rt.loadModule(ir.modules.at("tests"));
-    ASSERT_TRUE(testScript);
+    auto testScript = rt.loadModule(ir.modules.at("tests"));
 
     auto setInt = testScript->getFunction<void, int>("tests::setInt");
     ASSERT_TRUE(setInt);

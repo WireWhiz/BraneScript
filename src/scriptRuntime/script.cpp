@@ -5,7 +5,7 @@
 #include "script.h"
 #include "llvm/ExecutionEngine/Orc/Core.h"
 
-BraneScript::Module::Module(llvm::orc::JITDylib& lib) : lib(lib){}
+BraneScript::Module::Module(llvm::orc::JITDylib& lib) : lib(&lib){}
 
 BraneScript::Module::~Module()
 {

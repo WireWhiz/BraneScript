@@ -22,11 +22,15 @@ namespace BraneScript
         {
             std::string name;
             std::string type;
+            bool isRef;
         };
         std::string name;
         std::vector<Member> members;
+        std::string constructorSig;
+        std::string destructorSig;
+        std::string copyConstructorSig;
+        std::string moveConstructorSig;
         std::vector<std::string> tags;
-        bool packed;
     };
 
     struct IRFunction

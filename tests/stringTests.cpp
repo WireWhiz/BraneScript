@@ -22,8 +22,7 @@ TEST(BraneScript, Strings)
     ScriptRuntime rt;
     rt.resetMallocDiff();
     rt.loadLibrary(BSString::library());
-    Module* testScript = rt.loadModule(ir.modules.at("tests"));
-    ASSERT_TRUE(testScript);
+    auto testScript = rt.loadModule(ir.modules.at("tests"));
 
     BSString argA = "a";
     BSString argB = "b";

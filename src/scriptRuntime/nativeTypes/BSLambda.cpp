@@ -7,9 +7,8 @@
 
 namespace BraneScript
 {
-    NativeLibrary lambdaLibrary("lambda");
-    NativeLibrary& getLambdaLibrary()
+    NativeLibrary getLambdaLibrary()
     {
-        return lambdaLibrary;
+        return NativeLibrary{"lambda"};
     }
 } // namespace BraneScript

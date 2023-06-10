@@ -20,8 +20,7 @@ TEST(BraneScript, FlowStatements)
 
     ScriptRuntime rt;
     rt.resetMallocDiff();
-    Module* testScript = rt.loadModule(ir.modules.at("tests"));
-    ASSERT_TRUE(testScript);
+    auto testScript = rt.loadModule(ir.modules.at("tests"));
 
     auto testIf = testScript->getFunction<int, int, int, bool>("tests::testIf");
     ASSERT_TRUE(testIf);

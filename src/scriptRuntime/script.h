@@ -10,6 +10,7 @@
 #include <vector>
 #include "funcRef.h"
 #include "robin_hood.h"
+#include "scriptRuntime/structDef.h"
 #include <llvm/ADT/IntrusiveRefCntPtr.h>
 #include <unordered_map>
 
@@ -24,15 +25,16 @@ namespace BraneScript
     class Module
     {
         friend class ScriptRuntime;
-        FuncRef<void> destructor = nullptr;
     public:
+        FuncRef<void> destructor = nullptr;
         std::string id;
 
-        llvm::orc::JITDylib& lib;
+        llvm::orc::JITDylib* lib = nullptr;
         llvm::IntrusiveRefCntPtr<llvm::orc::ResourceTracker> rt;
 
         std::vector<void*> functions;
         std::vector<void*> globalVars;
+        robin_hood::unordered_map<std::string, std::unique_ptr<StructDef>> structDefinitions;
 
         robin_hood::unordered_map<std::string, size_t> functionNames;
         robin_hood::unordered_map<std::string, size_t> globalNames;

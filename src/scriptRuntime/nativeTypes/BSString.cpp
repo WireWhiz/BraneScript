@@ -4,6 +4,7 @@
 
 #include "BSString.h"
 #include <cstring>
+#include "scriptRuntime/structDef.h"
 
 namespace BraneScript
 {
@@ -105,22 +106,23 @@ namespace BraneScript
     NativeLibrary BSString::library()
     {
         NativeLibrary lib("string");
-        lib.addFunction("string::string::_construct(ref string::string)", (FuncRef<void, void*>)[](void* ptr)
-        {
-            new(ptr) BSString();
-        });
-        lib.addFunction("string::string::_move(ref string::string,ref string::string)", (FuncRef<void, void*, void*>)[](void* ptr, void* other)
-        {
-            new(ptr) BSString(std::move(*(BSString*)other));
-        });
-        lib.addFunction("string::string::_copy(ref string::string,const ref string::string)", (FuncRef<void, void*, const void*>)[](void* ptr, const void* other)
-        {
-            new(ptr) BSString(*(BSString*)other);
-        });
-        lib.addFunction("string::string::_destruct(ref string::string)", (FuncRef<void, void*>)[](void* ptr)
-        {
-            ((BSString*)ptr)->~BSString();
-        });
+        lib.addStruct(std::make_unique<StructDef>("string::string",
+            [](void* ptr)
+            {
+                new(ptr) BSString();
+            },
+            [](void* ptr, const void* other)
+            {
+                new(ptr) BSString(*(BSString*)other);
+            },
+            [](void* ptr, void* other)
+            {
+                new(ptr) BSString(std::move(*(BSString*)other));
+            },
+            [](void* ptr)
+            {
+                ((BSString*)ptr)->~BSString();
+            }));
         lib.addFunction("string::string opr +(ref string::string res,const ref string::string,const ref string::string)", (FuncRef<void, BSString&, const BSString&, const BSString&>)[](BSString& res, const BSString& a, const BSString& b)
         {
             res = a + b;

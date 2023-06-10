@@ -135,16 +135,24 @@ namespace BraneScript
         std::vector<llvm::Type*> llvmTypes;
         llvmTypes.reserve(1);
         entry.def.name = id;
+        entry.def.constructorSig = structCtx->constructor->signature();
+        entry.def.destructorSig = structCtx->destructor->signature();
+        entry.def.copyConstructorSig = structCtx->copyConstructor->signature();
+        entry.def.moveConstructorSig = structCtx->moveConstructor->signature();
         for(auto& m : structCtx->variables)
         {
             IRStructDef::Member newM;
+            if(m->type.storageType != ValueType::FuncRef)
+                newM.name = m->identifier;
+            else
+                newM.name = "FuncRef";
             newM.type = m->type.identifier;
-            newM.name = m->identifier;
+            newM.isRef = m->isRef;
             entry.def.members.push_back(std::move(newM));
             llvmTypes.push_back(getLLVMType(*m));
         }
-        entry.def.packed = structCtx->packed;
         entry.def.tags = structCtx->tags;
+        entry.exported = module->getName().equals(structCtx->getParent<ModuleContext>()->identifier.text);
 
         llvm::StructType* st;
         if(llvmTypes.empty())
@@ -2478,7 +2486,10 @@ namespace BraneScript
         module.functions = std::move(cc.exportedFunctions);
         module.globals = std::move(cc.exportedGlobals);
         for(auto& s : cc.definedStructs)
-            module.structs.push_back(std::move(s.second.def));
+        {
+            if(s.second.exported)
+                module.structs.push_back(std::move(s.second.def));
+        }
 
         return std::move(module);
     }

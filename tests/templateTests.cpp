@@ -29,8 +29,7 @@ TEST(BraneScript, Templates)
 
     ScriptRuntime rt;
     rt.resetMallocDiff();
-    Module* testScript = rt.loadModule(ir.modules.at("tests"));
-    ASSERT_TRUE(testScript);
+    auto testScript = rt.loadModule(ir.modules.at("tests"));
 
 
     auto addIntExplicit = testScript->getFunction<int, int, int>("tests::addIntExplicit");

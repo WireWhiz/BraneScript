@@ -39,9 +39,8 @@ TEST(BraneScript, API)
 
     ScriptRuntime rt;
     rt.resetMallocDiff();
-    rt.loadLibrary(testLib);
-    Module* testScript = rt.loadModule(ir.modules.at("tests"));
-    ASSERT_TRUE(testScript);
+    rt.loadLibrary(std::move(testLib));
+    ResourceHandle<Module> testScript = rt.loadModule(ir.modules.at("tests"));
 
     auto scriptSetRef = testScript->getFunction<void, int>("tests::setRef");
     ASSERT_TRUE(scriptSetRef);

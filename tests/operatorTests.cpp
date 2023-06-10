@@ -122,8 +122,7 @@ TEST(BraneScript, Operators)
 
     ScriptRuntime rt;
     rt.resetMallocDiff();
-    Module* testScript = rt.loadModule(ir.modules.at("tests"));
-    ASSERT_TRUE(testScript);
+    auto testScript = rt.loadModule(ir.modules.at("tests"));
 
     // Casting
     auto testBoolCast = testScript->getFunction<bool, int, int>("tests::testBoolCast");
@@ -153,7 +152,7 @@ TEST(BraneScript, Operators)
 
     // Arithmetic
     runScalarTestFunctions<int32_t>("int",
-                                    testScript,
+                                    testScript.get(),
                                     {{0, 1},
                                      {1, 1},
                                      {2, 3},
@@ -162,7 +161,7 @@ TEST(BraneScript, Operators)
                                      {0, -1},
                                      {std::numeric_limits<int32_t>::min(), std::numeric_limits<int32_t>::max()}});
     runScalarTestFunctions<int64_t>("int64",
-                                    testScript,
+                                    testScript.get(),
                                     {{0, 1},
                                      {1, 1},
                                      {2, 3},
@@ -172,11 +171,11 @@ TEST(BraneScript, Operators)
                                      {std::numeric_limits<int32_t>::min(), std::numeric_limits<int32_t>::max()},
                                      {std::numeric_limits<int64_t>::min(), std::numeric_limits<int64_t>::max()}});
     runScalarTestFunctions<uint32_t>(
-        "uint", testScript, {{0u, 1u}, {1u, 1u}, {2u, 3u}, {3u, 3u}, {123451u, 12332169u}});
+        "uint", testScript.get(), {{0u, 1u}, {1u, 1u}, {2u, 3u}, {3u, 3u}, {123451u, 12332169u}});
     runScalarTestFunctions<uint64_t>(
-        "uint64", testScript, {{0lu, 1lu}, {1lu, 1lu}, {2lu, 3lu}, {3lu, 3lu}, {123451lu, 12332169lu}});
+        "uint64", testScript.get(), {{0lu, 1lu}, {1lu, 1lu}, {2lu, 3lu}, {3lu, 3lu}, {123451lu, 12332169lu}});
     runScalarTestFunctions<float>("float",
-                                  testScript,
+                                  testScript.get(),
                                   {{0.0f, 1.0f},
                                    {1.0f, 1.0f},
                                    {2.4f, 3.2f},
@@ -185,7 +184,7 @@ TEST(BraneScript, Operators)
                                    {0.0f, -1.0f},
                                    {-1234123.126414f, 12341612.4123f}});
     runScalarTestFunctions<double>("double",
-                                   testScript,
+                                   testScript.get(),
                                    {{0.0, 1.0},
                                     {1.0, 1.0},
                                     {2.4, 3.2},

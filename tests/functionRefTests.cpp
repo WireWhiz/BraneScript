@@ -29,8 +29,7 @@ TEST(BraneScript, FunctionRefs)
 
     ScriptRuntime rt;
     rt.resetMallocDiff();
-    Module* testScript = rt.loadModule(ir.modules.at("tests"));
-    ASSERT_TRUE(testScript);
+    ResourceHandle<Module> testScript = rt.loadModule(ir.modules.at("tests"));
 
     auto setGlobalFunctionExt = testScript->getFunction<void, int(*)(int)>("tests::setGlobalFuncExt(FuncRef<int,int>)");
     ASSERT_TRUE(setGlobalFunctionExt);

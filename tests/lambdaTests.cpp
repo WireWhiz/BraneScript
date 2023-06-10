@@ -39,8 +39,7 @@ TEST(BraneScript, Lambdas)
     rt.resetMallocDiff();
     rt.loadLibrary(getLambdaLibrary());
     rt.loadLibrary(BSString::library());
-    Module* testScript = rt.loadModule(ir.modules.at("tests"));
-    ASSERT_TRUE(testScript);
+    auto testScript = rt.loadModule(ir.modules.at("tests"));
 
     auto returnInt = testScript->getFunction<void, BSLambda<int>&, int>("tests::returnInt(ref lambda::Lambda<int>,int)");
     ASSERT_TRUE(returnInt);

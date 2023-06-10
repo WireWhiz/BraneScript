@@ -134,7 +134,7 @@ namespace BraneScript
 
     struct NativeLibrary;
     //Empty library so link target is fulfilled
-    NativeLibrary& getLambdaLibrary();
+    NativeLibrary getLambdaLibrary();
 
 } // namespace BraneScript
 
