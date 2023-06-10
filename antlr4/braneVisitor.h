@@ -1,5 +1,5 @@
 
-// Generated from /home/wirewhiz/Documents/git/BraneEngine/libraries/internal/BraneScript/antlr4/brane.g4 by ANTLR 4.12.0
+// Generated from /home/wirewhiz/Documents/git/BraneEngine/libraries/BraneScript/antlr4/brane.g4 by ANTLR 4.12.0
 
 #pragma once
 
@@ -73,11 +73,11 @@ public:
 
     virtual std::any visitStructDef(braneParser::StructDefContext *context) = 0;
 
-    virtual std::any visitMemberVariable(braneParser::MemberVariableContext *context) = 0;
+    virtual std::any visitMemberFunctionStub(braneParser::MemberFunctionStubContext *context) = 0;
 
     virtual std::any visitMemberFunction(braneParser::MemberFunctionContext *context) = 0;
 
-    virtual std::any visitMemberFunctionStub(braneParser::MemberFunctionStubContext *context) = 0;
+    virtual std::any visitMemberVariable(braneParser::MemberVariableContext *context) = 0;
 
     virtual std::any visitExprStatement(braneParser::ExprStatementContext *context) = 0;
 

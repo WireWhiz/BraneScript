@@ -61,9 +61,9 @@ capturedVar : isRef='ref'? id=scopedID;
 varCapture : capturedVar (',' capturedVar)*;
 
 structDef     : structTags=tags? (template=templateDef)?  packed='packed'? 'struct' id=(ID | 'Lambda') '{' memberVars=structMember* '}';
-structMember  : var=declaration ';' #memberVariable
+structMember  : functionStub        #memberFunctionStub
               | func=function       #memberFunction
-              | functionStub        #memberFunctionStub
+              | var=declaration ';' #memberVariable
               ;
 
 statement   : expression ';'                                                              #exprStatement
@@ -91,9 +91,9 @@ expression  : INT                                                           #con
             | '(' type ')' expression                                       #cast
             | left=expression opr=(MUL | DIV) right=expression              #muldiv
             | left=expression opr=(ADD | SUB) right=expression              #addsub
+            | left=expression opr=('==' | '!=' | '<' | '>' | '<=' | '>=') right=expression #comparison
             | left=expression opr=LOGIC       right=expression              #logic
             | '!' value=expression                                          #not
-            | left=expression opr=('==' | '!=' | '<' | '>' | '<=' | '>=') right=expression #comparison
             | '(' expression ')'                                            #paren
             | returnType=type label='Lambda' ('[' capture=varCapture ']')? '(' arguments=argumentList ')' '{' statement* '}' #lambda
             ;

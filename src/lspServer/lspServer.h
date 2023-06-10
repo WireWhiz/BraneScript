@@ -4,7 +4,7 @@
 #include "asio.hpp"
 #include "lspMessage.h"
 #include "robin_hood.h"
-#include "staticAnalysis/staticAnalyzer.h"
+#include "analyzer.h"
 #include <functional>
 #include <thread>
 
@@ -34,7 +34,7 @@ namespace lsp
         std::recursive_mutex lock;
         bool initialized = false;
 
-        BraneScript::StaticAnalyzer analyzer;
+        BraneScript::Analyzer analyzer;
     };
 
     class LspServer

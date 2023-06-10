@@ -1,5 +1,5 @@
 
-// Generated from /home/wirewhiz/Documents/git/BraneEngine/libraries/internal/BraneScript/antlr4/brane.g4 by ANTLR 4.12.0
+// Generated from /home/wirewhiz/Documents/git/BraneEngine/libraries/BraneScript/antlr4/brane.g4 by ANTLR 4.12.0
 
 #pragma once
 
@@ -123,7 +123,7 @@ public:
     return visitChildren(ctx);
   }
 
-  virtual std::any visitMemberVariable(braneParser::MemberVariableContext *ctx) override {
+  virtual std::any visitMemberFunctionStub(braneParser::MemberFunctionStubContext *ctx) override {
     return visitChildren(ctx);
   }
 
@@ -131,7 +131,7 @@ public:
     return visitChildren(ctx);
   }
 
-  virtual std::any visitMemberFunctionStub(braneParser::MemberFunctionStubContext *ctx) override {
+  virtual std::any visitMemberVariable(braneParser::MemberVariableContext *ctx) override {
     return visitChildren(ctx);
   }
 

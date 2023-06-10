@@ -1,7 +1,7 @@
 #include "lspMessage.h"
 #include "lspServer.h"
 #include "robin_hood.h"
-#include "staticAnalysis/staticAnalyzer.h"
+#include "analyzer.h"
 #include <filesystem>
 #include <iostream>
 #include "tokenSerializer.h"
