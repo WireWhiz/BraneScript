@@ -139,14 +139,6 @@ public:
     return visitChildren(ctx);
   }
 
-  virtual std::any visitAssignment(braneParser::AssignmentContext *ctx) override {
-    return visitChildren(ctx);
-  }
-
-  virtual std::any visitRefAssignment(braneParser::RefAssignmentContext *ctx) override {
-    return visitChildren(ctx);
-  }
-
   virtual std::any visitScope(braneParser::ScopeContext *ctx) override {
     return visitChildren(ctx);
   }
@@ -163,15 +155,7 @@ public:
     return visitChildren(ctx);
   }
 
-  virtual std::any visitUnroll(braneParser::UnrollContext *ctx) override {
-    return visitChildren(ctx);
-  }
-
-  virtual std::any visitMemberAccess(braneParser::MemberAccessContext *ctx) override {
-    return visitChildren(ctx);
-  }
-
-  virtual std::any visitComparison(braneParser::ComparisonContext *ctx) override {
+  virtual std::any visitFor(braneParser::ForContext *ctx) override {
     return visitChildren(ctx);
   }
 
@@ -183,23 +167,11 @@ public:
     return visitChildren(ctx);
   }
 
-  virtual std::any visitConstInt(braneParser::ConstIntContext *ctx) override {
+  virtual std::any visitPreDec(braneParser::PreDecContext *ctx) override {
     return visitChildren(ctx);
   }
 
-  virtual std::any visitConstBool(braneParser::ConstBoolContext *ctx) override {
-    return visitChildren(ctx);
-  }
-
-  virtual std::any visitMuldiv(braneParser::MuldivContext *ctx) override {
-    return visitChildren(ctx);
-  }
-
-  virtual std::any visitIndexAccess(braneParser::IndexAccessContext *ctx) override {
-    return visitChildren(ctx);
-  }
-
-  virtual std::any visitConstString(braneParser::ConstStringContext *ctx) override {
+  virtual std::any visitRefAssignment(braneParser::RefAssignmentContext *ctx) override {
     return visitChildren(ctx);
   }
 
@@ -219,6 +191,62 @@ public:
     return visitChildren(ctx);
   }
 
+  virtual std::any visitSizeOfType(braneParser::SizeOfTypeContext *ctx) override {
+    return visitChildren(ctx);
+  }
+
+  virtual std::any visitId(braneParser::IdContext *ctx) override {
+    return visitChildren(ctx);
+  }
+
+  virtual std::any visitConstChar(braneParser::ConstCharContext *ctx) override {
+    return visitChildren(ctx);
+  }
+
+  virtual std::any visitMemberAccess(braneParser::MemberAccessContext *ctx) override {
+    return visitChildren(ctx);
+  }
+
+  virtual std::any visitComparison(braneParser::ComparisonContext *ctx) override {
+    return visitChildren(ctx);
+  }
+
+  virtual std::any visitAssignment(braneParser::AssignmentContext *ctx) override {
+    return visitChildren(ctx);
+  }
+
+  virtual std::any visitConstInt(braneParser::ConstIntContext *ctx) override {
+    return visitChildren(ctx);
+  }
+
+  virtual std::any visitConstBool(braneParser::ConstBoolContext *ctx) override {
+    return visitChildren(ctx);
+  }
+
+  virtual std::any visitPostDec(braneParser::PostDecContext *ctx) override {
+    return visitChildren(ctx);
+  }
+
+  virtual std::any visitMuldiv(braneParser::MuldivContext *ctx) override {
+    return visitChildren(ctx);
+  }
+
+  virtual std::any visitPreInc(braneParser::PreIncContext *ctx) override {
+    return visitChildren(ctx);
+  }
+
+  virtual std::any visitIndexAccess(braneParser::IndexAccessContext *ctx) override {
+    return visitChildren(ctx);
+  }
+
+  virtual std::any visitPostInc(braneParser::PostIncContext *ctx) override {
+    return visitChildren(ctx);
+  }
+
+  virtual std::any visitConstString(braneParser::ConstStringContext *ctx) override {
+    return visitChildren(ctx);
+  }
+
   virtual std::any visitSizeOfPack(braneParser::SizeOfPackContext *ctx) override {
     return visitChildren(ctx);
   }
@@ -231,19 +259,7 @@ public:
     return visitChildren(ctx);
   }
 
-  virtual std::any visitSizeOfType(braneParser::SizeOfTypeContext *ctx) override {
-    return visitChildren(ctx);
-  }
-
-  virtual std::any visitId(braneParser::IdContext *ctx) override {
-    return visitChildren(ctx);
-  }
-
   virtual std::any visitLogic(braneParser::LogicContext *ctx) override {
-    return visitChildren(ctx);
-  }
-
-  virtual std::any visitConstChar(braneParser::ConstCharContext *ctx) override {
     return visitChildren(ctx);
   }
 

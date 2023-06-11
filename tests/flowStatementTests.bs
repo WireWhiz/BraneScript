@@ -24,4 +24,13 @@ module "tests"
         }
         return a;
     }
+
+    int testFor(int a, int b)
+    {
+        for(int i = a; i < b; ++i)
+        {
+            a = a + 1;
+        }
+        return a;
+    }
 }

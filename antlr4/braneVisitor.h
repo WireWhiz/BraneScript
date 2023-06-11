@@ -81,10 +81,6 @@ public:
 
     virtual std::any visitExprStatement(braneParser::ExprStatementContext *context) = 0;
 
-    virtual std::any visitAssignment(braneParser::AssignmentContext *context) = 0;
-
-    virtual std::any visitRefAssignment(braneParser::RefAssignmentContext *context) = 0;
-
     virtual std::any visitScope(braneParser::ScopeContext *context) = 0;
 
     virtual std::any visitReturn(braneParser::ReturnContext *context) = 0;
@@ -93,25 +89,15 @@ public:
 
     virtual std::any visitWhile(braneParser::WhileContext *context) = 0;
 
-    virtual std::any visitUnroll(braneParser::UnrollContext *context) = 0;
-
-    virtual std::any visitMemberAccess(braneParser::MemberAccessContext *context) = 0;
-
-    virtual std::any visitComparison(braneParser::ComparisonContext *context) = 0;
+    virtual std::any visitFor(braneParser::ForContext *context) = 0;
 
     virtual std::any visitDecl(braneParser::DeclContext *context) = 0;
 
     virtual std::any visitAddsub(braneParser::AddsubContext *context) = 0;
 
-    virtual std::any visitConstInt(braneParser::ConstIntContext *context) = 0;
+    virtual std::any visitPreDec(braneParser::PreDecContext *context) = 0;
 
-    virtual std::any visitConstBool(braneParser::ConstBoolContext *context) = 0;
-
-    virtual std::any visitMuldiv(braneParser::MuldivContext *context) = 0;
-
-    virtual std::any visitIndexAccess(braneParser::IndexAccessContext *context) = 0;
-
-    virtual std::any visitConstString(braneParser::ConstStringContext *context) = 0;
+    virtual std::any visitRefAssignment(braneParser::RefAssignmentContext *context) = 0;
 
     virtual std::any visitCast(braneParser::CastContext *context) = 0;
 
@@ -121,19 +107,41 @@ public:
 
     virtual std::any visitLambda(braneParser::LambdaContext *context) = 0;
 
+    virtual std::any visitSizeOfType(braneParser::SizeOfTypeContext *context) = 0;
+
+    virtual std::any visitId(braneParser::IdContext *context) = 0;
+
+    virtual std::any visitConstChar(braneParser::ConstCharContext *context) = 0;
+
+    virtual std::any visitMemberAccess(braneParser::MemberAccessContext *context) = 0;
+
+    virtual std::any visitComparison(braneParser::ComparisonContext *context) = 0;
+
+    virtual std::any visitAssignment(braneParser::AssignmentContext *context) = 0;
+
+    virtual std::any visitConstInt(braneParser::ConstIntContext *context) = 0;
+
+    virtual std::any visitConstBool(braneParser::ConstBoolContext *context) = 0;
+
+    virtual std::any visitPostDec(braneParser::PostDecContext *context) = 0;
+
+    virtual std::any visitMuldiv(braneParser::MuldivContext *context) = 0;
+
+    virtual std::any visitPreInc(braneParser::PreIncContext *context) = 0;
+
+    virtual std::any visitIndexAccess(braneParser::IndexAccessContext *context) = 0;
+
+    virtual std::any visitPostInc(braneParser::PostIncContext *context) = 0;
+
+    virtual std::any visitConstString(braneParser::ConstStringContext *context) = 0;
+
     virtual std::any visitSizeOfPack(braneParser::SizeOfPackContext *context) = 0;
 
     virtual std::any visitFunctionCall(braneParser::FunctionCallContext *context) = 0;
 
     virtual std::any visitConstFloat(braneParser::ConstFloatContext *context) = 0;
 
-    virtual std::any visitSizeOfType(braneParser::SizeOfTypeContext *context) = 0;
-
-    virtual std::any visitId(braneParser::IdContext *context) = 0;
-
     virtual std::any visitLogic(braneParser::LogicContext *context) = 0;
-
-    virtual std::any visitConstChar(braneParser::ConstCharContext *context) = 0;
 
 
 };

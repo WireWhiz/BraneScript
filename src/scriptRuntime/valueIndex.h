@@ -14,14 +14,14 @@ namespace BraneScript
         Bool    = 1,
         Char    = 2,
         Scalar_Begin   = 3,
-        Signed_Begin = 3,
+        Int_Begin = 3,
         Unsigned_Begin = 3,
         UInt32  = 3,
         UInt64  = 4,
         Unsigned_End   = 4,
         Int32   = 5,
         Int64   = 6,
-        Signed_End = 6,
+        Int_End = 6,
         Float_Begin    = 7,
         Float32 = 7,
         Float64 = 8,
@@ -31,7 +31,7 @@ namespace BraneScript
         FuncRef = 10,
     };
     bool isValueTypeScalar(ValueType type);
-    bool isValueTypeSigned(ValueType type);
+    bool isValueTypeInt(ValueType type);
     bool isValueTypeUnsigned(ValueType type);
     bool isValueTypeFloat(ValueType type);
 

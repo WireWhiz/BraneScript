@@ -184,6 +184,4 @@ link "string"
         analyzer.load(path);
         analyzer.validate(path);
     }
-
-
 }

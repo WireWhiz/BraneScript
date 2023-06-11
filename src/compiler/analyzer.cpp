@@ -34,6 +34,7 @@ namespace BraneScript
 
     class AnalyzerCore : public braneBaseVisitor
     {
+
         class BraneErrorListener : public antlr4::BaseErrorListener
         {
             AnalyzerCore* _analyzer = nullptr;
@@ -1111,7 +1112,13 @@ namespace BraneScript
             ValueContext output;
             output.type = getTypeContext(ctx->name);
             output.isConst = ctx->isConst;
-            output.isRef = ctx->isRef;
+            output.isRef = !!ctx->isRef | !!ctx->isArrayRef;
+            if(ctx->isArrayRef)
+            {
+                output.arraySize = size_t(-1);
+                if(ctx->size)
+                    output.arraySize = std::stoul(ctx->size->getText());
+            }
 
             if(output.type.storageType == ValueType::Void && output.type.identifier != "void")
             {
@@ -1149,7 +1156,7 @@ namespace BraneScript
             std::string id = ctx->id->getText();
             if(auto prexisting = getIdentifierContext(id))
             {
-                if(prexisting->version == _result.version)
+                if(prexisting->version == _result.version && !prexisting->is<ModuleContext>())
                 {
                     recordError(ctx->id, "Identifier \"" + id + "\" already exists as \"" + prexisting->longId() + "\"!");
                     return LabeledValueContext{};
@@ -1163,6 +1170,7 @@ namespace BraneScript
             valueContext.type = std::move(type.type);
             valueContext.isConst = type.isConst;
             valueContext.isRef = type.isRef;
+            valueContext.arraySize = type.arraySize;
 
             valueContext.identifier.text = safeGetText(ctx->id);
             valueContext.identifier.range = toRange(ctx->id);
@@ -2060,14 +2068,30 @@ namespace BraneScript
 
         std::any visitWhile(braneParser::WhileContext* ctx) override
         {
-            STMT_ASSERT_EXISTS(ctx->cond, "while loop condition missing");
-            STMT_ASSERT_EXISTS(ctx->operation, "while loop body missing");
+            STMT_ASSERT_EXISTS(ctx->cond, "expected while loop condition");
+            STMT_ASSERT_EXISTS(ctx->operation, "expected while loop body");
             auto whileCtx = new WhileContext{};
             initDoc(whileCtx, ctx);
             whileCtx->condition = asExpr(visit(ctx->cond));
             whileCtx->body = asStmt(visit(ctx->operation));
             popDoc(whileCtx);
             RETURN_STMT(whileCtx);
+        }
+
+        std::any visitFor(braneParser::ForContext* ctx) override
+        {
+            STMT_ASSERT_EXISTS(ctx->cond, "expected for loop condition");
+            STMT_ASSERT_EXISTS(ctx->operation, "while loop body missing");
+            auto forCtx = new ForContext{};
+            initDoc(forCtx, ctx);
+            if(ctx->init)
+                forCtx->init = asStmt(visit(ctx->init));
+            forCtx->condition = asExpr(visit(ctx->cond));
+            if(ctx->step)
+                forCtx->step = asStmt(visit(ctx->step));
+            forCtx->body = asStmt(visit(ctx->operation));
+            popDoc(forCtx);
+            RETURN_STMT(forCtx);
         }
 
         std::any visitDecl(braneParser::DeclContext* ctx) override
@@ -2096,8 +2120,8 @@ namespace BraneScript
 
         std::any visitAssignment(braneParser::AssignmentContext* ctx) override
         {
-            STMT_ASSERT_EXISTS(ctx->lValue, "lValue expected");
-            STMT_ASSERT_EXISTS(ctx->rValue, "rValue expected");
+            EXPR_ASSERT_EXISTS(ctx->lValue, "lValue expected");
+            EXPR_ASSERT_EXISTS(ctx->rValue, "rValue expected");
             auto assignmentCtx = new AssignmentContext{};
             initDoc(assignmentCtx, ctx);
             auto lValue = asExpr(visit(ctx->lValue));
@@ -2136,7 +2160,7 @@ namespace BraneScript
                     }
                     recordError(ctx->rValue, error);
                     popDoc(assignmentCtx);
-                    RETURN_STMT(assignmentCtx);
+                    RETURN_EXPR(assignmentCtx);
                 }
                 rValue.reset(new FunctionReferenceContext(func));
             }
@@ -2152,13 +2176,13 @@ namespace BraneScript
 
             assignmentCtx->setArgs(lValue.release(), rValue.release());
             popDoc(assignmentCtx);
-            RETURN_STMT(assignmentCtx);
+            RETURN_EXPR(assignmentCtx);
         }
 
         std::any visitRefAssignment(braneParser::RefAssignmentContext* ctx) override
         {
-            STMT_ASSERT_EXISTS(ctx->lValue, "lValue expected");
-            STMT_ASSERT_EXISTS(ctx->rValue, "rValue expected");
+            EXPR_ASSERT_EXISTS(ctx->lValue, "lValue expected");
+            EXPR_ASSERT_EXISTS(ctx->rValue, "rValue expected");
             auto assignmentCtx = new RefAssignmentContext{};
             initDoc(assignmentCtx, ctx);
             auto lValue = asExpr(visit(ctx->lValue));
@@ -2177,18 +2201,18 @@ namespace BraneScript
             {
                 recordError(ctx->rValue, "Can not reference a temporary value!");
                 popDoc(assignmentCtx);
-                RETURN_STMT(assignmentCtx);
+                RETURN_EXPR(assignmentCtx);
             }
             if(lValue->returnType.type != rValue->returnType.type)
             {
                 recordError(ctx, "Can not reference a value of different type!");
                 popDoc(assignmentCtx);
-                RETURN_STMT(assignmentCtx);
+                RETURN_EXPR(assignmentCtx);
             }
 
             assignmentCtx->setArgs(lValue.release(), rValue.release());
             popDoc(assignmentCtx);
-            RETURN_STMT(assignmentCtx);
+            RETURN_EXPR(assignmentCtx);
         }
 
         std::any visitConstBool(braneParser::ConstBoolContext* ctx) override
@@ -2373,6 +2397,66 @@ namespace BraneScript
             return NULL_EXPR;
         }
 
+        std::any visitPreInc(braneParser::PreIncContext* ctx) override
+        {
+            EXPR_ASSERT_EXISTS(ctx->value, "expression expected");
+            auto value = asExpr(visit(ctx->value));
+            if(!isValueTypeScalar(value->returnType.type.storageType))
+            {
+                recordError(ctx, "pre increment operator may only be used on scalar types!");
+                return NULL_EXPR;
+            }
+            auto incCtx = new NativeIncrementContext(value.release(), true);
+            initDoc(incCtx, ctx);
+            popDoc(incCtx);
+            RETURN_EXPR(incCtx);
+        }
+
+        std::any visitPostInc(braneParser::PostIncContext* ctx) override
+        {
+            EXPR_ASSERT_EXISTS(ctx->value, "expression expected");
+            auto value = asExpr(visit(ctx->value));
+            if(!isValueTypeScalar(value->returnType.type.storageType))
+            {
+                recordError(ctx, "post increment operator may only be used on scalar types!");
+                return NULL_EXPR;
+            }
+            auto incCtx = new NativeIncrementContext(value.release(), false);
+            initDoc(incCtx, ctx);
+            popDoc(incCtx);
+            RETURN_EXPR(incCtx);
+        }
+
+        std::any visitPreDec(braneParser::PreDecContext* ctx) override
+        {
+            EXPR_ASSERT_EXISTS(ctx->value, "expression expected");
+            auto value = asExpr(visit(ctx->value));
+            if(!isValueTypeScalar(value->returnType.type.storageType))
+            {
+                recordError(ctx, "pre decrement operator may only be used on scalar types!");
+                return NULL_EXPR;
+            }
+            auto decCtx = new NativeDecrementContext(value.release(), true);
+            initDoc(decCtx, ctx);
+            popDoc(decCtx);
+            RETURN_EXPR(decCtx);
+        }
+
+        std::any visitPostDec(braneParser::PostDecContext* ctx) override
+        {
+            EXPR_ASSERT_EXISTS(ctx->value, "expression expected");
+            auto value = asExpr(visit(ctx->value));
+            if(!isValueTypeScalar(value->returnType.type.storageType))
+            {
+                recordError(ctx, "post decrement operator may only be used on scalar types!");
+                return NULL_EXPR;
+            }
+            auto decCtx = new NativeDecrementContext(value.release(), false);
+            initDoc(decCtx, ctx);
+            popDoc(decCtx);
+            RETURN_EXPR(decCtx);
+        }
+
         std::any visitNot(braneParser::NotContext* ctx) override
         {
             EXPR_ASSERT_EXISTS(ctx->value, "expression expected");
@@ -2457,11 +2541,24 @@ namespace BraneScript
             auto left = asExpr(visit(ctx->base));
             auto right = asExpr(visit(ctx->arg));
 
+            if(left->returnType.arraySize > 0)
+            {
+                if(!isValueTypeInt(right->returnType.type.storageType))
+                {
+                    recordError(ctx, "Array index must be an integer!");
+                    return NULL_EXPR;
+                }
+                RETURN_EXPR(new NativeIndexOperator(left.release(), right.release()));
+            }
+
             std::string error;
             if(auto callCtx = resolveOperator("[]", error, std::move(left), std::move(right)))
                 RETURN_EXPR(callCtx);
+
             recordError(ctx, error);
             return NULL_EXPR;
+
+
         }
 
         std::any visitId(braneParser::IdContext* ctx) override
@@ -2787,15 +2884,15 @@ namespace BraneScript
             _result.parseCtx.lexer = std::make_unique<braneLexer>(_result.parseCtx.inputStream.get());
             _result.parseCtx.lexer->removeErrorListeners();
 
-            _result.parseCtx.tokenStream = std::make_unique<antlr4::CommonTokenStream>(_result.parseCtx.lexer.get());
-            _result.parseCtx.parser = std::make_unique<braneParser>(_result.parseCtx.tokenStream.get());
-            _result.parseCtx.parser->removeErrorListeners();
-
-
             _result.parseCtx.lexErrorListener = std::make_unique<BraneErrorListener>();
             auto* lexErrorListener = dynamic_cast<BraneErrorListener*>(_result.parseCtx.lexErrorListener.get());
             lexErrorListener->setAnalyzer(this);
             _result.parseCtx.lexer->addErrorListener(_result.parseCtx.lexErrorListener.get());
+
+
+            _result.parseCtx.tokenStream = std::make_unique<antlr4::CommonTokenStream>(_result.parseCtx.lexer.get());
+            _result.parseCtx.parser = std::make_unique<braneParser>(_result.parseCtx.tokenStream.get());
+            _result.parseCtx.parser->removeErrorListeners();
 
             _result.parseCtx.parseErrorListener = std::make_unique<BraneErrorListener>();
             auto* parseErrorListener = dynamic_cast<BraneErrorListener*>(_result.parseCtx.parseErrorListener.get());
@@ -2891,6 +2988,8 @@ namespace BraneScript
         assert(_analyzationContexts.contains(path));
         auto& context = _analyzationContexts.at(path);
         std::scoped_lock lock(context->lock);
+        if(!context->errors.empty())
+            return false;
         AnalyzerCore(*this, *context, false, allowUnsafe).analyze();
         context->complete = true;
         return context->errors.empty();

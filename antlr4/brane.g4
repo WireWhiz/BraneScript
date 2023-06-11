@@ -28,7 +28,7 @@ tags   : '[' (tag=STRING (',' tag=STRING)*)? ']';
 module        : modTags=tags? 'module' id=STRING linkList '{' moduleComponent* '}';
 
 moduleComponent : function
-                | functionStub
+                | functionStub ';'
                 | structDef
                 | global
                 ;
@@ -46,7 +46,7 @@ templateArgs     : '<' templateArg (',' templateArg)* '>';
 
 scopedID    : id=(ID | 'Lambda') (template=templateArgs)? ('::' child=scopedID)?;
 
-type        : isConst='const'? isRef='ref'? name=scopedID;
+type        : isConst='const'? (isRef='ref' | isArrayRef='ref' '[' size=INT ']')?  name=scopedID;
 declaration : type id=ID;
 argumentListItem : declaration | pack=ID '...' id=ID;
 argumentList: (argumentListItem (',' argumentListItem)*)?;
@@ -54,26 +54,25 @@ argumentPackItem : expr=expression | packID=ID '...';
 argumentPack: (argumentPackItem (',' argumentPackItem)*)?;
 bracketOpr : ('('')') | ('['']');
 functionSig : funcTags=tags? (template=templateDef)? isConstexpr='constexpr'? ((type (id=ID | ('opr' (oprID=(ADD|SUB|MUL|DIV|'=='|'!='|'<'|'>'|'<='|'>='|'!'|LOGIC) | bracketOprID=bracketOpr)))) | ('opr' castType=type));
-functionStub: sig=functionSig '(' arguments=argumentList ')' isConst='const'? 'ext' ';';
+functionStub: sig=functionSig '(' arguments=argumentList ')' isConst='const'? 'ext';
 function    : sig=functionSig '(' arguments=argumentList ')' isConst='const'? '{' statements=statement* '}';
 
 capturedVar : isRef='ref'? id=scopedID;
 varCapture : capturedVar (',' capturedVar)*;
 
 structDef     : structTags=tags? (template=templateDef)?  packed='packed'? 'struct' id=(ID | 'Lambda') '{' memberVars=structMember* '}';
-structMember  : functionStub        #memberFunctionStub
+structMember  : functionStub ';'    #memberFunctionStub
               | func=function       #memberFunction
               | var=declaration ';' #memberVariable
               ;
 
 statement   : expression ';'                                                              #exprStatement
-            | lValue=expression '=' rValue=expression ';'                                 #assignment
-            | lValue=expression '<-' rValue=expression ';'                                #refAssignment
             | '{' statement* '}'                                                          #scope
             | 'return' expression? ';'                                                    #return
             | 'if' '(' cond=expression ')' operation=statement ('else' elseOp=statement)? #if
             | 'while' '(' cond=expression ')' operation=statement                         #while
-            | 'unroll' '(' id=ID ')' body=statement                                       #unroll
+            | 'for' '(' init=expression? ';' cond=expression ';' step=expression? ')' operation=statement #for
+            | ';'                                                                         #empty
             ;
 
 expression  : INT                                                           #constInt
@@ -89,6 +88,10 @@ expression  : INT                                                           #con
             | base=expression '[' arg=expression ']'                        #indexAccess
             | base=expression '.' member=ID  (template=templateArgs)?       #memberAccess
             | '(' type ')' expression                                       #cast
+            | '++' value=expression                                         #preInc
+            | '--' value=expression                                         #preDec
+            | value=expression '++'                                         #postInc
+            | value=expression '--'                                         #postDec
             | left=expression opr=(MUL | DIV) right=expression              #muldiv
             | left=expression opr=(ADD | SUB) right=expression              #addsub
             | left=expression opr=('==' | '!=' | '<' | '>' | '<=' | '>=') right=expression #comparison
@@ -96,4 +99,6 @@ expression  : INT                                                           #con
             | '!' value=expression                                          #not
             | '(' expression ')'                                            #paren
             | returnType=type label='Lambda' ('[' capture=varCapture ']')? '(' arguments=argumentList ')' '{' statement* '}' #lambda
+            | lValue=expression '=' rValue=expression                       #assignment
+            | lValue=expression '<-' rValue=expression                      #refAssignment
             ;

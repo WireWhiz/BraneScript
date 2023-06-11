@@ -8,7 +8,7 @@ namespace BraneScript
 {
     bool isValueTypeScalar(ValueType type) { return ValueType::Scalar_Begin <= type && type <= ValueType::Scalar_End; }
 
-    bool isValueTypeSigned(ValueType type) { return ValueType::Signed_Begin <= type && type <= ValueType::Signed_End; }
+    bool isValueTypeInt(ValueType type) { return ValueType::Int_Begin <= type && type <= ValueType::Int_End; }
 
     bool isValueTypeUnsigned(ValueType type)  { return ValueType::Unsigned_Begin <= type && type <= ValueType::Unsigned_End; }
 

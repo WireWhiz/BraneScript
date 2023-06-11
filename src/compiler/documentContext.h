@@ -79,6 +79,7 @@ namespace BraneScript
         bool isConst = false;
         // Is this a reference
         bool isRef = false;
+        size_t arraySize = 0;
 
         bool operator==(const ValueContext& o) const;
         bool operator!=(const ValueContext& o) const;
@@ -429,7 +430,19 @@ namespace BraneScript
         DocumentContext* deepCopy(const std::function<DocumentContext*(DocumentContext*)>& callback) const override;
     };
 
-    struct AssignmentContext : public StatementContext
+    struct ForContext : public StatementContext
+    {
+        std::unique_ptr<StatementContext> init;
+        std::unique_ptr<ExpressionContext> condition;
+        std::unique_ptr<StatementContext> step;
+        std::unique_ptr<StatementContext> body;
+        bool isConstexpr() const override;
+
+        llvm::Value* createAST(ASTContext& ctx) const override;
+        DocumentContext* deepCopy(const std::function<DocumentContext*(DocumentContext*)>& callback) const override;
+    };
+
+    struct AssignmentContext : public ExpressionContext
     {
         std::unique_ptr<ExpressionContext> lValue;
         std::unique_ptr<ExpressionContext> rValue;
@@ -442,7 +455,7 @@ namespace BraneScript
         DocumentContext* deepCopy(const std::function<DocumentContext*(DocumentContext*)>& callback) const override;
     };
 
-    struct RefAssignmentContext : public StatementContext
+    struct RefAssignmentContext : public ExpressionContext
     {
         std::unique_ptr<ExpressionContext> lValue;
         std::unique_ptr<ExpressionContext> rValue;
@@ -722,9 +735,46 @@ namespace BraneScript
         DocumentContext* deepCopy(const std::function<DocumentContext*(DocumentContext*)>& callback) const override;
     };
 
+    struct NativeNegateContext : public ExpressionContext
+    {
+        std::unique_ptr<ExpressionContext> value;
+
+        NativeNegateContext(ExpressionContext* value);
+
+        bool isConstexpr() const override;
+        llvm::Value* createAST(ASTContext& ctx) const override;
+
+        DocumentContext* deepCopy(const std::function<DocumentContext*(DocumentContext*)>& callback) const override;
+    };
+
+    struct NativeIncrementContext : public ExpressionContext
+    {
+        std::unique_ptr<ExpressionContext> value;
+        bool isPrefix;
+
+        NativeIncrementContext(ExpressionContext* value, bool isPrefix);
+
+        bool isConstexpr() const override;
+        llvm::Value* createAST(ASTContext& ctx) const override;
+
+        DocumentContext* deepCopy(const std::function<DocumentContext*(DocumentContext*)>& callback) const override;
+    };
+
+    struct NativeDecrementContext : public ExpressionContext
+    {
+        std::unique_ptr<ExpressionContext> value;
+        bool isPrefix;
+
+        NativeDecrementContext(ExpressionContext* value, bool isPrefix);
+
+        bool isConstexpr() const override;
+        llvm::Value* createAST(ASTContext& ctx) const override;
+
+        DocumentContext* deepCopy(const std::function<DocumentContext*(DocumentContext*)>& callback) const override;
+    };
+
     struct NativeNotContext  : public ExpressionContext
     {
-
         std::unique_ptr<ExpressionContext> value;
 
         NativeNotContext(ExpressionContext* value);
@@ -781,6 +831,17 @@ namespace BraneScript
         std::unique_ptr<ExpressionContext> functionRef;
         std::vector<std::unique_ptr<ExpressionContext>> arguments;
 
+        bool isConstexpr() const override;
+        llvm::Value* createAST(ASTContext& ctx) const override;
+        DocumentContext* deepCopy(const std::function<DocumentContext*(DocumentContext*)>& callback) const override;
+    };
+
+    struct NativeIndexOperator : public ExpressionContext
+    {
+        std::unique_ptr<ExpressionContext> source;
+        std::unique_ptr<ExpressionContext> index;
+
+        NativeIndexOperator(ExpressionContext* source, ExpressionContext* index);
         bool isConstexpr() const override;
         llvm::Value* createAST(ASTContext& ctx) const override;
         DocumentContext* deepCopy(const std::function<DocumentContext*(DocumentContext*)>& callback) const override;

@@ -1,0 +1,24 @@
+module "vector"
+{
+    template<typedef T>
+    struct Vector
+    {
+        ref void data;
+        uint size;
+        uint allocSize;
+        void _construct()
+        {
+            size = 0;
+            allocSize = 0;
+        }
+        void _destruct()
+        {
+            if (allocSize > 0)
+            {
+                free(data);
+            }
+        }
+        void _move(ref Vector<T> other) ext;
+        void _copy(const ref Vector<T> other) ext;
+    }
+}

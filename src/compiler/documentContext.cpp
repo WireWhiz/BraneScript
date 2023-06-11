@@ -54,10 +54,7 @@ namespace BraneScript
         return ValueType::Unsigned_Begin <= storageType && storageType <= ValueType::Unsigned_End;
     }
 
-    bool TypeContext::isInt() const
-    {
-        return ValueType::Signed_Begin <= storageType && storageType <= ValueType::Signed_End;
-    }
+    bool TypeContext::isInt() const { return ValueType::Int_Begin <= storageType && storageType <= ValueType::Int_End; }
 
     bool TypeContext::isFloat() const
     {
@@ -666,8 +663,8 @@ namespace BraneScript
             ctx.setInsertPoint(llvm::BasicBlock::Create(*ctx.llvmCtx, "", ctx.func));
         if(ctx.dBuilder)
         {
-            auto newScope = ctx.dBuilder->createLexicalBlock(ctx.debugScope(), ctx.diFunction->getFile(),
-                                                             range.start.line, range.start.charPos);
+            auto newScope = ctx.dBuilder->createLexicalBlock(
+                ctx.debugScope(), ctx.diFunction->getFile(), range.start.line, range.start.charPos);
             ctx.setDebugScope(newScope);
             ctx.setDebugLocation(this);
         }
@@ -684,7 +681,7 @@ namespace BraneScript
                 llvm::DILocalVariable* dVar = ctx.dBuilder->createAutoVariable(
                     ctx.debugScope(), var->identifier.text, ctx.diFunction->getFile(), line, dType, true);
 
-                //TODO move this to where the variable is declared in the grammar to make debug info cleaner
+                // TODO move this to where the variable is declared in the grammar to make debug info cleaner
                 ctx.dBuilder->insertDeclare(
                     varValue,
                     dVar,
@@ -904,6 +901,48 @@ namespace BraneScript
 
     bool WhileContext::isConstexpr() const { return condition->isConstexpr() && body->isConstexpr(); }
 
+    bool ForContext::isConstexpr() const
+    {
+        return init->isConstexpr() && condition->isConstexpr() && step->isConstexpr() && body->isConstexpr();
+    }
+
+    llvm::Value* ForContext::createAST(ASTContext& ctx) const
+    {
+        auto* header = llvm::BasicBlock::Create(*ctx.llvmCtx, "forHeader", ctx.func);
+        auto* bodyBlock = llvm::BasicBlock::Create(*ctx.llvmCtx, "forBody", ctx.func);
+        auto* end = llvm::BasicBlock::Create(*ctx.llvmCtx, "forEnd", ctx.func);
+
+        init->createAST(ctx);
+        ctx.builder.CreateBr(header);
+        ctx.setInsertPoint(header);
+
+        auto* cond = condition->createAST(ctx);
+        ctx.builder.CreateCondBr(cond, bodyBlock, end);
+
+        ctx.setInsertPoint(bodyBlock);
+        body->createAST(ctx);
+        step->createAST(ctx);
+        ctx.builder.CreateBr(header);
+
+        ctx.setInsertPoint(end);
+        return nullptr;
+    }
+
+    DocumentContext* ForContext::deepCopy(const std::function<DocumentContext*(DocumentContext*)>& callback) const
+    {
+        auto copy = new ForContext{};
+        copyBase(this, copy);
+        copy->init.reset(assertCast<StatementContext>(init->deepCopy(callback)));
+        copy->init->parent = copy;
+        copy->condition.reset(assertCast<ExpressionContext>(condition->deepCopy(callback)));
+        copy->condition->parent = copy;
+        copy->step.reset(assertCast<StatementContext>(step->deepCopy(callback)));
+        copy->step->parent = copy;
+        copy->body.reset(assertCast<StatementContext>(body->deepCopy(callback)));
+        copy->body->parent = copy;
+        return callback(copy);
+    }
+
     llvm::Value* AssignmentContext::createAST(ASTContext& ctx) const
     {
         llvm::Value* l = ctx.dereferenceToDepth(lValue->createAST(ctx),
@@ -917,7 +956,7 @@ namespace BraneScript
             assert(l->getType()->getContainedType(0) == r->getType());
             ctx.setDebugLocation(this);
             ctx.builder.CreateStore(r, l);
-            return nullptr;
+            return l;
         }
 
         auto cc = ctx.functions.find(lValue->returnType.type.structCtx->copyConstructor->signature());
@@ -929,7 +968,7 @@ namespace BraneScript
         std::vector<llvm::Value*> args = {l, ctx.dereferenceToDepth(r, 1)};
         ctx.setDebugLocation(this);
         ctx.builder.CreateCall(cc->second, args);
-        return nullptr;
+        return l;
     }
 
     DocumentContext*
@@ -950,12 +989,14 @@ namespace BraneScript
         : lValue(lValue), rValue(rValue)
     {
         assert(lValue && rValue);
+        returnType = lValue->returnType;
     }
 
     void AssignmentContext::setArgs(ExpressionContext* lValue, ExpressionContext* rValue)
     {
         this->lValue.reset(lValue);
         this->rValue.reset(rValue);
+        returnType = lValue->returnType;
     }
 
     bool RefAssignmentContext::isConstexpr() const { return false; }
@@ -964,6 +1005,7 @@ namespace BraneScript
         : lValue(lValue), rValue(rValue)
     {
         assert(lValue->returnType.isRef && (rValue->returnType.isLValue || rValue->returnType.isRef));
+        returnType = lValue->returnType;
     }
 
     void RefAssignmentContext::setArgs(ExpressionContext* lValue, ExpressionContext* rValue)
@@ -981,7 +1023,7 @@ namespace BraneScript
         llvm::Value* r = ctx.dereferenceToDepth(rValue->createAST(ctx), 1);
 
         ctx.builder.CreateStore(r, l);
-        return nullptr;
+        return l;
     }
 
     DocumentContext*
@@ -1574,10 +1616,10 @@ namespace BraneScript
                     case MUL:
                         return ctx.builder.CreateMul(l, r);
                     case DIV:
-                        if(isValueTypeSigned(type))
-                            return ctx.builder.CreateSDiv(l, r);
-                        else
+                        if(isValueTypeUnsigned(type))
                             return ctx.builder.CreateUDiv(l, r);
+                        else
+                            return ctx.builder.CreateSDiv(l, r);
                 }
             case ValueType::Float32:
             case ValueType::Float64:
@@ -1602,6 +1644,104 @@ namespace BraneScript
     {
         return new NativeArithmeticContext(
             op, (ExpressionContext*)lValue->deepCopy(), (ExpressionContext*)rValue->deepCopy());
+    }
+
+    NativeNegateContext::NativeNegateContext(ExpressionContext* value) : value(value)
+    {
+        assert(isValueTypeScalar(value->returnType.type.storageType));
+        returnType = value->returnType;
+        returnType.isRef = false;
+        returnType.isLValue = false;
+    }
+
+    bool NativeNegateContext::isConstexpr() const { return value->isConstexpr(); }
+
+    llvm::Value* NativeNegateContext::createAST(ASTContext& ctx) const
+    {
+        auto num = ctx.dereferenceToDepth(value->createAST(ctx), 0);
+        if(num->getType()->isFloatTy())
+            return ctx.builder.CreateFNeg(num);
+        else
+            return ctx.builder.CreateNeg(num);
+    }
+
+    DocumentContext*
+    NativeNegateContext::deepCopy(const std::function<DocumentContext*(DocumentContext*)>& callback) const
+    {
+        auto copy = new NativeNegateContext((ExpressionContext*)value->deepCopy(callback));
+        value->parent = copy;
+        return callback(copy);
+    }
+
+    NativeIncrementContext::NativeIncrementContext(ExpressionContext* value, bool isPrefix) : value(value)
+    {
+        assert(isValueTypeScalar(value->returnType.type.storageType));
+        assert(value->returnType.isLValue || value->returnType.isRef);
+        returnType = value->returnType;
+        returnType.isRef = false;
+        returnType.isLValue = false;
+    }
+
+    bool NativeIncrementContext::isConstexpr() const { return value->isConstexpr(); }
+
+    llvm::Value* NativeIncrementContext::createAST(ASTContext& ctx) const
+    {
+        auto ref = ctx.dereferenceToDepth(value->createAST(ctx), 1);
+        auto num = ctx.dereferenceToDepth(ref, 0);
+
+        llvm::Value* incNum = nullptr;
+        ctx.setDebugLocation(this);
+        if(isValueTypeInt(value->returnType.type.storageType))
+            incNum = ctx.builder.CreateAdd(num, llvm::ConstantInt::get(num->getType(), 1));
+        else
+            incNum = ctx.builder.CreateFAdd(num, llvm::ConstantFP::get(num->getType(), 1.0));
+        ctx.builder.CreateStore(incNum, ref);
+        if(isPrefix)
+            return incNum;
+        return num;
+    }
+
+    DocumentContext*
+    NativeIncrementContext::deepCopy(const std::function<DocumentContext*(DocumentContext*)>& callback) const
+    {
+        auto copy = new NativeIncrementContext((ExpressionContext*)value->deepCopy(callback), isPrefix);
+        value->parent = copy;
+        return callback(copy);
+    }
+
+    NativeDecrementContext::NativeDecrementContext(ExpressionContext* value, bool isPrefix) : value(value)
+    {
+        assert(isValueTypeScalar(value->returnType.type.storageType));
+        assert(value->returnType.isLValue || value->returnType.isRef);
+        returnType = value->returnType;
+        returnType.isRef = false;
+        returnType.isLValue = false;
+    }
+
+    bool NativeDecrementContext::isConstexpr() const { return value->isConstexpr(); }
+
+    llvm::Value* NativeDecrementContext::createAST(ASTContext& ctx) const
+    {
+        auto ref = ctx.dereferenceToDepth(value->createAST(ctx), 1);
+        auto num = ctx.dereferenceToDepth(ref, 0);
+
+        llvm::Value* decNum = nullptr;
+        if(isValueTypeInt(value->returnType.type.storageType))
+            decNum = ctx.builder.CreateSub(num, llvm::ConstantInt::get(num->getType(), 1));
+        else
+            decNum = ctx.builder.CreateFSub(num, llvm::ConstantFP::get(num->getType(), 1.0));
+        ctx.builder.CreateStore(decNum, ref);
+        if(isPrefix)
+            return decNum;
+        return num;
+    }
+
+    DocumentContext*
+    NativeDecrementContext::deepCopy(const std::function<DocumentContext*(DocumentContext*)>& callback) const
+    {
+        auto copy = new NativeDecrementContext((ExpressionContext*)value->deepCopy(callback), isPrefix);
+        value->parent = copy;
+        return callback(copy);
     }
 
     NativeNotContext::NativeNotContext(ExpressionContext* value) : value(value)
@@ -1859,6 +1999,39 @@ namespace BraneScript
         return retVal;
     }
 
+    NativeIndexOperator::NativeIndexOperator(ExpressionContext* source, ExpressionContext* index)
+        : source(source), index(index)
+    {
+        assert(source);
+        assert(index);
+        assert(source->returnType.isRef);
+        assert(source->returnType.type.storageType == ValueType::UInt32 ||
+               source->returnType.type.storageType == ValueType::Int32 ||
+               source->returnType.type.storageType == ValueType::UInt64 ||
+               source->returnType.type.storageType == ValueType::Int64);
+        returnType = source->returnType;
+    }
+
+    bool NativeIndexOperator::isConstexpr() const { return false; }
+
+    llvm::Value* NativeIndexOperator::createAST(ASTContext& ctx) const
+    {
+        auto srcArr = ctx.dereferenceToDepth(source->createAST(ctx), 1);
+        auto idx = ctx.dereferenceToDepth(index->createAST(ctx), 0);
+        assert(idx->getType()->isIntegerTy());
+        auto elementType = returnType;
+        elementType.isRef = false;
+
+        return ctx.builder.CreateGEP(ctx.getLLVMType(elementType), srcArr, idx);
+    }
+
+    DocumentContext*
+    NativeIndexOperator::deepCopy(const std::function<DocumentContext*(DocumentContext*)>& callback) const
+    {
+        return new NativeIndexOperator((ExpressionContext*)source->deepCopy(callback),
+                                       (ExpressionContext*)index->deepCopy(callback));
+    }
+
     bool LambdaInstanceContext::isConstexpr() const { return false; }
 
     DocumentContext*
@@ -2070,8 +2243,14 @@ namespace BraneScript
                     auto* dType = ctx.getDebugType(*arguments[index]);
                     auto line = arguments[index]->range.start.line;
                     auto charPos = arguments[index]->range.start.charPos;
-                    llvm::DILocalVariable* dArg = ctx.dBuilder->createParameterVariable(
-                        ctx.debugScope(), arguments[index]->identifier.text, index, ctx.diFunction->getFile(), line, dType, true);
+                    llvm::DILocalVariable* dArg =
+                        ctx.dBuilder->createParameterVariable(ctx.debugScope(),
+                                                              arguments[index]->identifier.text,
+                                                              index + 1,
+                                                              ctx.diFunction->getFile(),
+                                                              line,
+                                                              dType,
+                                                              true);
 
                     ctx.dBuilder->insertDeclare(
                         argValue,
@@ -2105,10 +2284,10 @@ namespace BraneScript
         llvm::raw_string_ostream funcErrStr(funcError);
         if(llvm::verifyFunction(*ctx.func, &funcErrStr))
         {
-                ctx.printModule();
-                fprintf(stderr, "Invalid function IR generated:\n%s\n", funcErrStr.str().c_str());
+            ctx.printModule();
+            fprintf(stderr, "Invalid function IR generated:\n%s\n", funcErrStr.str().c_str());
 
-                throw std::runtime_error("Invalid function IR generated");
+            throw std::runtime_error("Invalid function IR generated");
         }
         // Only run optimization if verification succeeds
         else if(ctx.fpm)
@@ -2602,6 +2781,4 @@ namespace BraneScript
     }
 
     bool ConstValueContext::isConstexpr() const { return true; }
-
-
 } // namespace BraneScript

@@ -21,6 +21,7 @@ TEST(BraneScript, UnsafeTests)
     analyzer.load(path);
     analyzer.validate(path, false);
     EXPECT_GT(analyzer.getCtx(path)->errors.size(), 0);
+    analyzer.load(path, true, true);
     analyzer.validate(path, true);
     checkCompileErrors(analyzer, path)
 

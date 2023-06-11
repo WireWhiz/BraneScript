@@ -206,7 +206,7 @@ namespace BraneScript
 
         for(auto& glob : irModule.globals)
         {
-            auto globSymbol = _session->lookup({&lib}, (*_mangler)(glob.name));
+            llvm::Expected<llvm::JITEvaluatedSymbol> globSymbol = _session->lookup({&lib}, (*_mangler)(glob.name));
             if(!globSymbol)
                 throw std::runtime_error("Unable to find exported global: " + toString(globSymbol.takeError()));
             module->globalNames.insert({glob.name, module->globalVars.size()});
@@ -223,11 +223,15 @@ namespace BraneScript
         }
 
         auto constructor = _session->lookup({&lib}, (*_mangler)("_construct"));
-        if(constructor)
+        if(llvm::Error error = constructor.takeError())
+            consumeError(std::move(error));//We just want to check if it exists or not, so ignore the error.
+        else
             FuncRef<void>(constructor->getAddress())();
 
         auto destructor = _session->lookup({&lib}, (*_mangler)("_construct"));
-        if(destructor)
+        if(llvm::Error error = destructor.takeError())
+            consumeError(std::move(error));//We just want to check if it exists or not, so ignore the error.
+        else
             module->destructor = FuncRef<void>(destructor->getAddress());
 
 
@@ -298,7 +302,13 @@ namespace BraneScript
         _modules.erase(id);
     }
 
-    ScriptRuntime::~ScriptRuntime() { _modules.clear(); }
+    ScriptRuntime::~ScriptRuntime()
+    {
+        if(auto error = _session->endSession())
+            throw std::runtime_error("Unable to end session: " + toString(std::move(error)));
+        _linkingLayer->unregisterJITEventListener(*llvm::JITEventListener::createGDBRegistrationListener());
+        _modules.clear();
+    }
 
     llvm::orc::JITDylib& ScriptRuntime::loadLibrary(NativeLibrary&& lib)
     {

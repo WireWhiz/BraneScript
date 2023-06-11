@@ -35,4 +35,11 @@ TEST(BraneScript, FlowStatements)
     auto testWhile = testScript->getFunction<int, int, int>("tests::testWhile");
     ASSERT_TRUE(testWhile);
     EXPECT_EQ(testWhile(2, 10), 10);
+
+    auto testFor = testScript->getFunction<int, int, int>("tests::testFor");
+    ASSERT_TRUE(testFor);
+    EXPECT_EQ(testFor(2, 10), 10);
+    EXPECT_EQ(testFor(2, 2), 2);
+    EXPECT_EQ(testFor(0, 0), 0);
+    EXPECT_EQ(testFor(0, 30), 30);
 }
