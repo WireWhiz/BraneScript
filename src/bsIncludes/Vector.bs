@@ -93,9 +93,6 @@ link "unsafe"
         {
             for(uint i = 0; i < _size; i++)
                 _destruct(_data[i]);
-            if(_allocSize > 0)
-                free(_data);
-            _allocSize = 0;
             _size = 0;
         }
         void remove(uint index)

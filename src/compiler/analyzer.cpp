@@ -334,8 +334,29 @@ namespace BraneScript
 
         DocumentContext* getIdentifierContextFromLibs(const std::string& identifier)
         {
-            auto currentMod = getLast<ModuleContext>();
-            for(auto& link : currentMod->links)
+            // For a template, search its module links first
+            if(_instantiatingTemplate)
+            {
+                auto currentMod = getLast<ModuleContext>();
+                if(currentMod != _currentModule)
+                {
+                    for(auto& link : currentMod->links)
+                    {
+                        if(!link.second->alias.empty())
+                            continue;
+                        if(!link.second->module)
+                        {
+                            link.second->module = _analyzer.getModule(link.second->moduleName);
+                            if(!link.second->module)
+                                continue;
+                        }
+                        if(auto* ident = link.second->module->findIdentifier(identifier, IDSearchOptions_ChildrenOnly))
+                            return ident;
+                    }
+                }
+            }
+
+            for(auto& link : _currentModule->links)
             {
                 if(!link.second->alias.empty())
                     continue;
@@ -588,9 +609,19 @@ namespace BraneScript
                 scope->getFunction(name, overrides, IDSearchOptions_ChildrenOnly);
             else
             {
-                lastNode()->getFunction(name, overrides, IDSearchOptions_ParentsOnly);
                 robin_hood::unordered_set<ModuleContext*> searched;
-                getFunctionOverridesInLinks(name, overrides, getLast<ModuleContext>(), searched);
+                if(_instantiatingTemplate)
+                {
+                    auto tempScope = getLast<ModuleContext>();
+                    if(tempScope != _currentModule)
+                    {
+                        tempScope->getFunction(name, overrides, IDSearchOptions_ChildrenOnly);
+                        searched.insert(tempScope);
+                        getFunctionOverridesInLinks(name, overrides, tempScope, searched);
+                    }
+                }
+                _currentModule->getFunction(name, overrides, IDSearchOptions_ChildrenOnly);
+                getFunctionOverridesInLinks(name, overrides, _currentModule, searched);
             }
 
             if(tempArgsCtx)
@@ -2131,8 +2162,8 @@ namespace BraneScript
             initDoc(assignmentCtx, ctx);
             auto lValue = asExpr(visit(ctx->lValue));
             assert(lValue);
-            if(!lValue->returnType.isLValue)
-                recordError(ctx->lValue, "Expression is not an lValue!");
+            if(!lValue->returnType.isLValue && !lValue->returnType.isRef)
+                recordError(ctx->lValue, "Can not assign to a temporary value!");
             if(lValue->returnType.isConst)
                 recordError(ctx->lValue, "Can not modify a constant value!");
 
@@ -2195,7 +2226,7 @@ namespace BraneScript
             if(!lValue->returnType.isRef)
                 recordError(ctx->lValue, "Expression is not a reference!");
             if(!lValue->returnType.isLValue)
-                recordError(ctx->lValue, "Expression is not an lValue!");
+                recordError(ctx->lValue, "Can not assign to a temporary value!");
             if(lValue->returnType.isConst)
                 recordError(ctx->lValue, "Can not modify a constant value!");
 
@@ -2586,29 +2617,42 @@ namespace BraneScript
                 // Do we implicitly need to reference this?
                 if(auto parentStruct= node->parent->as<StructContext>())
                 {
-                    auto memberAccess = new MemberAccessContext{};
-                    initDoc(memberAccess, ctx);
-                    auto thisRef =
-                        lastNode()->findIdentifier("this", IDSearchOptions_ParentsOnly)->as<LabeledValueContext>();
-                    assert(thisRef);
-                    auto valueAccess = new LabeledValueReferenceContext{*thisRef};
-                    initDoc(valueAccess, ctx);
-
-                    memberAccess->baseExpression.reset(valueAccess);
-                    memberAccess->member = 0;
+                    bool parentContainsMember = false;
                     for(auto& m : parentStruct->variables)
                     {
                         if(m->identifier.text == valueContext->identifier.text)
+                        {
+                            parentContainsMember = true;
                             break;
-                        memberAccess->member++;
+                        }
                     }
 
-                    assert(memberAccess->member < parentStruct->variables.size());
-                    memberAccess->returnType = *parentStruct->variables[memberAccess->member];
+                    if(parentContainsMember)
+                    {
+                        auto memberAccess = new MemberAccessContext{};
+                        initDoc(memberAccess, ctx);
+                        auto thisRef =
+                            lastNode()->findIdentifier("this", IDSearchOptions_ParentsOnly)->as<LabeledValueContext>();
+                        assert(thisRef);
+                        auto valueAccess = new LabeledValueReferenceContext{*thisRef};
+                        initDoc(valueAccess, ctx);
 
-                    popDoc(valueAccess);
-                    popDoc(memberAccess);
-                    RETURN_EXPR(memberAccess);
+                        memberAccess->baseExpression.reset(valueAccess);
+                        memberAccess->member = 0;
+                        for(auto& m : parentStruct->variables)
+                        {
+                            if(m->identifier.text == valueContext->identifier.text)
+                                break;
+                            memberAccess->member++;
+                        }
+
+                        assert(memberAccess->member < parentStruct->variables.size());
+                        memberAccess->returnType = *parentStruct->variables[memberAccess->member];
+
+                        popDoc(valueAccess);
+                        popDoc(memberAccess);
+                        RETURN_EXPR(memberAccess);
+                    }
                 }
 
                 auto valueAccess = new LabeledValueReferenceContext{*node->as<LabeledValueContext>()};
