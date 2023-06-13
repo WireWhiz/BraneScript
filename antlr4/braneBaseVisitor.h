@@ -159,6 +159,10 @@ public:
     return visitChildren(ctx);
   }
 
+  virtual std::any visitEmpty(braneParser::EmptyContext *ctx) override {
+    return visitChildren(ctx);
+  }
+
   virtual std::any visitDecl(braneParser::DeclContext *ctx) override {
     return visitChildren(ctx);
   }

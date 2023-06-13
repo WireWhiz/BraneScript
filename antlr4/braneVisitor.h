@@ -91,6 +91,8 @@ public:
 
     virtual std::any visitFor(braneParser::ForContext *context) = 0;
 
+    virtual std::any visitEmpty(braneParser::EmptyContext *context) = 0;
+
     virtual std::any visitDecl(braneParser::DeclContext *context) = 0;
 
     virtual std::any visitAddsub(braneParser::AddsubContext *context) = 0;

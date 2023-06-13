@@ -9,6 +9,9 @@ add_library(BraneScriptRuntime STATIC
         funcRef.cpp
         structDef.cpp
         script.cpp
-        nativeLibrary.cpp nativeTypes/BSString.cpp nativeTypes/BSString.h nativeTypes/BSLambda.cpp nativeTypes/BSLambda.h)
+        nativeLibrary.cpp
+        nativeTypes/bsString.cpp
+        nativeTypes/bsLambda.cpp
+        nativeTypes/bsVector.cpp)
 target_link_libraries(BraneScriptRuntime PUBLIC LLVM::LLVMOrcJIT LLVM::LLVMAsmPrinter LLVM::LLVMX86AsmParser)
 target_include_directories(BraneScriptRuntime PUBLIC ${robin_hood_INCLUDE_DIRS} ${CMAKE_CURRENT_SOURCE_DIR}/.. PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})

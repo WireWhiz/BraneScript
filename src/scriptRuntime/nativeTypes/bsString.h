@@ -34,6 +34,8 @@ namespace BraneScript
         BSString operator+(const BSString& other) const { BSString s(*this); s.append(other); return s; }
         BSString operator+(const char* other) const { BSString s(*this); s.append(other); return s; }
         BSString operator+(char c) const { BSString s(*this); s.append(c); return s; }
+        char operator[](uint32_t index) const { return _data[index]; }
+        char& operator[](uint32_t index) { return _data[index]; }
         operator std::string() const { return { _data, _size}; }
 
         void append(const BSString& string);
@@ -43,8 +45,8 @@ namespace BraneScript
         uint32_t size() const { return _size; }
 
         friend std::ostream& operator<<(std::ostream& os, const BSString& string);
-        static NativeLibrary library();
     };
+    NativeLibrary getStringLibrary();
 
 } // namespace BraneScript
 

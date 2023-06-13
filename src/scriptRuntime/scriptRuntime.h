@@ -5,12 +5,13 @@
 #ifndef BRANESCRIPT_SCRIPTRUNTIME_H
 #define BRANESCRIPT_SCRIPTRUNTIME_H
 
-#include "utility/DependencyGraph.h"
 #include <vector>
 #include "funcRef.h"
 #include "nativeLibrary.h"
 #include "robin_hood.h"
+#include "utility/DependencyGraph.h"
 #include "varType.h"
+#include <llvm/ExecutionEngine/JITSymbol.h>
 
 namespace llvm
 {
@@ -25,6 +26,7 @@ namespace llvm
         class RTDyldObjectLinkingLayer;
         class IRTransformLayer;
         class JITDylib;
+        class ThreadSafeContext;
     } // namespace orc
 } // namespace llvm
 
@@ -50,6 +52,7 @@ namespace BraneScript
         DependencyGraph<std::string, Module> _modules;
         robin_hood::unordered_map<std::string, TypeDef*> _types;
 
+        std::unique_ptr<llvm::orc::ThreadSafeContext> _llvmCtx;
         std::unique_ptr<llvm::orc::ExecutionSession> _session;
         std::unique_ptr<llvm::DataLayout> _layout;
         std::unique_ptr<llvm::orc::MangleAndInterner> _mangler;
@@ -58,20 +61,24 @@ namespace BraneScript
         std::unique_ptr<llvm::orc::IRCompileLayer> _compileLayer;
         std::unique_ptr<llvm::orc::IRTransformLayer> _transformLayer;
 
+        robin_hood::unordered_map<std::string, llvm::JITEvaluatedSymbol> _nativeSymbols;
+
         static int64_t _scriptMallocDiff;
 
-        VarType getVarType(llvm::Type* type) const;
       public:
         ScriptRuntime(ScriptRuntimeMode mode = ScriptRuntimeMode_Debug);
         ~ScriptRuntime();
 
-        llvm::orc::JITDylib& loadLibrary(NativeLibrary&& lib);
+        void loadLibrary(NativeLibrary&& lib);
 
         ResourceHandle<Module> loadModule(const IRModule& irModule);
+        ResourceHandle<Module> getModule(const std::string& id);
         void unloadModule(const std::string& id);
 
         int64_t mallocDiff() const;
         void resetMallocDiff();
+
+        void loadDefaultModules();
     };
 } // namespace BraneScript
 

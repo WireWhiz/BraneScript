@@ -1,8 +1,8 @@
 
 #include "testing.h"
 
-#include "nativeTypes/BSLambda.h"
-#include "nativeTypes/BSString.h"
+#include "nativeTypes/bsLambda.h"
+#include "nativeTypes/bsString.h"
 #include "script.h"
 #include "scriptRuntime.h"
 
@@ -37,8 +37,7 @@ TEST(BraneScript, Lambdas)
 
     ScriptRuntime rt;
     rt.resetMallocDiff();
-    rt.loadLibrary(getLambdaLibrary());
-    rt.loadLibrary(BSString::library());
+    rt.loadDefaultModules();
     auto testScript = rt.loadModule(ir.modules.at("tests"));
 
     auto returnInt = testScript->getFunction<void, BSLambda<int>&, int>("tests::returnInt(ref lambda::Lambda<int>,int)");

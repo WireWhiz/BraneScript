@@ -92,6 +92,8 @@ namespace BraneScript
             return false;
         if(isRef != o.isRef)
             return false;
+        if(arraySize > 0 != o.arraySize > 0)
+            return false;
         return true;
     }
 
@@ -103,6 +105,8 @@ namespace BraneScript
             return true;
         if(isRef != o.isRef)
             return true;
+        if(arraySize > 0 != o.arraySize > 0)
+            return true;
         return false;
     }
 
@@ -113,6 +117,7 @@ namespace BraneScript
         isConst = o.isConst;
         isRef = o.isRef;
         isLValue = o.isLValue;
+        arraySize = o.arraySize;
         return *this;
     }
 
@@ -658,6 +663,18 @@ namespace BraneScript
 
     llvm::Value* ScopeContext::createAST(ASTContext& ctx) const
     {
+        beginScope(ctx);
+        for(auto& expression : expressions)
+        {
+            if(!ctx.currentBlock)
+                ctx.setInsertPoint(llvm::BasicBlock::Create(*ctx.llvmCtx, "", ctx.func));
+            expression->createAST(ctx);
+        }
+        endScope(ctx);
+        return nullptr;
+    }
+    void ScopeContext::beginScope(ASTContext& ctx) const
+    {
         ctx.pushScope();
         if(!ctx.currentBlock)
             ctx.setInsertPoint(llvm::BasicBlock::Create(*ctx.llvmCtx, "", ctx.func));
@@ -690,16 +707,13 @@ namespace BraneScript
                     ctx.currentBlock);
             }
         }
-        for(auto& expression : expressions)
-        {
-            if(!ctx.currentBlock)
-                ctx.setInsertPoint(llvm::BasicBlock::Create(*ctx.llvmCtx, "", ctx.func));
-            expression->createAST(ctx);
-        }
+    }
+
+    void ScopeContext::endScope(ASTContext& ctx) const
+    {
         if(ctx.currentBlock)
             ctx.destructStack(true);
         ctx.popScope();
-        return nullptr;
     }
 
     DocumentContext* ScopeContext::deepCopy(const std::function<DocumentContext*(DocumentContext*)>& callback) const
@@ -728,6 +742,7 @@ namespace BraneScript
                 return false;
         return true;
     }
+
 
     DocumentContext* ReturnContext::deepCopy(const std::function<DocumentContext*(DocumentContext*)>& callback) const
     {
@@ -912,6 +927,7 @@ namespace BraneScript
         auto* bodyBlock = llvm::BasicBlock::Create(*ctx.llvmCtx, "forBody", ctx.func);
         auto* end = llvm::BasicBlock::Create(*ctx.llvmCtx, "forEnd", ctx.func);
 
+        loopScope->beginScope(ctx);
         init->createAST(ctx);
         ctx.builder.CreateBr(header);
         ctx.setInsertPoint(header);
@@ -925,6 +941,7 @@ namespace BraneScript
         ctx.builder.CreateBr(header);
 
         ctx.setInsertPoint(end);
+        loopScope->endScope(ctx);
         return nullptr;
     }
 
@@ -1062,6 +1079,7 @@ namespace BraneScript
     {
         returnType.type = {"bool", ValueType::Bool};
         returnType.isConst = true;
+        returnType.isLValue = true;
     }
 
     DocumentContext* ConstBoolContext::deepCopy(const std::function<DocumentContext*(DocumentContext*)>& callback) const
@@ -1082,6 +1100,7 @@ namespace BraneScript
     {
         returnType.type = {"char", ValueType::Char};
         returnType.isConst = true;
+        returnType.isLValue = true;
     }
 
     DocumentContext* ConstCharContext::deepCopy(const std::function<DocumentContext*(DocumentContext*)>& callback) const
@@ -1102,6 +1121,7 @@ namespace BraneScript
     {
         returnType.type = {"int", ValueType::Int32};
         returnType.isConst = true;
+        returnType.isLValue = true;
     }
 
     DocumentContext* ConstIntContext::deepCopy(const std::function<DocumentContext*(DocumentContext*)>& callback) const
@@ -1122,6 +1142,7 @@ namespace BraneScript
     {
         returnType.type = {"float", ValueType::Float32};
         returnType.isConst = true;
+        returnType.isLValue = true;
     }
 
     DocumentContext*
@@ -1145,6 +1166,7 @@ namespace BraneScript
     {
         returnType.type = {"string::string", ValueType::Struct};
         returnType.isLValue = true;
+        returnType.isLValue = true;
     }
 
     DocumentContext*
@@ -1163,7 +1185,7 @@ namespace BraneScript
             throw std::runtime_error("String library must be linked to use strings!");
         auto* tempString = ctx.builder.CreateAlloca(stringType);
         auto hiddenConstructor =
-            ctx.module->getOrInsertFunction("string::stringFromCharArr(ref string::string, const ref char)",
+            ctx.module->getOrInsertFunction("string::_stringFromCharArr(ref string::string,const ref char)",
                                             llvm::Type::getVoidTy(*ctx.llvmCtx),
                                             llvm::PointerType::get(stringType, 0),
                                             llvm::Type::getInt8PtrTy(*ctx.llvmCtx));
@@ -1350,7 +1372,12 @@ namespace BraneScript
     llvm::Value* CreateReferenceContext::createAST(ASTContext& ctx) const
     {
         auto ref = _source->createAST(ctx);
-        assert(ref->getType()->isPointerTy());
+        if(!ref->getType()->isPointerTy())
+        {
+            auto mem = ctx.builder.CreateAlloca(ref->getType(), nullptr, "tempRef");
+            ctx.builder.CreateStore(ref, mem);
+            return mem;
+        }
         return ref;
     }
 
@@ -1386,6 +1413,7 @@ namespace BraneScript
     {
         assert(targetType.type != source->returnType.type);
         returnType = std::move(targetType);
+        returnType.isRef &= source->returnType.isRef;
     }
 
     bool NativeCastContext::isConstexpr() const { return sourceExpr->isConstexpr(); }
@@ -1538,12 +1566,8 @@ namespace BraneScript
 
     bool NativeCastContext::validCast(const ValueContext& from, const ValueContext& to)
     {
-        if(from.isRef || to.isRef)
-        {
-            if(from.isRef && to.isRef)
-                return from.type.storageType == ValueType::Void || to.type.storageType == ValueType::Void;
-            return false;
-        }
+        if(from.isRef && to.isRef)
+            return from.type.storageType == ValueType::Void || to.type.storageType == ValueType::Void;
         switch(from.type.storageType)
         {
             case ValueType::Bool:
@@ -2005,10 +2029,7 @@ namespace BraneScript
         assert(source);
         assert(index);
         assert(source->returnType.isRef);
-        assert(source->returnType.type.storageType == ValueType::UInt32 ||
-               source->returnType.type.storageType == ValueType::Int32 ||
-               source->returnType.type.storageType == ValueType::UInt64 ||
-               source->returnType.type.storageType == ValueType::Int64);
+        assert(isValueTypeInt(index->returnType.type.storageType));
         returnType = source->returnType;
     }
 
@@ -2022,7 +2043,9 @@ namespace BraneScript
         auto elementType = returnType;
         elementType.isRef = false;
 
-        return ctx.builder.CreateGEP(ctx.getLLVMType(elementType), srcArr, idx);
+        auto coreType = ctx.getLLVMType(elementType);
+
+        return ctx.builder.CreateGEP(coreType, srcArr, idx);
     }
 
     DocumentContext*
@@ -2206,14 +2229,14 @@ namespace BraneScript
 
         ctx.pushScope();
 
-        if(ctx.dBuilder)
-        {
-            ctx.diFunction = ctx.debugSubprograms.at(signature());
-            ctx.setDebugScope(ctx.diFunction);
-        }
-
         if(body)
         {
+            if(ctx.dBuilder)
+            {
+                ctx.diFunction = ctx.debugSubprograms.at(signature());
+                ctx.setDebugScope(ctx.diFunction);
+            }
+
             ctx.currentBlock = llvm::BasicBlock::Create(*ctx.llvmCtx, "entry", ctx.func);
             ctx.builder.SetInsertPoint(ctx.currentBlock);
             ctx.setDebugLocation(body.get());
@@ -2273,12 +2296,12 @@ namespace BraneScript
             }
 
             ctx.currentBlock = nullptr;
+
+            if(ctx.dBuilder)
+                ctx.dBuilder->finalizeSubprogram(ctx.diFunction);
         }
 
         ctx.popScope();
-
-        if(ctx.dBuilder)
-            ctx.dBuilder->finalizeSubprogram(ctx.diFunction);
 
         std::string funcError;
         llvm::raw_string_ostream funcErrStr(funcError);
@@ -2290,7 +2313,7 @@ namespace BraneScript
             throw std::runtime_error("Invalid function IR generated");
         }
         // Only run optimization if verification succeeds
-        else if(ctx.fpm)
+        else if(ctx.fpm && body)
             ctx.fpm->run(*ctx.func, *ctx.fam);
 
         return nullptr;
@@ -2325,7 +2348,7 @@ namespace BraneScript
         auto func = llvm::Function::Create(funcType, linkage, sig, ctx.module.get());
         ctx.functions.insert({sig, func});
 
-        if(!isLinked && ctx.dBuilder)
+        if(!isLinked && body && ctx.dBuilder)
         {
             std::vector<llvm::Metadata*> dArgs;
             size_t argIndex = 0;
@@ -2566,6 +2589,8 @@ namespace BraneScript
 
         for(auto& s : structs)
         {
+            //Call getStructDef here to make sure the struct is generated even if it is not used
+            ctx.getStructDef(s.get());
             for(auto& f : s->functions)
                 f->registerFunction(ctx, false);
         }

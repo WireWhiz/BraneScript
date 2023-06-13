@@ -1,10 +1,10 @@
 
 #include "testing.h"
 
+#include "analyzer.h"
+#include "nativeTypes/bsString.h"
 #include "script.h"
 #include "scriptRuntime.h"
-#include "analyzer.h"
-#include "nativeTypes/BSString.h"
 
 using namespace BraneScript;
 
@@ -21,7 +21,7 @@ TEST(BraneScript, Strings)
 
     ScriptRuntime rt;
     rt.resetMallocDiff();
-    rt.loadLibrary(BSString::library());
+    rt.loadDefaultModules();
     auto testScript = rt.loadModule(ir.modules.at("tests"));
 
     BSString argA = "a";

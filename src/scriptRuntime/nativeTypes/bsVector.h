@@ -7,6 +7,7 @@
 
 #include <cstdint>
 #include <cassert>
+#include "nativeLibrary.h"
 
 namespace BraneScript
 {
@@ -39,10 +40,11 @@ namespace BraneScript
         }
 
       public:
+        BSVector() = default;
         BSVector(const BSVector<T>& o)
         {
-            _size = o._size;
             destructCurrent();
+            _size = o._size;
             if(_allocSize < o._allocSize)
             {
                 ::operator delete(_data);
@@ -51,7 +53,6 @@ namespace BraneScript
             }
             for(uint32_t i = 0; i < _size; i++)
                 new(_data + i) T(_data[i]);
-            return *this;
         }
         BSVector(BSVector<T>&& o)
         {
@@ -69,9 +70,9 @@ namespace BraneScript
 
         BSVector<T>& operator=(const BSVector<T>& o)
         {
-            _size = o._size;
             destructCurrent();
-            if(_allocSize < o._allocSize)
+            _size = o._size;
+            if(_allocSize < o._size)
             {
                 ::operator delete(_data);
                 _data = ::operator new(o._allocSize * sizeof(T));
@@ -125,6 +126,8 @@ namespace BraneScript
                 grow(size);
             for(uint32_t i = _size; i < size; i++)
                 new(_data + i) T();
+            for(uint32_t i = size; i < _size; i++)
+                _data[i].~T();
             _size = size;
         }
         void reserve(uint32_t size)
@@ -154,9 +157,12 @@ namespace BraneScript
         void clear()
         {
             destructCurrent();
+            ::operator delete(_data);
             _size = 0;
         }
     };
+
+    NativeLibrary getVectorLibrary();
 }
 
 

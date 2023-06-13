@@ -8,6 +8,7 @@
 #include <vector>
 #include <string>
 #include <robin_hood.h>
+#include "utility/serializedData.h"
 
 namespace llvm
 {
@@ -31,6 +32,8 @@ namespace BraneScript
         std::string copyConstructorSig;
         std::string moveConstructorSig;
         std::vector<std::string> tags;
+        void serialize(OutputSerializer out);
+        void deserialize(InputSerializer in);
     };
 
     struct IRFunction
@@ -38,12 +41,16 @@ namespace BraneScript
         std::string name;
         std::string returnType;
         std::vector<std::string> tags;
+        void serialize(OutputSerializer out);
+        void deserialize(InputSerializer in);
     };
 
     struct IRGlobal
     {
         std::string name;
         std::string type;
+        void serialize(OutputSerializer out);
+        void deserialize(InputSerializer in);
     };
 
     struct IRModule
@@ -57,6 +64,8 @@ namespace BraneScript
         std::vector<IRStructDef> structs;
 
         std::vector<std::string> links;
+        void serialize(OutputSerializer out);
+        void deserialize(InputSerializer in);
     };
 
     struct IRScript

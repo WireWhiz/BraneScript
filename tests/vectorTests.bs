@@ -1,0 +1,12 @@
+module "tests"
+link "vector"
+{
+    Vector<int> returnSimpleVector()
+    {
+        Vector<int> v;
+        v.append(1);
+        v.append(2);
+        v.append(3);
+        return v;
+    }
+}

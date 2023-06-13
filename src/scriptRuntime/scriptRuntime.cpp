@@ -28,8 +28,10 @@
 #include "llvm/Support/TargetSelect.h"
 #include "llvm/Transforms/Scalar.h"
 #include "llvm/Transforms/Scalar/GVN.h"
+#include "nativeTypes/bsString.h"
 
 #include <cstdio>
+#include <filesystem>
 #include <stdexcept>
 #include <llvm/Passes/PassBuilder.h>
 
@@ -47,6 +49,7 @@ namespace BraneScript
         {
             nativeTypes.emplace_back(new TypeDef("void", ValueType::Void, 0));
             nativeTypes.emplace_back(new TypeDef("bool", ValueType::Bool, 1));
+            nativeTypes.emplace_back(new TypeDef("char", ValueType::Char, 1));
             nativeTypes.emplace_back(new TypeDef("uint", ValueType::UInt32, 4));
             nativeTypes.emplace_back(new TypeDef("int", ValueType::Int32, 4));
             nativeTypes.emplace_back(new TypeDef("uint64", ValueType::UInt64, 8));
@@ -65,6 +68,8 @@ namespace BraneScript
             llvm::InitializeNativeTargetAsmParser();
             llvmInitialized = true;
         }
+
+        _llvmCtx = std::make_unique<llvm::orc::ThreadSafeContext>(std::make_unique<llvm::LLVMContext>());
 
         auto EPC = llvm::orc::SelfExecutorProcessControl::Create();
         if(!EPC)
@@ -95,7 +100,8 @@ namespace BraneScript
         std::shared_ptr<llvm::TargetMachine> tm;
         if(auto etm = jtmb.createTargetMachine())
             tm = std::move(*etm);
-        _transformLayer = std::make_unique<llvm::orc::IRTransformLayer>(*_session, *_compileLayer, [this, tm](llvm::orc::ThreadSafeModule m, const auto& r) {
+        _transformLayer = std::make_unique<llvm::orc::IRTransformLayer>(
+            *_session, *_compileLayer, [this, tm](llvm::orc::ThreadSafeModule m, const auto& r) {
                 // Add some optimizations.
                 std::string moduleErr;
                 llvm::raw_string_ostream modErrStr(moduleErr);
@@ -142,27 +148,13 @@ namespace BraneScript
 
                 return std::move(m);
             });
-
-        NativeLibrary unsafeLib("unsafe");
-        unsafeLib.addFunction("unsafe::malloc(uint)", (FuncRef<void*, int>)[](int size){
-            _scriptMallocDiff++;
-            auto ptr = ::operator new(size);
-            //printf("Allocating %d bytes at %p\n", size, ptr);
-            return ptr;
-        });
-        unsafeLib.addFunction("unsafe::free(ref void)", (FuncRef<void, void*>)[](void* ptr){
-            _scriptMallocDiff--;
-            //printf("Freeing %p\n", ptr);
-            ::operator delete(ptr);
-        });
-        loadLibrary(std::move(unsafeLib));
     }
 
     ResourceHandle<Module> ScriptRuntime::loadModule(const IRModule& irModule)
     {
         if(_modules.contains(irModule.id))
             throw std::runtime_error("Module with id \"" + irModule.id + "\" already loaded");
-        auto ctx = std::make_unique<llvm::LLVMContext>();
+        auto ctx = _llvmCtx->getContext();
 
         auto deserializedModule = llvm::parseBitcodeFile(llvm::MemoryBufferRef(irModule.bitcode, irModule.id), *ctx);
         if(!deserializedModule)
@@ -181,14 +173,25 @@ namespace BraneScript
             lib.addToLinkOrder(*_modules.at(importedModule)->lib);
         }
 
+        llvm::orc::SymbolMap symbols;
+        for(auto& f : irModule.functions)
+        {
+            auto nativeFunc = _nativeSymbols.find(f.name);
+            if(nativeFunc != _nativeSymbols.end())
+                symbols[(*_mangler)(f.name)] = nativeFunc->second;
+        }
+        if(!symbols.empty())
+        {
+            if(auto err = lib.define(llvm::orc::absoluteSymbols(symbols)))
+                throw std::runtime_error("Unable to define native symbols: " + toString(std::move(err)));
+        }
+
         auto module = new Module(lib);
         module->rt = lib.getDefaultResourceTracker();
 
-        printf("Loading module %s with structs:\n", irModule.id.c_str());
+        /*printf("Loading module %s with structs:\n", irModule.id.c_str());
         for(auto& s : (*deserializedModule)->getIdentifiedStructTypes())
-        {
-            printf("  %s\n", s->getName().str().c_str());
-        }
+            printf("  %s\n", s->getName().str().c_str());*/
 
         std::vector<const llvm::StructLayout*> exportedStructLayouts;
         for(auto& s : irModule.structs)
@@ -201,7 +204,7 @@ namespace BraneScript
         }
 
         if(llvm::Error res = _transformLayer->add(
-               module->rt, llvm::orc::ThreadSafeModule(std::move(*deserializedModule), std::move(ctx))))
+               module->rt, llvm::orc::ThreadSafeModule(std::move(*deserializedModule), *_llvmCtx)))
             throw std::runtime_error("Unable to add script: " + toString(std::move(res)));
 
         for(auto& glob : irModule.globals)
@@ -224,19 +227,19 @@ namespace BraneScript
 
         auto constructor = _session->lookup({&lib}, (*_mangler)("_construct"));
         if(llvm::Error error = constructor.takeError())
-            consumeError(std::move(error));//We just want to check if it exists or not, so ignore the error.
+            consumeError(std::move(error)); // We just want to check if it exists or not, so ignore the error.
         else
             FuncRef<void>(constructor->getAddress())();
 
         auto destructor = _session->lookup({&lib}, (*_mangler)("_construct"));
         if(llvm::Error error = destructor.takeError())
-            consumeError(std::move(error));//We just want to check if it exists or not, so ignore the error.
+            consumeError(std::move(error)); // We just want to check if it exists or not, so ignore the error.
         else
             module->destructor = FuncRef<void>(destructor->getAddress());
 
 
         std::unordered_map<std::string, std::unique_ptr<StructDef>> newStructs;
-        //Extract all structs before populating members, so we can resolve out of order dependencies.
+        // Extract all structs before populating members, so we can resolve out of order dependencies.
 
         for(auto& s : irModule.structs)
         {
@@ -272,14 +275,15 @@ namespace BraneScript
                 auto memberType = _types.find(src.type);
                 if(memberType == _types.end())
                     throw std::runtime_error("Module load failed, unable to find type metadata: " + src.type);
-                ns.second->memberVars.push_back(StructVar{src.name, VarType{memberType->second, src.isRef}, memberOffset});
+                ns.second->memberVars.push_back(
+                    StructVar{src.name, VarType{memberType->second, src.isRef}, memberOffset});
             }
 
-            printf("Adding struct %s\n", ns.first.c_str());
+            /*printf("Adding struct %s\n", ns.first.c_str());
             printf("Size: %zu\n", ns.second->size);
             printf("Members:\n");
             for(auto& m : ns.second->memberVars)
-                printf("  %s %s, offset: %zu\n", m.type.def->name.c_str(), m.name.c_str(), m.offset);
+                printf("  %s %s, offset: %zu\n", m.type.def->name.c_str(), m.name.c_str(), m.offset);*/
 
             module->structDefinitions.insert({ns.first, std::move(ns.second)});
             ++structIndex;
@@ -310,90 +314,94 @@ namespace BraneScript
         _modules.clear();
     }
 
-    llvm::orc::JITDylib& ScriptRuntime::loadLibrary(NativeLibrary&& lib)
+    void ScriptRuntime::loadLibrary(NativeLibrary&& lib)
     {
-        auto& newLib = _session->createBareJITDylib(lib.identifier);
-        llvm::orc::SymbolMap symbols;
         for(auto& func : lib.functions)
         {
-            symbols.insert(
-                {(*_mangler)(func.first),
+            _nativeSymbols.insert(
+                {func.first,
                  llvm::JITEvaluatedSymbol::fromPointer(func.second,
                                                        llvm::JITSymbolFlags::Exported | llvm::JITSymbolFlags::Weak |
                                                            llvm::JITSymbolFlags::Callable)});
         }
-        if(auto err = newLib.define(llvm::orc::absoluteSymbols(symbols)))
-            throw std::runtime_error("Unable to load native library: " + toString(std::move(err)));
-
-        auto nativeModule = new Module(newLib);
-        for(auto& structDef : lib.structDefinitions)
-        {
-            if(_types.contains(structDef->name))
-                throw std::runtime_error("Cannot load a struct multiple times: " + structDef->name);
-            _types.insert({structDef->name, structDef.get()});
-            nativeModule->structDefinitions.insert({structDef->name, std::move(structDef)});
-        }
-        _modules.insert(lib.identifier, nativeModule);
-        return newLib;
     }
 
     int64_t ScriptRuntime::mallocDiff() const { return _scriptMallocDiff; }
 
     void ScriptRuntime::resetMallocDiff() { _scriptMallocDiff = 0; }
 
-    VarType ScriptRuntime::getVarType(llvm::Type* type) const
+    void ScriptRuntime::loadDefaultModules()
     {
-        VarType output;
-        if(type->isPointerTy())
+        NativeLibrary unsafeLib("unsafe");
+        unsafeLib.addFunction(
+            "unsafe::malloc(uint)", (FuncRef<void*, int>)[](int size) {
+                _scriptMallocDiff++;
+                auto ptr = ::operator new(size);
+                // printf("Allocating %d bytes at %p\n", size, ptr);
+                return ptr;
+            });
+        unsafeLib.addFunction(
+            "unsafe::free(ref void)", (FuncRef<void, void*>)[](void* ptr) {
+                _scriptMallocDiff--;
+                // printf("Freeing %p\n", ptr);
+                ::operator delete(ptr);
+            });
+        loadLibrary(std::move(unsafeLib));
+        loadLibrary(getStringLibrary());
+        std::filesystem::path path = std::filesystem::current_path() / "modules";
+        if(!std::filesystem::exists(path))
+            return;
+        std::vector<std::string> loadOrder;
+        std::ifstream orderFile(path / "loadOrder.txt");
+        if(!orderFile.is_open())
         {
-            output = getVarType(type->getPointerElementType());
-            output.isRef = true;
-            return output;
+            std::cerr << "Failed to load default BraneScript modules! loadOrder.txt was not found." << std::endl;
+            return;
         }
-        if(type->isStructTy())
+
+        while(!orderFile.eof())
         {
-            auto structType = _types.find(type->getStructName().str());
-            if(structType == _types.end())
-                return output;
-            output.def = structType->second;
-            return output;
+            std::string entry;
+            orderFile >> entry;
+            loadOrder.push_back(std::move(entry));
         }
-        if(type->isIntegerTy())
+
+        for(auto& loadPath : loadOrder)
         {
-            switch(type->getScalarSizeInBits())
+            std::filesystem::path mp = path / loadPath;
+
+            if(!std::filesystem::exists(mp))
             {
-                case 1:
-                    output.def = _types.at("bool");
-                    return output;
-                case 8:
-                    output.def = _types.at("char");
-                    return output;
-                case 32:
-                    output.def = _types.at("int");
-                    return output;
-                case 64:
-                    output.def = _types.at("int64");
-                    return output;
+                std::cerr << "Failed to load default BraneScript module! " << mp << " was not found. Check loadOrder.txt and verify filenames are correct." << std::endl;
+                continue;
             }
-            assert(false);
-            return output;
+            std::ifstream modFile(mp, std::ios::binary | std::ios::ate);
+
+            auto len = modFile.tellg();
+            modFile.seekg(0, std::ios::beg);
+
+            SerializedData data;
+            data.vector().resize(len);
+            modFile.read(reinterpret_cast<char*>(data.vector().data()), len);
+            modFile.close();
+
+            InputSerializer serializer(data);
+
+            IRModule module{};
+            module.deserialize(serializer);
+
+            auto loadedModule = loadModule(module);
+
         }
-        if(type->isFloatTy())
-        {
-            switch(type->getScalarSizeInBits())
-            {
-                case 32:
-                output.def = _types.at("float");
-                return output;
-                case 64:
-                output.def = _types.at("double");
-                return output;
-            }
-            assert(false);
-            return output;
-        }
-        assert(false);
-        return output;
+
+
+    }
+
+    ResourceHandle<Module> ScriptRuntime::getModule(const std::string& id)
+    {
+        if(!_modules.contains(id))
+            throw std::runtime_error("Module not found: " + id);
+        return _modules.at(id);
     }
 
 } // namespace BraneScript

@@ -30,7 +30,9 @@ TEST(BraneScript, API)
     std::string path = "testScripts/apiTests.bs";
     analyzer.load(path);
     analyzer.load("header", header);
+    analyzer.validate("header");
     analyzer.validate(path);
+    checkCompileErrors(analyzer, "header");
     checkCompileErrors(analyzer, path);
 
     llvm::LLVMContext ctx;
@@ -40,6 +42,7 @@ TEST(BraneScript, API)
     ScriptRuntime rt;
     rt.resetMallocDiff();
     rt.loadLibrary(std::move(testLib));
+    rt.loadModule(analyzer.compile("header").modules.at("testLib"));
     ResourceHandle<Module> testScript = rt.loadModule(ir.modules.at("tests"));
 
     auto scriptSetRef = testScript->getFunction<void, int>("tests::setRef");

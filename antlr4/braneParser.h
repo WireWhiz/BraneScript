@@ -650,6 +650,14 @@ public:
     virtual std::any accept(antlr4::tree::ParseTreeVisitor *visitor) override;
   };
 
+  class  EmptyContext : public StatementContext {
+  public:
+    EmptyContext(StatementContext *ctx);
+
+
+    virtual std::any accept(antlr4::tree::ParseTreeVisitor *visitor) override;
+  };
+
   StatementContext* statement();
 
   class  ExpressionContext : public antlr4::ParserRuleContext {

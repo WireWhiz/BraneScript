@@ -1,6 +1,10 @@
 add_subdirectory(scriptRuntime)
 add_subdirectory(compiler)
 add_subdirectory(lspServer)
-if(BS_BUILD_EXECUTABLE)
-    #add_subdirectory(debugger)
-endif()
+add_subdirectory(cliTool)
+
+file(MAKE_DIRECTORY ${EXECUTABLE_OUTPUT_PATH}/include)
+file(COPY bsIncludes/ DESTINATION ${EXECUTABLE_OUTPUT_PATH}/include)
+
+file(MAKE_DIRECTORY ${EXECUTABLE_OUTPUT_PATH}/modules)
+file(COPY bsModules/ DESTINATION ${EXECUTABLE_OUTPUT_PATH}/modules)

@@ -2,7 +2,7 @@
 // Created by wirewhiz on 5/11/23.
 //
 
-#include "BSString.h"
+#include "bsString.h"
 #include <cstring>
 #include "scriptRuntime/structDef.h"
 
@@ -103,41 +103,40 @@ namespace BraneScript
         return os;
     }
 
-    NativeLibrary BSString::library()
+    NativeLibrary getStringLibrary()
     {
         NativeLibrary lib("string");
-        lib.addStruct(std::make_unique<StructDef>("string::string",
-            [](void* ptr)
-            {
-                new(ptr) BSString();
-            },
-            [](void* ptr, const void* other)
-            {
-                new(ptr) BSString(*(BSString*)other);
-            },
-            [](void* ptr, void* other)
-            {
-                new(ptr) BSString(std::move(*(BSString*)other));
-            },
-            [](void* ptr)
-            {
-                ((BSString*)ptr)->~BSString();
-            }));
+        lib.addFunction("string::string::_construct(ref string::string)", (FuncRef<void, void*>)[](void* ptr)
+        {
+            new(ptr) BSString();
+        });
+        lib.addFunction("string::string::_move(ref string::string,ref string::string)", (FuncRef<void, void*, void*>)[](void* ptr, void* other)
+        {
+            new(ptr) BSString(std::move(*(BSString*)other));
+        });
+        lib.addFunction("string::string::_copy(ref string::string,const ref string::string)", (FuncRef<void, void*, const void*>)[](void* ptr, const void* other)
+        {
+            new(ptr) BSString(*(BSString*)other);
+        });
+        lib.addFunction("string::string::_destruct(ref string::string)", (FuncRef<void, void*>)[](void* ptr)
+        {
+            ((BSString*)ptr)->~BSString();
+        });
         lib.addFunction("string::string opr +(ref string::string res,const ref string::string,const ref string::string)", (FuncRef<void, BSString&, const BSString&, const BSString&>)[](BSString& res, const BSString& a, const BSString& b)
         {
             res = a + b;
         });
         lib.addFunction("string::string::opr [](ref string::string,uint)", (FuncRef<char*, BSString&, uint32_t>)[](BSString& str, uint32_t index)
         {
-            return &str._data[index];
+            return &str[index];
         });
         lib.addFunction("string::string::opr [](const ref string::string,uint)", (FuncRef<char, const BSString&, uint32_t>)[](const BSString& str, uint32_t index)
         {
-            return str._data[index];
+            return str[index];
         });
         lib.addFunction("string::string::length(const ref string::string)", (FuncRef<uint32_t, const BSString&>)[](const BSString& str)
         {
-            return str._size;
+            return str.size();
         });
         lib.addFunction("string::string::opr ==(const ref string::string,const ref string::string)", (FuncRef<bool, const BSString&, const BSString&>)[](const BSString& a, const BSString& b)
         {
@@ -147,7 +146,7 @@ namespace BraneScript
         {
             return a != b;
         });
-        lib.addFunction("string::string::opr +(ref string:::string ret, char l,char r)", (FuncRef<void, BSString&, char, char>)[](BSString& ret, char l, char r)
+        lib.addFunction("string::opr +(ref string::string,char,char)", (FuncRef<void, BSString&, char, char>)[](BSString& ret, char l, char r)
         {
             ret = BSString(l) + r;
         });
@@ -155,9 +154,13 @@ namespace BraneScript
         {
             ret = l + r;
         });
+        lib.addFunction("string::string::opr +(ref string::string,const ref string::string,char)", (FuncRef<void, BSString&, const BSString&, char>)[](BSString& ret, const BSString& l, char r)
+        {
+            ret = l + r;
+        });
 
         // This constructor hidden from the script api since ref string casts might go wrong, it also expects an uninitialized BSString, which goes against the BS calling convention
-        lib.addFunction("string::stringFromCharArr(ref string::string, const ref char)", (FuncRef<void, BSString*, const char*>)[](BSString* str, const char* cstr)
+        lib.addFunction("string::_stringFromCharArr(ref string::string,const ref char)", (FuncRef<void, BSString*, const char*>)[](BSString* str, const char* cstr)
         {
             new(str) BSString(cstr);
         });

@@ -2084,12 +2084,17 @@ namespace BraneScript
             STMT_ASSERT_EXISTS(ctx->operation, "while loop body missing");
             auto forCtx = new ForContext{};
             initDoc(forCtx, ctx);
+            forCtx->loopScope = std::make_unique<ScopeContext>();
+            initDoc(forCtx->loopScope.get(), ctx);
+
             if(ctx->init)
                 forCtx->init = asStmt(visit(ctx->init));
             forCtx->condition = asExpr(visit(ctx->cond));
             if(ctx->step)
                 forCtx->step = asStmt(visit(ctx->step));
             forCtx->body = asStmt(visit(ctx->operation));
+
+            popDoc(forCtx->loopScope.get());
             popDoc(forCtx);
             RETURN_STMT(forCtx);
         }
@@ -2642,6 +2647,7 @@ namespace BraneScript
                 memberOverrides->thisRef = std::move(base);
                 RETURN_EXPR(memberOverrides);
             }
+            delete memberOverrides;
 
             auto accessCtx = new MemberAccessContext{};
             accessCtx->baseExpression = std::move(base);
@@ -2658,10 +2664,8 @@ namespace BraneScript
                 recordError(ctx->member, "Struct " + typeName + " does not have a member " + memberName);
             else
             {
-                accessCtx->returnType.type = type->variables[accessCtx->member]->type;
-                accessCtx->returnType.isRef = accessCtx->returnType.type.storageType == ValueType::Struct;
-                accessCtx->returnType.isConst = accessCtx->baseExpression->returnType.isConst;
-                accessCtx->returnType.isLValue = accessCtx->baseExpression->returnType.isLValue;
+                accessCtx->returnType = *type->variables[accessCtx->member];
+                accessCtx->returnType.isRef |= accessCtx->returnType.type.storageType == ValueType::Struct;
             }
 
             popDoc(accessCtx);

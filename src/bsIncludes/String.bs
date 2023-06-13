@@ -17,5 +17,6 @@ module "string"
         bool opr!=(const ref string other) const ext;
     }
 
+    string _stringFromCharArr(const ref char a) ext;
     string opr+(char l, char r) ext;
 }

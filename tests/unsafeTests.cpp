@@ -30,6 +30,7 @@ TEST(BraneScript, UnsafeTests)
 
     ScriptRuntime rt;
     rt.resetMallocDiff();
+    rt.loadDefaultModules();
     auto testScript = rt.loadModule(ir.modules.at("tests"));
 
     auto allocStruct = testScript->getFunction<TestStruct*>("tests::allocStruct()");

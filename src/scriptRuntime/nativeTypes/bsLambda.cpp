@@ -2,7 +2,7 @@
 // Created by wirewhiz on 5/16/23.
 //
 
-#include "BSLambda.h"
+#include "bsLambda.h"
 #include "nativeLibrary.h"
 
 namespace BraneScript

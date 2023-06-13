@@ -63,32 +63,30 @@ TEST(BraneScript, Objects)
 )";
 
     NativeLibrary constructors("BraneScript");
-
-    auto testStruct1Def = new StructDef(
-        "BraneScript::TestStruct1",
-        [](void* data) {
-            new(data) TestStruct1();
-            constructorCalled++;
-        },
-        [](void* dest, const void* src) {
-            *((TestStruct1*)dest) = *((TestStruct1*)src);
-            copyConstructorCalled++;
-        },
-        [](void* dest, void* src) {
-            *((TestStruct1*)dest) = std::move(*((TestStruct1*)src));
-            moveConstructorCalled++;
-        },
-        [](void* data) {
-            ((TestStruct1*)data)->~TestStruct1();
-            destructorCalled++;
-        });
-    constructors.addStruct(std::unique_ptr<StructDef>(testStruct1Def));
+    constructors.addFunction("BraneScript::TestStruct1::_construct(ref BraneScript::TestStruct1)",  (void*)(FuncRef<void, void*>)[](void* data) {
+        new(data) TestStruct1();
+        constructorCalled++;
+    });
+    constructors.addFunction("BraneScript::TestStruct1::_copy(ref BraneScript::TestStruct1,const ref BraneScript::TestStruct1)", (void*)(FuncRef<void, void*, const void*>)[](void* dest, const void* src) {
+        *((TestStruct1*)dest) = *((TestStruct1*)src);
+        copyConstructorCalled++;
+    });
+    constructors.addFunction("BraneScript::TestStruct1::_move(ref BraneScript::TestStruct1,ref BraneScript::TestStruct1)", (void*)(FuncRef<void, void*, void*>)[](void* dest, void* src) {
+        *((TestStruct1*)dest) = std::move(*((TestStruct1*)src));
+        moveConstructorCalled++;
+    });
+    constructors.addFunction("BraneScript::TestStruct1::_destruct(ref BraneScript::TestStruct1)", (void*)(FuncRef<void, void*>)[](void* data) {
+        ((TestStruct1*)data)->~TestStruct1();
+        destructorCalled++;
+    });
 
     Analyzer analyzer;
     analyzer.load("header", header);
     std::string path = "testScripts/objectTests.bs";
     analyzer.load(path);
+    analyzer.validate("header");
     analyzer.validate(path);
+    checkCompileErrors(analyzer, "header");
     checkCompileErrors(analyzer, path);
 
     auto ir = analyzer.compile(path, CompileFlags_DebugInfo);
@@ -97,6 +95,7 @@ TEST(BraneScript, Objects)
     ScriptRuntime rt;
     rt.resetMallocDiff();
     rt.loadLibrary(std::move(constructors));
+    rt.loadModule(analyzer.compile("header", CompileFlags_None).modules.at("BraneScript"));
     auto testScript = rt.loadModule(ir.modules.at("tests"));
 
     TestStruct1 testStruct1{true, 23.3, 45};

@@ -395,6 +395,9 @@ namespace BraneScript
 
         DocumentContext* findIdentifier(const std::string& identifier, uint8_t searchOptions) override;
 
+        void beginScope(ASTContext& ctx) const;
+        void endScope(ASTContext& ctx) const;
+
         llvm::Value* createAST(ASTContext& ctx) const override;
         DocumentContext* deepCopy(const std::function<DocumentContext*(DocumentContext*)>& callback) const override;
         bool isConstexpr() const override;
@@ -411,6 +414,7 @@ namespace BraneScript
 
     struct IfContext : public StatementContext
     {
+        std::unique_ptr<ScopeContext> branchScope;
         std::unique_ptr<ExpressionContext> condition;
         std::unique_ptr<StatementContext> body;
         std::unique_ptr<StatementContext> elseBody;
@@ -422,6 +426,7 @@ namespace BraneScript
 
     struct WhileContext : public StatementContext
     {
+        std::unique_ptr<ScopeContext> loopScope;
         std::unique_ptr<ExpressionContext> condition;
         std::unique_ptr<StatementContext> body;
         bool isConstexpr() const override;
@@ -432,6 +437,7 @@ namespace BraneScript
 
     struct ForContext : public StatementContext
     {
+        std::unique_ptr<ScopeContext> loopScope;
         std::unique_ptr<StatementContext> init;
         std::unique_ptr<ExpressionContext> condition;
         std::unique_ptr<StatementContext> step;
