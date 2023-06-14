@@ -438,10 +438,10 @@ namespace BraneScript
             if(found)
                 return found;
 
-            //If we have not found it by this point it must be a function or just not exist
+            // If we have not found it by this point it must be a function or just not exist
             auto funcOverrides = getFunctionOverrides(id, parent, ctx->template_);
             if(!funcOverrides->overrides.empty() || !funcOverrides->templates.empty())
-               return funcOverrides;
+                return funcOverrides;
             delete funcOverrides;
 
             return nullptr;
@@ -581,7 +581,10 @@ namespace BraneScript
             return output;
         }
 
-        void getFunctionOverridesInLinks(const std::string& name, FunctionOverridesContext* overrides, ModuleContext* mod, robin_hood::unordered_set<ModuleContext*>& searched)
+        void getFunctionOverridesInLinks(const std::string& name,
+                                         FunctionOverridesContext* overrides,
+                                         ModuleContext* mod,
+                                         robin_hood::unordered_set<ModuleContext*>& searched)
         {
             searched.insert(mod);
             for(auto& link : mod->links)
@@ -640,17 +643,17 @@ namespace BraneScript
         }
 
         FunctionContext* bestOverride(const std::vector<ValueContext>& args,
-                                   const FunctionOverridesContext::CastCallback& canImplicitCast,
-                                   const FunctionOverridesContext* overrides,
-                                   FunctionOverridesContext::MatchFlags flags = FunctionOverridesContext::None)
+                                      const FunctionOverridesContext::CastCallback& canImplicitCast,
+                                      const FunctionOverridesContext* overrides,
+                                      FunctionOverridesContext::MatchFlags flags = FunctionOverridesContext::None)
         {
             if(overrides->overrides.empty() && overrides->templates.empty())
                 return nullptr;
             /* We want to find the best match with the lowest amount of implicit casts. So we store the cast count for
-         * each candidate function and try to find the closest one. Cast cost is a measure of the desirability of
-         * casts the casts. For instance a cast from uint32 to uint64 is more desirable than a cast from uint32_t to
-         * a float.
-         * */
+             * each candidate function and try to find the closest one. Cast cost is a measure of the desirability of
+             * casts the casts. For instance a cast from uint32 to uint64 is more desirable than a cast from uint32_t to
+             * a float.
+             * */
             uint16_t bestCastCount = -1;
             uint32_t bestCastCost = -1;
             FunctionContext* bestMatch = nullptr;
@@ -861,9 +864,9 @@ namespace BraneScript
 
       public:
         AnalyzerCore(Analyzer& analyzer,
-                 Analyzer::AnalyzationContext& result,
-                 bool extractOnlyIdentifiers,
-                 bool allowUnsafe)
+                     Analyzer::AnalyzationContext& result,
+                     bool extractOnlyIdentifiers,
+                     bool allowUnsafe)
             : _analyzer(analyzer), _result(result), _extractOnlyIdentifiers(extractOnlyIdentifiers),
               _allowUnsafe(allowUnsafe){};
 
@@ -1143,12 +1146,14 @@ namespace BraneScript
             ValueContext output;
             output.type = getTypeContext(ctx->name);
             output.isConst = ctx->isConst;
-            output.isRef = !!ctx->isRef | !!ctx->isArrayRef;
-            if(ctx->isArrayRef)
+            output.isRef = ctx->isRef;
+            if(ctx->isArray)
             {
                 output.arraySize = size_t(-1);
                 if(ctx->size)
                     output.arraySize = std::stoul(ctx->size->getText());
+                else if(!ctx->isRef)
+                    recordError(ctx, "Array size must be specified for local arrays!");
             }
 
             if(output.type.storageType == ValueType::Void && output.type.identifier != "void")
@@ -1189,7 +1194,8 @@ namespace BraneScript
             {
                 if(prexisting->version == _result.version && !prexisting->is<ModuleContext>())
                 {
-                    recordError(ctx->id, "Identifier \"" + id + "\" already exists as \"" + prexisting->longId() + "\"!");
+                    recordError(ctx->id,
+                                "Identifier \"" + id + "\" already exists as \"" + prexisting->longId() + "\"!");
                     return LabeledValueContext{};
                 }
             }
@@ -1223,8 +1229,19 @@ namespace BraneScript
             for(auto& item : ctx->argumentListItem())
             {
                 if(auto* declaration = item->declaration())
-                    args.emplace_back(
-                        new LabeledValueContext{std::any_cast<LabeledValueContext>(visitDeclaration(declaration))});
+                {
+                    auto arg = std::any_cast<LabeledValueContext>(visitDeclaration(declaration));
+                    arg.isLValue = true;
+                    if(arg.arraySize > 1 && !arg.isRef)
+                        recordError(item, "Arrays must be passed by reference!");
+
+                    if(arg.type.storageType == ValueType::Struct && !arg.isRef)
+                        recordError(
+                            item,
+                            R"(Structs may only be passed by reference, consider adding the "ref" and "const" descriptors instead)");
+
+                    args.emplace_back(new LabeledValueContext{arg});
+                }
                 else
                 {
                     if(!_instantiatingTemplate)
@@ -1519,18 +1536,24 @@ namespace BraneScript
                 if(sig.id == "_construct")
                 {
                     if(arguments.size() != 1)
-                        recordError(ctx->arguments, "Constructor may have no arguments, it is intended for initializing default values only!");
+                        recordError(
+                            ctx->arguments,
+                            "Constructor may have no arguments, it is intended for initializing default values only!");
                     constructorType = ConstructorType::Default;
                 }
                 else if(sig.id == "_copy")
                 {
                     if(arguments.size() != 2 || arguments[1]->type.structCtx != parentStruct || !arguments[1]->isConst)
-                        recordError(ctx->sig->id, "Copy constructor must have exactly one argument of type \"const ref " + parentStruct->longId() + "\".");
+                        recordError(ctx->sig->id,
+                                    "Copy constructor must have exactly one argument of type \"const ref " +
+                                        parentStruct->longId() + "\".");
                 }
                 else if(sig.id == "_move")
                 {
                     if(arguments.size() != 2 || arguments[1]->type.structCtx != parentStruct || arguments[1]->isConst)
-                        recordError(ctx->sig->id, "Copy constructor must have exactly one argument of type \"ref " + parentStruct->longId() + "\".");
+                        recordError(ctx->sig->id,
+                                    "Copy constructor must have exactly one argument of type \"ref " +
+                                        parentStruct->longId() + "\".");
                 }
                 else if(sig.id == "_destruct")
                 {
@@ -1558,11 +1581,6 @@ namespace BraneScript
             {
                 auto& a = func->arguments[i];
                 a->parent = func;
-                a->isLValue = true;
-                if(a->type.storageType == ValueType::Struct && !a->isRef)
-                    recordError(
-                        a->identifier.range,
-                        R"(Structs may only be passed by reference, consider adding the "ref" and "const" descriptors instead)");
             }
 
             if(func->version == _result.version)
@@ -1662,8 +1680,14 @@ namespace BraneScript
                 buildDefaultConstructor(lambdaCaptureStruct, ConstructorType::Destructor);
 
                 std::vector<std::unique_ptr<LabeledValueContext>> captureArgs;
-                captureArgs.emplace_back(new LabeledValueContext{"this", ValueContext{{lambdaCaptureStruct->longId(), ValueType::Struct, lambdaCaptureStruct}, true, false, true}});
-                captureArgs.emplace_back(new LabeledValueContext{"other", ValueContext{{lambdaCaptureStruct->longId(), ValueType::Struct, lambdaCaptureStruct}, true, true, true}});
+                captureArgs.emplace_back(new LabeledValueContext{
+                    "this",
+                    ValueContext{
+                        {lambdaCaptureStruct->longId(), ValueType::Struct, lambdaCaptureStruct}, true, false, true}});
+                captureArgs.emplace_back(new LabeledValueContext{
+                    "other",
+                    ValueContext{
+                        {lambdaCaptureStruct->longId(), ValueType::Struct, lambdaCaptureStruct}, true, true, true}});
                 copyData = getFunctionNode(lambdaID + "CopyData", arguments);
                 initDoc(copyData, ctx);
                 copyData->arguments = std::move(captureArgs);
@@ -1671,10 +1695,9 @@ namespace BraneScript
                 LabeledValueContext thisRef = *copyData->arguments[0];
                 thisRef.isRef = false;
                 copyData->body->expressions.emplace_back(new LabeledValueConstructionContext{thisRef});
-                copyData->body->expressions.emplace_back(new AssignmentContext{
-                    new LabeledValueReferenceContext(*copyData->arguments[0]),
-                    new LabeledValueReferenceContext{*copyData->arguments[1]}
-                });
+                copyData->body->expressions.emplace_back(
+                    new AssignmentContext{new LabeledValueReferenceContext(*copyData->arguments[0]),
+                                          new LabeledValueReferenceContext{*copyData->arguments[1]}});
 
                 popDoc(copyData);
 
@@ -1682,11 +1705,12 @@ namespace BraneScript
                     arguments.begin(),
                     std::make_unique<LabeledValueContext>(
                         "this",
-                        ValueContext{
-                            {lambdaCaptureStruct->longId(), ValueType::Struct, lambdaCaptureStruct}, false, false, true}));
+                        ValueContext{{lambdaCaptureStruct->longId(), ValueType::Struct, lambdaCaptureStruct},
+                                     false,
+                                     false,
+                                     true}));
                 popDoc(lambdaCaptureStruct);
             }
-
 
 
             auto lambdaLib = getIdentifierContext("lambda");
@@ -1732,8 +1756,8 @@ namespace BraneScript
                     popDoc(lambdaCtx);
                     RETURN_EXPR(lambdaCtx);
                 }
-                lambdaCtx->allocFunc =
-                    getInstance(allocFuncTemplate->second->as<TemplateHandle>(), captureAllocArg)->as<FunctionContext>();
+                lambdaCtx->allocFunc = getInstance(allocFuncTemplate->second->as<TemplateHandle>(), captureAllocArg)
+                                           ->as<FunctionContext>();
                 assert(lambdaCtx->allocFunc);
             }
 
@@ -2144,6 +2168,7 @@ namespace BraneScript
                 std::any_cast<LabeledValueContext>(visitDeclaration(ctx->declaration())));
 
             decl->isLValue = true;
+            decl->parent = scope;
 
             scope->localVariables.push_back(std::move(decl));
             popDoc(result);
@@ -2199,6 +2224,13 @@ namespace BraneScript
                     RETURN_EXPR(assignmentCtx);
                 }
                 rValue.reset(new FunctionReferenceContext(func));
+            }
+
+            if(rValue->returnType.arraySize == -1 || lValue->returnType.arraySize == -1)
+            {
+                recordError(ctx, "Can not assign directly to an un-sized array!");
+                popDoc(assignmentCtx);
+                RETURN_EXPR(assignmentCtx);
             }
 
             if(lValue->returnType.type != rValue->returnType.type)
@@ -2303,7 +2335,8 @@ namespace BraneScript
                 popDoc(constCtx);
                 return NULL_EXPR;
             }
-            constCtx->returnType.type.structCtx =  dynamic_cast<StructContext*>(stringLib->second->module->findIdentifier("string", IDSearchOptions_ChildrenOnly));
+            constCtx->returnType.type.structCtx = dynamic_cast<StructContext*>(
+                stringLib->second->module->findIdentifier("string", IDSearchOptions_ChildrenOnly));
             if(!constCtx->returnType.type.structCtx)
             {
                 recordError(ctx, "Native string type not found! The \"string\" module may be damaged.");
@@ -2314,6 +2347,31 @@ namespace BraneScript
             constCtx->value = {constCtx->value.data() + 1, constCtx->value.size() - 2};
             popDoc(constCtx);
             RETURN_EXPR(constCtx);
+        }
+
+        std::any visitArray(braneParser::ArrayContext* ctx) override
+        {
+            std::vector<std::unique_ptr<ExpressionContext>> indices;
+            for(auto e : ctx->expression())
+            {
+                indices.push_back(asExpr(visit(e)));
+                if(!(*indices.begin())->returnType.sameBaseType((*(indices.end() - 1))->returnType))
+                {
+                    std::string error;
+                    if(auto castValue = resolveCast(indices.back().release(), (*indices.begin())->returnType, error))
+                        indices.back().reset(castValue);
+                    else
+                    {
+                        recordError(e, "Array indices must be of the same type!\n" + error);
+                        return NULL_EXPR;
+                    }
+                }
+            }
+
+            auto arrayCtx = new ArrayConstructionContext(std::move(indices));
+            initDoc(arrayCtx, ctx);
+            popDoc(arrayCtx);
+            RETURN_EXPR(arrayCtx);
         }
 
         std::any visitSizeOfType(braneParser::SizeOfTypeContext* ctx) override
@@ -2498,7 +2556,7 @@ namespace BraneScript
             EXPR_ASSERT_EXISTS(ctx->value, "expression expected");
             auto value = asExpr(visit(ctx->value));
             if(value->returnType.type.storageType == ValueType::Bool)
-                    RETURN_EXPR(new NativeNotContext(value.release()));
+                RETURN_EXPR(new NativeNotContext(value.release()));
             std::string error;
             if(auto callCtx = resolveOperator("!", error, std::move(value)))
                 RETURN_EXPR(callCtx);
@@ -2514,12 +2572,12 @@ namespace BraneScript
 
             auto left = asExpr(visit(ctx->left));
             auto right = asExpr(visit(ctx->right));
-            if(left->returnType.type.storageType == ValueType::Bool && right->returnType.type.storageType == ValueType::Bool)
+            if(left->returnType.type.storageType == ValueType::Bool &&
+               right->returnType.type.storageType == ValueType::Bool)
             {
-                    std::string op = ctx->opr->getText();
-                    RETURN_EXPR(new NativeLogicContext((op == "||") ? NativeLogicContext::OR : NativeLogicContext::AND,
-                                                       left.release(),
-                                                       right.release()));
+                std::string op = ctx->opr->getText();
+                RETURN_EXPR(new NativeLogicContext(
+                    (op == "||") ? NativeLogicContext::OR : NativeLogicContext::AND, left.release(), right.release()));
             }
 
             std::string error;
@@ -2577,7 +2635,7 @@ namespace BraneScript
             auto left = asExpr(visit(ctx->base));
             auto right = asExpr(visit(ctx->arg));
 
-            if(left->returnType.arraySize > 0)
+            if(left->returnType.arraySize > 1)
             {
                 if(!isValueTypeInt(right->returnType.type.storageType))
                 {
@@ -2593,8 +2651,6 @@ namespace BraneScript
 
             recordError(ctx, error);
             return NULL_EXPR;
-
-
         }
 
         std::any visitId(braneParser::IdContext* ctx) override
@@ -2615,7 +2671,7 @@ namespace BraneScript
             if(auto valueContext = node->as<LabeledValueContext>())
             {
                 // Do we implicitly need to reference this?
-                if(auto parentStruct= node->parent->as<StructContext>())
+                if(auto parentStruct = node->parent->as<StructContext>())
                 {
                     bool parentContainsMember = false;
                     for(auto& m : parentStruct->variables)

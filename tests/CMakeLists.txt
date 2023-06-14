@@ -18,6 +18,7 @@ add_executable(bs_tests
         refTests.cpp
         unsafeTests.cpp
         functionRefTests.cpp
+        arrayTests.cpp
         vectorTests.cpp
         parseWhileTypingTest.cpp)
 target_link_libraries(bs_tests PUBLIC GTest::gtest_main BraneScriptCompiler)

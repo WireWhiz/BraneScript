@@ -195,6 +195,10 @@ public:
     return visitChildren(ctx);
   }
 
+  virtual std::any visitArray(braneParser::ArrayContext *ctx) override {
+    return visitChildren(ctx);
+  }
+
   virtual std::any visitSizeOfType(braneParser::SizeOfTypeContext *ctx) override {
     return visitChildren(ctx);
   }

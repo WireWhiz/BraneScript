@@ -109,6 +109,8 @@ public:
 
     virtual std::any visitLambda(braneParser::LambdaContext *context) = 0;
 
+    virtual std::any visitArray(braneParser::ArrayContext *context) = 0;
+
     virtual std::any visitSizeOfType(braneParser::SizeOfTypeContext *context) = 0;
 
     virtual std::any visitId(braneParser::IdContext *context) = 0;

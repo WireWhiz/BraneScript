@@ -5,7 +5,7 @@ link "unsafe"
     template<typedef T>
     struct Vector
     {
-        ref[] T _data;
+        ref T[] _data;
         uint _size;
         uint _allocSize;
         void _grow(uint minSize)
@@ -16,7 +16,7 @@ link "unsafe"
                 return;
 
             uint newSize = minSize * 1.5f;
-            ref[] T newData <- (ref[] T)malloc(newSize * sizeof(T));
+            ref T[] newData <- (ref T[])malloc(newSize * sizeof(T));
             for(uint i = 0; i < _size; i++)
             {
                 _construct(newData[i]);
@@ -41,7 +41,7 @@ link "unsafe"
             {
                 if(_allocSize > 0)
                     free(_data);
-                _data <- (ref[] T)malloc(other._allocSize * sizeof(T));
+                _data <- (ref T[])malloc(other._allocSize * sizeof(T));
                 _allocSize = other._allocSize;
                 for(uint i = 0; i < other._size; i++)
                     _construct(_data[i]);

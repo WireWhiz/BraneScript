@@ -216,10 +216,11 @@ namespace BraneScript
 
     llvm::Type* ASTContext::getLLVMType(const ValueContext& valueCtx)
     {
+        bool isPointerTy = valueCtx.isRef || valueCtx.arraySize > 1;
         if(valueCtx.type.structCtx)
         {
             llvm::Type* type = getStructDef(valueCtx.type.structCtx);
-            if(valueCtx.isRef)
+            if(isPointerTy)
                 type = llvm::PointerType::get(type, 0);
             return type;
         }
@@ -227,39 +228,39 @@ namespace BraneScript
         switch(valueCtx.type.storageType)
         {
             case ValueType::Void:
-                if(valueCtx.isRef)
+                if(isPointerTy)
                     return llvm::PointerType::get(llvm::Type::getInt32Ty(*llvmCtx), 0);
                 else
                     return llvm::Type::getVoidTy(*llvmCtx);
             case ValueType::Bool:
-                if(valueCtx.isRef)
+                if(isPointerTy)
                     return llvm::Type::getInt1PtrTy(*llvmCtx);
                 else
                     return llvm::Type::getInt1Ty(*llvmCtx);
             case ValueType::Char:
-                if(valueCtx.isRef)
+                if(isPointerTy)
                     return llvm::Type::getInt8PtrTy(*llvmCtx);
                 else
                     return llvm::Type::getInt8Ty(*llvmCtx);
             case ValueType::UInt32:
             case ValueType::Int32:
-                if(valueCtx.isRef)
+                if(isPointerTy)
                     return llvm::Type::getInt32PtrTy(*llvmCtx);
                 else
                     return llvm::Type::getInt32Ty(*llvmCtx);
             case ValueType::Int64:
             case ValueType::UInt64:
-                if(valueCtx.isRef)
+                if(isPointerTy)
                     return llvm::Type::getInt64PtrTy(*llvmCtx);
                 else
                     return llvm::Type::getInt64Ty(*llvmCtx);
             case ValueType::Float32:
-                if(valueCtx.isRef)
+                if(isPointerTy)
                     return llvm::Type::getFloatPtrTy(*llvmCtx);
                 else
                     return llvm::Type::getFloatTy(*llvmCtx);
             case ValueType::Float64:
-                if(valueCtx.isRef)
+                if(isPointerTy)
                     return llvm::Type::getDoublePtrTy(*llvmCtx);
                 else
                     return llvm::Type::getDoubleTy(*llvmCtx);
@@ -381,9 +382,21 @@ namespace BraneScript
                     continue;
                 if(!value.second.context.type.structCtx)
                     continue;
+                auto sType = getLLVMType(value.second.context);
                 auto destructorFunc = functions.find(value.second.context.type.structCtx->destructor->signature());
                 assert(destructorFunc != functions.end());
-                builder.CreateCall(destructorFunc->second, {value.second.value});
+                if(value.second.context.arraySize > 1)
+                {
+                    assert(value.second.context.arraySize != size_t(-1));
+                    for(size_t i = 0; i < value.second.context.arraySize; ++i)
+                    {
+                        auto index = llvm::ConstantInt::get(llvm::Type::getInt16Ty(*llvmCtx), i);
+                        auto indexValue = builder.CreateGEP(sType->getPointerElementType(), value.second.value, index);
+                        builder.CreateCall(destructorFunc->second, {indexValue});
+                    }
+                }
+                else
+                    builder.CreateCall(destructorFunc->second, {value.second.value});
             }
             for(auto& value : itr->unnamedValues)
             {
@@ -391,9 +404,21 @@ namespace BraneScript
                     continue;
                 if(!value.context.type.structCtx)
                     continue;
+                auto sType = getLLVMType(value.context);
                 auto destructorFunc = functions.find(value.context.type.structCtx->destructor->signature());
                 assert(destructorFunc != functions.end());
-                builder.CreateCall(destructorFunc->second, {value.value});
+                if(value.context.arraySize > 1)
+                {
+                    assert(value.context.arraySize != size_t(-1));
+                    for(size_t i = 0; i < value.context.arraySize; ++i)
+                    {
+                        auto index = llvm::ConstantInt::get(llvm::Type::getInt16Ty(*llvmCtx), i);
+                        auto indexValue = builder.CreateGEP(sType->getPointerElementType(), value.value, index);
+                        builder.CreateCall(destructorFunc->second, {indexValue});
+                    }
+                }
+                else
+                    builder.CreateCall(destructorFunc->second, {value.value});
             }
             if(onlyLocal)
                 break;
@@ -418,12 +443,21 @@ namespace BraneScript
         if(itr != debugTypes.end())
             return itr->second;
 
-        if(valueCtx.isRef)
+        if(valueCtx.isRef || valueCtx.arraySize > 1)
         {
             auto baseType = valueCtx;
             baseType.isRef = false;
+            baseType.arraySize = 0;
             auto* type = getDebugType(baseType);
-            auto* debugType = dBuilder->createPointerType(type, sizeof(void*) * 8);
+            llvm::DIType* debugType = nullptr;
+            if(valueCtx.arraySize > 1 && valueCtx.arraySize != size_t(-1))
+            {
+                auto range = dBuilder->getOrCreateSubrange(0, valueCtx.arraySize);
+                debugType = dBuilder->createArrayType(valueCtx.arraySize, sizeof(void*) * 8, type, dBuilder->getOrCreateArray({range}));
+            }
+            else
+                debugType = dBuilder->createPointerType(type, sizeof(void*) * 8);
+            dBuilder->createPointerType(type, sizeof(void*) * 8);
             debugTypes.insert({sig, debugType});
             return debugType;
         }
@@ -530,6 +564,13 @@ namespace BraneScript
         if(isRef)
             sig += "ref ";
         sig += type.identifier;
+        if(arraySize > 1)
+        {
+            if(arraySize == size_t(-1))
+                sig += "[]";
+            else
+                sig += "[" + std::to_string(arraySize) + "]";
+        }
         return sig;
     }
 
@@ -538,11 +579,14 @@ namespace BraneScript
         type = o.type;
         isConst = o.isConst;
         isRef = o.isRef;
+        arraySize = o.arraySize;
     }
 
     bool ValueContext::sameBaseType(const ValueContext& o) const
     {
         if(type.identifier != o.type.identifier)
+            return false;
+        if(arraySize != o.arraySize)
             return false;
         return isRef == o.isRef;
     }
@@ -587,6 +631,7 @@ namespace BraneScript
         this->isLValue = isLValue;
         this->isConst = isConst;
         this->isRef = isRef;
+        arraySize = 1;
     }
 
     std::string LabeledValueContext::signature() const { return ValueContext::signature() + " " + identifier.text; }
@@ -688,7 +733,15 @@ namespace BraneScript
         size_t varIndex = 0;
         for(auto& var : localVariables)
         {
-            auto varValue = ctx.builder.CreateAlloca(ctx.getLLVMType(*var), nullptr, var->identifier.text);
+            llvm::Value* arraySize = nullptr;
+            llvm::Type* varType = ctx.getLLVMType(*var);
+            if(var->arraySize > 1 && !var->isRef)
+            {
+                varType = varType->getPointerElementType();
+                arraySize = llvm::ConstantInt::get(llvm::Type::getInt16Ty(*ctx.llvmCtx),  llvm::APInt(16, var->arraySize));
+            }
+
+            auto varValue = ctx.builder.CreateAlloca(varType, arraySize, var->identifier.text);
             ctx.addValue(var->identifier.text, varValue, *var);
             if(ctx.dBuilder)
             {
@@ -777,12 +830,14 @@ namespace BraneScript
             return ctx.builder.CreateRetVoid();
         }
 
+
         auto parentFunc = getParent<FunctionContext>();
         assert(parentFunc);
+        bool isArgRet = !parentFunc->returnType.isRef && (parentFunc->returnType.type.structCtx || parentFunc->returnType.arraySize > 1);
         auto retValue = value->createAST(ctx);
         ctx.setDebugLocation(this);
         assert(retValue);
-        if(!parentFunc->returnType.isRef && parentFunc->returnType.type.structCtx)
+        if(isArgRet)
         {
             assert(ctx.func->getReturnType()->isVoidTy());
             // If we are returning a value from a function, it will have detected this node as a parent and returned
@@ -796,12 +851,46 @@ namespace BraneScript
             }
             auto retRef = ctx.findValue("-retRef");
             assert(retRef);
+            assert(parentFunc->returnType.arraySize != -1 && parentFunc->returnType.arraySize != 0);
 
-            auto copy = ctx.functions.find(parentFunc->returnType.type.structCtx->copyConstructor->signature());
-            assert(copy != ctx.functions.end());
+            if(auto structCtx = parentFunc->returnType.type.structCtx)
+            {
+                auto copy = ctx.functions.find(structCtx->copyConstructor->signature());
+                assert(copy != ctx.functions.end());
+                ctx.setDebugLocation(this);
+                retValue = ctx.dereferenceToDepth(retValue, 1);
+                if(parentFunc->returnType.arraySize == 1)
+                {
+                    std::vector<llvm::Value*> args = {retRef, retValue};
+                    ctx.builder.CreateCall(copy->second, args);
+                }
+                else
+                {
+                    auto elementType = retValue->getType()->getPointerElementType();
+                    for(size_t i = 0; i < parentFunc->returnType.arraySize; ++i)
+                    {
+                        auto index = llvm::ConstantInt::get(llvm::Type::getInt16Ty(*ctx.llvmCtx), i);
+                        auto* valPtr = ctx.builder.CreateGEP(elementType, retValue, index);
+                        auto* retPtr = ctx.builder.CreateGEP(elementType, retRef, index);
+                        std::vector<llvm::Value*> args = {retPtr ,valPtr};
+                        ctx.builder.CreateCall(copy->second, args);
+                    }
+                }
 
-            std::vector<llvm::Value*> args = {retRef, ctx.dereferenceToDepth(retValue, 1)};
-            ctx.builder.CreateCall(copy->second, args);
+            }
+            else
+            {
+                auto valArray = ctx.dereferenceToDepth(retValue, 1);
+                auto retArray = ctx.dereferenceToDepth(retRef, 1);
+                auto elementType = valArray->getType()->getPointerElementType();
+                for(size_t i = 0; i < parentFunc->returnType.arraySize; ++i)
+                {
+                    auto index = llvm::ConstantInt::get(llvm::Type::getInt16Ty(*ctx.llvmCtx), i);
+                    auto* valPtr = ctx.builder.CreateGEP(elementType, valArray, index);
+                    auto* retPtr = ctx.builder.CreateGEP(elementType, retArray, index);
+                    ctx.builder.CreateStore(ctx.dereferenceToDepth(valPtr, 0), retPtr);
+                }
+            }
             ctx.destructStack();
             ctx.setDebugLocation(this);
             ctx.builder.CreateRetVoid();
@@ -928,16 +1017,20 @@ namespace BraneScript
         auto* end = llvm::BasicBlock::Create(*ctx.llvmCtx, "forEnd", ctx.func);
 
         loopScope->beginScope(ctx);
+        ctx.setDebugLocation(this);
         init->createAST(ctx);
+        ctx.setDebugLocation(this);
         ctx.builder.CreateBr(header);
         ctx.setInsertPoint(header);
 
         auto* cond = condition->createAST(ctx);
+        ctx.setDebugLocation(this);
         ctx.builder.CreateCondBr(cond, bodyBlock, end);
 
         ctx.setInsertPoint(bodyBlock);
         body->createAST(ctx);
         step->createAST(ctx);
+        ctx.setDebugLocation(this);
         ctx.builder.CreateBr(header);
 
         ctx.setInsertPoint(end);
@@ -965,26 +1058,51 @@ namespace BraneScript
         llvm::Value* l = ctx.dereferenceToDepth(lValue->createAST(ctx),
                                                 lValue->returnType.type.storageType == ValueType::FuncRef ? 2 : 1);
         llvm::Value* r = rValue->createAST(ctx);
+        ctx.setDebugLocation(this);
 
         assert(l->getType()->isPointerTy());
         if(!lValue->returnType.type.structCtx)
         {
-            r = ctx.dereferenceToDepth(r, lValue->returnType.type.storageType == ValueType::FuncRef ? 1 : 0);
-            assert(l->getType()->getContainedType(0) == r->getType());
-            ctx.setDebugLocation(this);
-            ctx.builder.CreateStore(r, l);
+            if(lValue->returnType.arraySize == 1)
+            {
+                r = ctx.dereferenceToDepth(r, lValue->returnType.type.storageType == ValueType::FuncRef ? 1 : 0);
+                assert(l->getType()->getContainedType(0) == r->getType());
+                ctx.builder.CreateStore(r, l);
+                return l;
+            }
+
+            r = ctx.dereferenceToDepth(r, lValue->returnType.type.storageType == ValueType::FuncRef ? 2 : 1);
+
+            auto elementType = l->getType()->getPointerElementType();
+            for(size_t i = 0; i < lValue->returnType.arraySize; ++i)
+            {
+                auto indexValue = llvm::ConstantInt::get(*ctx.llvmCtx, llvm::APInt(16, i));
+                auto* ptr = ctx.builder.CreateGEP(elementType, l, indexValue);
+                auto* val = ctx.builder.CreateGEP(elementType, r, indexValue);
+                ctx.builder.CreateStore(ctx.dereferenceToDepth(val, lValue->returnType.type.storageType == ValueType::FuncRef ? 1 : 0), ptr);
+            }
             return l;
         }
 
         auto cc = ctx.functions.find(lValue->returnType.type.structCtx->copyConstructor->signature());
         assert(cc != ctx.functions.end());
         assert(cc->second->arg_size() == 2);
-        auto structPointerType = lValue->returnType;
-        structPointerType.isRef = true;
+        r = ctx.dereferenceToDepth(r, 1);
 
-        std::vector<llvm::Value*> args = {l, ctx.dereferenceToDepth(r, 1)};
-        ctx.setDebugLocation(this);
-        ctx.builder.CreateCall(cc->second, args);
+        if(lValue->returnType.arraySize == 1)
+        {
+            ctx.builder.CreateCall(cc->second, {l, r});
+            return l;
+        }
+
+        auto elementType = l->getType()->getPointerElementType();
+        for(size_t i = 0; i < lValue->returnType.arraySize; ++i)
+        {
+            auto indexValue = llvm::ConstantInt::get(*ctx.llvmCtx, llvm::APInt(16, i));
+            auto* ptr = ctx.builder.CreateGEP(elementType, l, indexValue);
+            auto* val = ctx.builder.CreateGEP(elementType, r, indexValue);
+            ctx.builder.CreateCall(cc->second, {ptr, val});
+        }
         return l;
     }
 
@@ -1191,7 +1309,76 @@ namespace BraneScript
                                             llvm::Type::getInt8PtrTy(*ctx.llvmCtx));
 
         ctx.builder.CreateCall(hiddenConstructor, {tempString, str});
+        ctx.addValue(tempString, returnType);
         return tempString;
+    }
+
+    ArrayConstructionContext::ArrayConstructionContext(std::vector<std::unique_ptr<ExpressionContext>> indices) : indices(std::move(indices))
+    {
+        returnType = this->indices[0]->returnType;
+        returnType.arraySize = this->indices.size();
+        returnType.isRef = false;
+        returnType.isLValue = false;
+    }
+
+    bool ArrayConstructionContext::isConstexpr() const
+    {
+        return false;
+    }
+
+    llvm::Value* ArrayConstructionContext::createAST(ASTContext& ctx) const
+    {
+        llvm::Value* numElements = llvm::ConstantInt::get(*ctx.llvmCtx, llvm::APInt(16, indices.size()));
+        ctx.setDebugLocation(this);
+
+        ValueContext rt = returnType;
+        rt.arraySize = 1;
+        rt.isRef = false;
+        auto* elementType = ctx.getLLVMType(rt);
+
+        auto array = ctx.builder.CreateAlloca(elementType, numElements);
+        for(size_t i = 0; i < indices.size(); i++)
+        {
+            auto& index = indices[i];
+            auto* indexValue = index->createAST(ctx);
+            ctx.setDebugLocation(this);
+            auto* indexPtr = ctx.builder.CreateGEP(elementType, array, llvm::ConstantInt::get(*ctx.llvmCtx, llvm::APInt(16, i)));
+
+            if(!index->returnType.type.structCtx)
+            {
+                indexValue = ctx.dereferenceToDepth(indexValue, returnType.type.storageType == ValueType::FuncRef ? 1 : 0);
+                assert(indexPtr->getType()->getContainedType(0) == indexValue->getType());
+                ctx.builder.CreateStore(indexValue, indexPtr);
+                continue;
+            }
+
+            std::vector<llvm::Value*> args = {indexPtr};
+            auto c = ctx.functions.find(index->returnType.type.structCtx->constructor->signature());
+            assert(c != ctx.functions.end());
+            assert(c->second->arg_size() == 1);
+            ctx.builder.CreateCall(c->second, args);
+
+            auto cc = ctx.functions.find(index->returnType.type.structCtx->copyConstructor->signature());
+            assert(cc != ctx.functions.end());
+            assert(cc->second->arg_size() == 2);
+
+            args.push_back(indexValue);
+            ctx.builder.CreateCall(cc->second, args);
+        }
+        ctx.addValue(array, returnType);
+        return array;
+    }
+
+    DocumentContext* ArrayConstructionContext::deepCopy(const std::function<DocumentContext*(DocumentContext*)>& callback) const
+    {
+        std::vector<std::unique_ptr<ExpressionContext>> copyIndices;
+        for(auto& index : indices)
+        {
+            auto newIndex = (ExpressionContext*)index->deepCopy(callback);
+            copyIndices.emplace_back(newIndex);
+        }
+
+        return new ArrayConstructionContext(std::move(copyIndices));
     }
 
     LabeledValueConstructionContext::LabeledValueConstructionContext(const LabeledValueContext& value)
@@ -1219,12 +1406,21 @@ namespace BraneScript
         assert(func != ctx.functions.end());
         assert(func->second->arg_size() == 1);
 
-        auto structPointerType = returnType;
-        structPointerType.isRef = true;
+        value = ctx.dereferenceToDepth(value, 1);
+        auto structPointerType = value->getType()->getPointerElementType();
 
-        assert(value->getType()->isPointerTy());
-        std::vector<llvm::Value*> arg = {ctx.dereferenceToDepth(value, 1)};
-        ctx.builder.CreateCall(func->second, arg);
+        if(returnType.arraySize == 1)
+        {
+            ctx.builder.CreateCall(func->second, {value});
+            return nullptr;
+        }
+        for(size_t i = 0; i < returnType.arraySize; i++)
+        {
+            auto* indexPtr = ctx.builder.CreateGEP(structPointerType, value, llvm::ConstantInt::get(*ctx.llvmCtx, llvm::APInt(16, i)));
+            std::vector<llvm::Value*> args = {indexPtr};
+            ctx.builder.CreateCall(func->second, args);
+        }
+
         return value;
     }
 
@@ -1697,7 +1893,7 @@ namespace BraneScript
         return callback(copy);
     }
 
-    NativeIncrementContext::NativeIncrementContext(ExpressionContext* value, bool isPrefix) : value(value)
+    NativeIncrementContext::NativeIncrementContext(ExpressionContext* value, bool isPrefix) : value(value), isPrefix(isPrefix)
     {
         assert(isValueTypeScalar(value->returnType.type.storageType));
         assert(value->returnType.isLValue || value->returnType.isRef);
@@ -1950,7 +2146,7 @@ namespace BraneScript
     llvm::Value* FunctionCallContext::createAST(ASTContext& ctx) const
     {
         ctx.setDebugLocation(this);
-        bool argRet = !returnType.isRef && returnType.type.structCtx;
+        bool argRet = !returnType.isRef && (returnType.type.structCtx || returnType.arraySize > 1);
         std::vector<llvm::Value*> args;
         if(argRet)
         {
@@ -1960,12 +2156,31 @@ namespace BraneScript
             else
             {
                 // Construct struct to be returned into
-                args.push_back(ctx.builder.CreateAlloca(ctx.getLLVMType(returnType)));
-                auto constructor = ctx.functions.find(returnType.type.structCtx->constructor->signature());
-                assert(constructor != ctx.functions.end());
+                assert(returnType.arraySize != -1);
+                assert(returnType.arraySize != 0);
+                auto arraySize = llvm::ConstantInt::get(ctx.builder.getInt32Ty(), returnType.arraySize);
+                ValueContext elementType = returnType;
+                elementType.arraySize = 1;
+                auto retType = ctx.getLLVMType(elementType);
+                args.push_back(ctx.builder.CreateAlloca(retType, arraySize));
 
-                ctx.setDebugLocation(this);
-                ctx.builder.CreateCall(constructor->second, args[0]);
+                if(returnType.type.structCtx)
+                {
+                    auto constructor = ctx.functions.find(returnType.type.structCtx->constructor->signature());
+                    assert(constructor != ctx.functions.end());
+
+                    if(returnType.arraySize == 1)
+                        ctx.builder.CreateCall(constructor->second, args[0]);
+                    else
+                    {
+                        for(int i = 0; i < returnType.arraySize; i++)
+                        {
+                            auto ptr = ctx.builder.CreateGEP(args[0]->getType(), args[0], llvm::ConstantInt::get(ctx.builder.getInt16Ty(), i));
+                            ctx.builder.CreateCall(constructor->second, {ptr});
+                        }
+                    }
+                }
+                ctx.addValue(args[0], returnType);
             }
         }
 
@@ -2031,6 +2246,9 @@ namespace BraneScript
         assert(source->returnType.isRef);
         assert(isValueTypeInt(index->returnType.type.storageType));
         returnType = source->returnType;
+        returnType.isRef = true;
+        returnType.arraySize = 1;
+
     }
 
     bool NativeIndexOperator::isConstexpr() const { return false; }
@@ -2042,6 +2260,7 @@ namespace BraneScript
         assert(idx->getType()->isIntegerTy());
         auto elementType = returnType;
         elementType.isRef = false;
+        elementType.arraySize = 1;
 
         auto coreType = ctx.getLLVMType(elementType);
 
@@ -2169,7 +2388,7 @@ namespace BraneScript
     std::string FunctionContext::argSig() const
     {
         std::string sig = "(";
-        if(returnType.type.structCtx && !returnType.isRef)
+        if(!returnType.isRef && (returnType.type.structCtx || returnType.arraySize > 1))
         {
             auto resType = returnType;
             resType.isRef = true;
@@ -2180,12 +2399,7 @@ namespace BraneScript
 
         for(auto itr = arguments.begin(); itr != arguments.end();)
         {
-            auto& arg = *itr;
-            if(arg->isConst)
-                sig += "const ";
-            if(arg->isRef)
-                sig += "ref ";
-            sig += arg->type.identifier;
+            sig += (*itr)->ValueContext::signature();
             if(++itr != arguments.end())
                 sig += ",";
             else
@@ -2240,7 +2454,7 @@ namespace BraneScript
             ctx.currentBlock = llvm::BasicBlock::Create(*ctx.llvmCtx, "entry", ctx.func);
             ctx.builder.SetInsertPoint(ctx.currentBlock);
             ctx.setDebugLocation(body.get());
-            bool argReturn = !returnType.isRef && returnType.type.structCtx;
+            bool argReturn = !returnType.isRef && (returnType.type.structCtx || returnType.arraySize > 1);
             size_t index = argReturn ? -1 : 0;
             for(auto& arg : ctx.func->args())
             {
@@ -2322,7 +2536,7 @@ namespace BraneScript
     void FunctionContext::registerFunction(ASTContext& ctx, bool isLinked) const
     {
         std::vector<llvm::Type*> argTypes;
-        bool argReturn = !returnType.isRef && returnType.type.structCtx;
+        bool argReturn = !returnType.isRef && (returnType.type.structCtx || returnType.arraySize > 1);
         if(argReturn)
         {
             auto thisRefType = returnType;
@@ -2806,4 +3020,5 @@ namespace BraneScript
     }
 
     bool ConstValueContext::isConstexpr() const { return true; }
+
 } // namespace BraneScript

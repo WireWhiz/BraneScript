@@ -42,12 +42,14 @@ namespace BraneScript
 
     BSString::~BSString()
     {
-        delete[] _data;
+        if(_size > 0)
+            delete[] _data;
     }
 
     BSString& BSString::operator=(const BSString& other)
     {
-        delete[] _data;
+        if(_size > 0)
+            delete[] _data;
         _size = other._size;
         _data = new char[_size + 1];
         memcpy(_data, other._data, _size);
@@ -56,7 +58,8 @@ namespace BraneScript
     }
 
     BSString& BSString::operator=(BSString&& other) noexcept {
-        delete[] _data;
+        if(_size > 0)
+            delete[] _data;
         _size = other._size;
         _data = other._data;
         other._data = nullptr;
@@ -112,11 +115,11 @@ namespace BraneScript
         });
         lib.addFunction("string::string::_move(ref string::string,ref string::string)", (FuncRef<void, void*, void*>)[](void* ptr, void* other)
         {
-            new(ptr) BSString(std::move(*(BSString*)other));
+            *(BSString*)ptr = std::move(*(BSString*)other);
         });
         lib.addFunction("string::string::_copy(ref string::string,const ref string::string)", (FuncRef<void, void*, const void*>)[](void* ptr, const void* other)
         {
-            new(ptr) BSString(*(BSString*)other);
+            *(BSString*)ptr = *(BSString*)other;
         });
         lib.addFunction("string::string::_destruct(ref string::string)", (FuncRef<void, void*>)[](void* ptr)
         {

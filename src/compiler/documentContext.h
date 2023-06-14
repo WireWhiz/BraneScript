@@ -79,7 +79,7 @@ namespace BraneScript
         bool isConst = false;
         // Is this a reference
         bool isRef = false;
-        size_t arraySize = 0;
+        size_t arraySize = 1;
 
         bool operator==(const ValueContext& o) const;
         bool operator!=(const ValueContext& o) const;
@@ -540,6 +540,16 @@ namespace BraneScript
         std::string toString() const override;
         llvm::Value* createAST(ASTContext& ctx) const override;
         DocumentContext* deepCopy(const std::function<DocumentContext*(DocumentContext*)>& callback) const override;
+    };
+
+    struct ArrayConstructionContext : public ExpressionContext
+    {
+        std::vector<std::unique_ptr<ExpressionContext>> indices;
+        ArrayConstructionContext(std::vector<std::unique_ptr<ExpressionContext>> indices);
+
+        bool isConstexpr() const override;
+        llvm::Value* createAST(ASTContext& ctx) const override;
+        DocumentContext* deepCopy(const std::function<DocumentContext*(DocumentContext*)>&) const override;
     };
 
     struct LabeledValueConstructionContext : public ExpressionContext

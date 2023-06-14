@@ -46,7 +46,7 @@ templateArgs     : '<' templateArg (',' templateArg)* '>';
 
 scopedID    : id=(ID | 'Lambda') (template=templateArgs)? ('::' child=scopedID)?;
 
-type        : isConst='const'? (isRef='ref' | isArrayRef='ref' '[' size=INT? ']')?  name=scopedID;
+type        : isConst='const'? isRef='ref'? name=scopedID (isArray='[' size=INT? ']')?;
 declaration : type id=ID;
 argumentListItem : declaration | pack=ID '...' id=ID;
 argumentList: (argumentListItem (',' argumentListItem)*)?;
@@ -80,6 +80,7 @@ expression  : INT                                                           #con
             | CHAR                                                          #constChar
             | STRING                                                        #constString
             | BOOL                                                          #constBool
+            | '[' (expression (',' expression)*)? ']'                       #array
             | 'sizeof' '(' t=type ')'                                       #sizeOfType
             | 'sizeof' '...' '(' id=ID ')'                                  #sizeOfPack
             | declaration                                                   #decl

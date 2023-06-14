@@ -304,9 +304,9 @@ public:
   public:
     antlr4::Token *isConst = nullptr;
     antlr4::Token *isRef = nullptr;
-    antlr4::Token *isArrayRef = nullptr;
-    antlr4::Token *size = nullptr;
     braneParser::ScopedIDContext *name = nullptr;
+    antlr4::Token *isArray = nullptr;
+    antlr4::Token *size = nullptr;
     TypeContext(antlr4::ParserRuleContext *parent, size_t invokingState);
     virtual size_t getRuleIndex() const override;
     ScopedIDContext *scopedID();
@@ -765,6 +765,16 @@ public:
     virtual std::any accept(antlr4::tree::ParseTreeVisitor *visitor) override;
   };
 
+  class  ArrayContext : public ExpressionContext {
+  public:
+    ArrayContext(ExpressionContext *ctx);
+
+    std::vector<ExpressionContext *> expression();
+    ExpressionContext* expression(size_t i);
+
+    virtual std::any accept(antlr4::tree::ParseTreeVisitor *visitor) override;
+  };
+
   class  SizeOfTypeContext : public ExpressionContext {
   public:
     SizeOfTypeContext(ExpressionContext *ctx);
@@ -907,7 +917,7 @@ public:
     virtual std::any accept(antlr4::tree::ParseTreeVisitor *visitor) override;
   };
 
-  class  ConstStringContext : public ExpressionContext {
+  class ConstStringContext : public ExpressionContext {
   public:
     ConstStringContext(ExpressionContext *ctx);
 
