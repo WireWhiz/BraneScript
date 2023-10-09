@@ -9,6 +9,7 @@
 #include <unordered_map>
 #include <cassert>
 #include <vector>
+#include <cstdint>
 
 namespace BraneScript
 {

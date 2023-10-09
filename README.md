@@ -25,7 +25,7 @@ cmake --build
 ```
 
 ### CMake options
-* BUILD_TESTS<br>
+* BS_BUILD_TESTS<br>
 builds tests target
 * BS_BUILD_EXECUTABLE<br>
 builds compiler example (wip)

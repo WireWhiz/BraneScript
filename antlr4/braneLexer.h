@@ -1,5 +1,5 @@
 
-// Generated from /home/wirewhiz/Documents/git/BraneEngine/libraries/BraneScript/antlr4/brane.g4 by ANTLR 4.12.0
+// Generated from /home/wirewhiz/CLionProjects/BraneScript/antlr4/brane.g4 by ANTLR 4.13.1
 
 #pragma once
 
@@ -18,9 +18,10 @@ public:
     T__20 = 21, T__21 = 22, T__22 = 23, T__23 = 24, T__24 = 25, T__25 = 26, 
     T__26 = 27, T__27 = 28, T__28 = 29, T__29 = 30, T__30 = 31, T__31 = 32, 
     T__32 = 33, T__33 = 34, T__34 = 35, T__35 = 36, T__36 = 37, T__37 = 38, 
-    T__38 = 39, T__39 = 40, T__40 = 41, T__41 = 42, COMMENT = 43, NEWLINE = 44, 
-    BLOCK_COMMENT = 45, SPACE = 46, BOOL = 47, INT = 48, FLOAT = 49, CHAR = 50, 
-    STRING = 51, ID = 52, MUL = 53, DIV = 54, ADD = 55, SUB = 56, LOGIC = 57
+    T__38 = 39, T__39 = 40, T__40 = 41, T__41 = 42, T__42 = 43, T__43 = 44, 
+    T__44 = 45, T__45 = 46, COMMENT = 47, NEWLINE = 48, BLOCK_COMMENT = 49, 
+    SPACE = 50, BOOL = 51, INT = 52, FLOAT = 53, CHAR = 54, STRING = 55, 
+    ID = 56, MUL = 57, DIV = 58, ADD = 59, SUB = 60, LOGIC = 61
   };
 
   explicit braneLexer(antlr4::CharStream *input);

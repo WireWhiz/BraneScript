@@ -133,7 +133,7 @@ namespace BraneScript
                 PB.crossRegisterProxies(lam, fam, cgam, mam);
 
                 // Create the pass manager.
-                auto fpm = PB.buildFunctionSimplificationPipeline(llvm::PassBuilder::OptimizationLevel::O2,
+                auto fpm = PB.buildFunctionSimplificationPipeline(llvm::OptimizationLevel::O2,
                                                                   llvm::ThinOrFullLTOPhase::FullLTOPostLink);
 
 

@@ -4,6 +4,13 @@
 
 #include "documentContext.h"
 #include <cassert>
+#include <llvm/IR/LegacyPassManager.h>
+
+#include "llvm/Support/raw_ostream.h"
+#include "llvm/Support/FileSystem.h"
+#include "llvm/MC/TargetRegistry.h"
+#include "llvm/Target/TargetMachine.h"
+#include "llvm/Support/TargetSelect.h"
 
 #include "llvm/ADT/APFloat.h"
 #include "llvm/ADT/APInt.h"
@@ -12,6 +19,7 @@
 #include "llvm/IR/Verifier.h"
 #include "llvm/Passes/PassBuilder.h"
 #include "llvm/Support/Host.h"
+#include "llvm/Support/Path.h"
 #include "llvm/Transforms/Scalar.h"
 
 namespace BraneScript
@@ -233,7 +241,7 @@ namespace BraneScript
                     return llvm::Type::getVoidTy(*llvmCtx);
             case ValueType::Bool:
                 if(valueCtx.isRef)
-                    return llvm::Type::getInt1PtrTy(*llvmCtx);
+                    return llvm::PointerType::get(llvm::Type::getInt1Ty(*llvmCtx), 0);
                 else
                     return llvm::Type::getInt1Ty(*llvmCtx);
             case ValueType::Char:
@@ -970,7 +978,6 @@ namespace BraneScript
         if(!lValue->returnType.type.structCtx)
         {
             r = ctx.dereferenceToDepth(r, lValue->returnType.type.storageType == ValueType::FuncRef ? 1 : 0);
-            assert(l->getType()->getContainedType(0) == r->getType());
             ctx.setDebugLocation(this);
             ctx.builder.CreateStore(r, l);
             return l;
@@ -2632,9 +2639,9 @@ namespace BraneScript
             // Create the pass manager.
             // This one corresponds to a typical -O2 optimization pipeline.
             cc.mpm = std::make_unique<llvm::ModulePassManager>(
-                PB.buildPerModuleDefaultPipeline(llvm::PassBuilder::OptimizationLevel::O2));
+                PB.buildPerModuleDefaultPipeline(llvm::OptimizationLevel::O2));
             cc.fpm = std::make_unique<llvm::FunctionPassManager>(PB.buildFunctionSimplificationPipeline(
-                llvm::PassBuilder::OptimizationLevel::O2, llvm::ThinOrFullLTOPhase::None));
+                llvm::OptimizationLevel::O2, llvm::ThinOrFullLTOPhase::None));
         }
         if(flags & CompileFlags_DebugInfo)
         {
@@ -2677,8 +2684,59 @@ namespace BraneScript
         if(cc.dBuilder)
             cc.dBuilder->finalize();
 
+
+        try
+        {
+            llvm::InitializeAllTargetInfos();
+            llvm::InitializeAllTargets();
+            llvm::InitializeAllTargetMCs();
+            llvm::InitializeAllAsmParsers();
+            llvm::InitializeAllAsmPrinters();
+
+
+            auto triple = "wasm32-unknown-unknown";
+
+            cc.module->setDataLayout("p:32:32:32-n32:32:32");
+            cc.module->setTargetTriple(triple);
+
+            std::string Error;
+            auto Target = llvm::TargetRegistry::lookupTarget(triple, Error);
+            if(!Target)
+                throw std::runtime_error("Could not find wasm32-unknown-unknown target!");
+
+            auto RM = std::optional<llvm::Reloc::Model>();
+            auto TargetMachine = Target->createTargetMachine(triple, "generic", "", llvm::TargetOptions(), RM);
+
+            std::error_code ec;
+            llvm::raw_fd_ostream dest("test-wasm.o", ec, llvm::sys::fs::OF_None);
+
+            if(ec) {
+                throw std::runtime_error("Could not open wasm output file");
+            }
+
+            llvm::legacy::PassManager pass;
+            auto FileType = llvm::CGFT_ObjectFile;
+
+            if(TargetMachine->addPassesToEmitFile(pass, dest, nullptr, FileType)) {
+                    throw std::runtime_error("TargetMachine can't emit a file of this type");
+            }
+
+            pass.run(*cc.module);
+            dest.flush();
+            std::cout << "Wrote wasm test file for " << identifier.text << " to test-wasm.o\n";
+        }
+        catch(std::exception_ptr& e)
+        {
+#ifndef NDEBUG
+            std::rethrow_exception(e);
+#endif
+        }
+
+
         if(flags & CompileFlags_PrintIR)
             cc.printModule();
+
+
 
         llvm::raw_string_ostream bitcodeStream(module.bitcode);
         llvm::WriteBitcodeToFile(*cc.module, bitcodeStream);

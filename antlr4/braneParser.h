@@ -1,5 +1,5 @@
 
-// Generated from /home/wirewhiz/Documents/git/BraneEngine/libraries/BraneScript/antlr4/brane.g4 by ANTLR 4.12.0
+// Generated from /home/wirewhiz/CLionProjects/BraneScript/antlr4/brane.g4 by ANTLR 4.13.1
 
 #pragma once
 
@@ -18,9 +18,10 @@ public:
     T__20 = 21, T__21 = 22, T__22 = 23, T__23 = 24, T__24 = 25, T__25 = 26, 
     T__26 = 27, T__27 = 28, T__28 = 29, T__29 = 30, T__30 = 31, T__31 = 32, 
     T__32 = 33, T__33 = 34, T__34 = 35, T__35 = 36, T__36 = 37, T__37 = 38, 
-    T__38 = 39, T__39 = 40, T__40 = 41, T__41 = 42, COMMENT = 43, NEWLINE = 44, 
-    BLOCK_COMMENT = 45, SPACE = 46, BOOL = 47, INT = 48, FLOAT = 49, CHAR = 50, 
-    STRING = 51, ID = 52, MUL = 53, DIV = 54, ADD = 55, SUB = 56, LOGIC = 57
+    T__38 = 39, T__39 = 40, T__40 = 41, T__41 = 42, T__42 = 43, T__43 = 44, 
+    T__44 = 45, T__45 = 46, COMMENT = 47, NEWLINE = 48, BLOCK_COMMENT = 49, 
+    SPACE = 50, BOOL = 51, INT = 52, FLOAT = 53, CHAR = 54, STRING = 55, 
+    ID = 56, MUL = 57, DIV = 58, ADD = 59, SUB = 60, LOGIC = 61
   };
 
   enum {
@@ -30,8 +31,8 @@ public:
     RuleType = 12, RuleDeclaration = 13, RuleArgumentListItem = 14, RuleArgumentList = 15, 
     RuleArgumentPackItem = 16, RuleArgumentPack = 17, RuleBracketOpr = 18, 
     RuleFunctionSig = 19, RuleFunctionStub = 20, RuleFunction = 21, RuleCapturedVar = 22, 
-    RuleVarCapture = 23, RuleStructDef = 24, RuleStructMember = 25, RuleStatement = 26, 
-    RuleExpression = 27
+    RuleVarCapture = 23, RuleStructDef = 24, RuleStructMember = 25, RuleExpression = 26, 
+    RuleSwitchCase = 27, RuleMatchCase = 28, RuleMagicFunction = 29
   };
 
   explicit braneParser(antlr4::TokenStream *input);
@@ -77,8 +78,10 @@ public:
   class VarCaptureContext;
   class StructDefContext;
   class StructMemberContext;
-  class StatementContext;
-  class ExpressionContext; 
+  class ExpressionContext;
+  class SwitchCaseContext;
+  class MatchCaseContext;
+  class MagicFunctionContext; 
 
   class  ModulesContext : public antlr4::ParserRuleContext {
   public:
@@ -458,13 +461,13 @@ public:
     braneParser::FunctionSigContext *sig = nullptr;
     braneParser::ArgumentListContext *arguments = nullptr;
     antlr4::Token *isConst = nullptr;
-    braneParser::StatementContext *statements = nullptr;
+    braneParser::ExpressionContext *expressions = nullptr;
     FunctionContext(antlr4::ParserRuleContext *parent, size_t invokingState);
     virtual size_t getRuleIndex() const override;
     FunctionSigContext *functionSig();
     ArgumentListContext *argumentList();
-    std::vector<StatementContext *> statement();
-    StatementContext* statement(size_t i);
+    std::vector<ExpressionContext *> expression();
+    ExpressionContext* expression(size_t i);
 
 
     virtual std::any accept(antlr4::tree::ParseTreeVisitor *visitor) override;
@@ -568,98 +571,6 @@ public:
 
   StructMemberContext* structMember();
 
-  class  StatementContext : public antlr4::ParserRuleContext {
-  public:
-    StatementContext(antlr4::ParserRuleContext *parent, size_t invokingState);
-   
-    StatementContext() = default;
-    void copyFrom(StatementContext *context);
-    using antlr4::ParserRuleContext::copyFrom;
-
-    virtual size_t getRuleIndex() const override;
-
-   
-  };
-
-  class  ScopeContext : public StatementContext {
-  public:
-    ScopeContext(StatementContext *ctx);
-
-    std::vector<StatementContext *> statement();
-    StatementContext* statement(size_t i);
-
-    virtual std::any accept(antlr4::tree::ParseTreeVisitor *visitor) override;
-  };
-
-  class  ExprStatementContext : public StatementContext {
-  public:
-    ExprStatementContext(StatementContext *ctx);
-
-    ExpressionContext *expression();
-
-    virtual std::any accept(antlr4::tree::ParseTreeVisitor *visitor) override;
-  };
-
-  class  ForContext : public StatementContext {
-  public:
-    ForContext(StatementContext *ctx);
-
-    braneParser::ExpressionContext *init = nullptr;
-    braneParser::ExpressionContext *cond = nullptr;
-    braneParser::ExpressionContext *step = nullptr;
-    braneParser::StatementContext *operation = nullptr;
-    std::vector<ExpressionContext *> expression();
-    ExpressionContext* expression(size_t i);
-    StatementContext *statement();
-
-    virtual std::any accept(antlr4::tree::ParseTreeVisitor *visitor) override;
-  };
-
-  class  WhileContext : public StatementContext {
-  public:
-    WhileContext(StatementContext *ctx);
-
-    braneParser::ExpressionContext *cond = nullptr;
-    braneParser::StatementContext *operation = nullptr;
-    ExpressionContext *expression();
-    StatementContext *statement();
-
-    virtual std::any accept(antlr4::tree::ParseTreeVisitor *visitor) override;
-  };
-
-  class  IfContext : public StatementContext {
-  public:
-    IfContext(StatementContext *ctx);
-
-    braneParser::ExpressionContext *cond = nullptr;
-    braneParser::StatementContext *operation = nullptr;
-    braneParser::StatementContext *elseOp = nullptr;
-    ExpressionContext *expression();
-    std::vector<StatementContext *> statement();
-    StatementContext* statement(size_t i);
-
-    virtual std::any accept(antlr4::tree::ParseTreeVisitor *visitor) override;
-  };
-
-  class  ReturnContext : public StatementContext {
-  public:
-    ReturnContext(StatementContext *ctx);
-
-    ExpressionContext *expression();
-
-    virtual std::any accept(antlr4::tree::ParseTreeVisitor *visitor) override;
-  };
-
-  class  EmptyContext : public StatementContext {
-  public:
-    EmptyContext(StatementContext *ctx);
-
-
-    virtual std::any accept(antlr4::tree::ParseTreeVisitor *visitor) override;
-  };
-
-  StatementContext* statement();
-
   class  ExpressionContext : public antlr4::ParserRuleContext {
   public:
     ExpressionContext(antlr4::ParserRuleContext *parent, size_t invokingState);
@@ -678,6 +589,29 @@ public:
     DeclContext(ExpressionContext *ctx);
 
     DeclarationContext *declaration();
+
+    virtual std::any accept(antlr4::tree::ParseTreeVisitor *visitor) override;
+  };
+
+  class  VoidExpressionContext : public ExpressionContext {
+  public:
+    VoidExpressionContext(ExpressionContext *ctx);
+
+    ExpressionContext *expression();
+
+    virtual std::any accept(antlr4::tree::ParseTreeVisitor *visitor) override;
+  };
+
+  class  ForContext : public ExpressionContext {
+  public:
+    ForContext(ExpressionContext *ctx);
+
+    braneParser::ExpressionContext *init = nullptr;
+    braneParser::ExpressionContext *cond = nullptr;
+    braneParser::ExpressionContext *step = nullptr;
+    braneParser::ExpressionContext *operation = nullptr;
+    std::vector<ExpressionContext *> expression();
+    ExpressionContext* expression(size_t i);
 
     virtual std::any accept(antlr4::tree::ParseTreeVisitor *visitor) override;
   };
@@ -719,10 +653,43 @@ public:
     virtual std::any accept(antlr4::tree::ParseTreeVisitor *visitor) override;
   };
 
+  class  WhileContext : public ExpressionContext {
+  public:
+    WhileContext(ExpressionContext *ctx);
+
+    braneParser::ExpressionContext *cond = nullptr;
+    braneParser::ExpressionContext *operation = nullptr;
+    std::vector<ExpressionContext *> expression();
+    ExpressionContext* expression(size_t i);
+
+    virtual std::any accept(antlr4::tree::ParseTreeVisitor *visitor) override;
+  };
+
+  class  SwitchContext : public ExpressionContext {
+  public:
+    SwitchContext(ExpressionContext *ctx);
+
+    braneParser::ExpressionContext *value = nullptr;
+    ExpressionContext *expression();
+    std::vector<SwitchCaseContext *> switchCase();
+    SwitchCaseContext* switchCase(size_t i);
+
+    virtual std::any accept(antlr4::tree::ParseTreeVisitor *visitor) override;
+  };
+
+  class  EmptyContext : public ExpressionContext {
+  public:
+    EmptyContext(ExpressionContext *ctx);
+
+
+    virtual std::any accept(antlr4::tree::ParseTreeVisitor *visitor) override;
+  };
+
   class  CastContext : public ExpressionContext {
   public:
     CastContext(ExpressionContext *ctx);
 
+    braneParser::ExpressionContext *expr = nullptr;
     TypeContext *type();
     ExpressionContext *expression();
 
@@ -758,19 +725,28 @@ public:
     braneParser::ArgumentListContext *arguments = nullptr;
     TypeContext *type();
     ArgumentListContext *argumentList();
-    std::vector<StatementContext *> statement();
-    StatementContext* statement(size_t i);
+    std::vector<ExpressionContext *> expression();
+    ExpressionContext* expression(size_t i);
     VarCaptureContext *varCapture();
 
     virtual std::any accept(antlr4::tree::ParseTreeVisitor *visitor) override;
   };
 
-  class  SizeOfTypeContext : public ExpressionContext {
+  class  MagicFunctionCallContext : public ExpressionContext {
   public:
-    SizeOfTypeContext(ExpressionContext *ctx);
+    MagicFunctionCallContext(ExpressionContext *ctx);
 
-    braneParser::TypeContext *t = nullptr;
-    TypeContext *type();
+    MagicFunctionContext *magicFunction();
+
+    virtual std::any accept(antlr4::tree::ParseTreeVisitor *visitor) override;
+  };
+
+  class  ScopeContext : public ExpressionContext {
+  public:
+    ScopeContext(ExpressionContext *ctx);
+
+    std::vector<ExpressionContext *> expression();
+    ExpressionContext* expression(size_t i);
 
     virtual std::any accept(antlr4::tree::ParseTreeVisitor *visitor) override;
   };
@@ -780,6 +756,19 @@ public:
     IdContext(ExpressionContext *ctx);
 
     ScopedIDContext *scopedID();
+
+    virtual std::any accept(antlr4::tree::ParseTreeVisitor *visitor) override;
+  };
+
+  class  IfContext : public ExpressionContext {
+  public:
+    IfContext(ExpressionContext *ctx);
+
+    braneParser::ExpressionContext *cond = nullptr;
+    braneParser::ExpressionContext *operation = nullptr;
+    braneParser::ExpressionContext *elseOp = nullptr;
+    std::vector<ExpressionContext *> expression();
+    ExpressionContext* expression(size_t i);
 
     virtual std::any accept(antlr4::tree::ParseTreeVisitor *visitor) override;
   };
@@ -828,6 +817,18 @@ public:
     braneParser::ExpressionContext *rValue = nullptr;
     std::vector<ExpressionContext *> expression();
     ExpressionContext* expression(size_t i);
+
+    virtual std::any accept(antlr4::tree::ParseTreeVisitor *visitor) override;
+  };
+
+  class  MatchContext : public ExpressionContext {
+  public:
+    MatchContext(ExpressionContext *ctx);
+
+    braneParser::ExpressionContext *value = nullptr;
+    ExpressionContext *expression();
+    std::vector<MatchCaseContext *> matchCase();
+    MatchCaseContext* matchCase(size_t i);
 
     virtual std::any accept(antlr4::tree::ParseTreeVisitor *visitor) override;
   };
@@ -916,16 +917,6 @@ public:
     virtual std::any accept(antlr4::tree::ParseTreeVisitor *visitor) override;
   };
 
-  class  SizeOfPackContext : public ExpressionContext {
-  public:
-    SizeOfPackContext(ExpressionContext *ctx);
-
-    antlr4::Token *id = nullptr;
-    antlr4::tree::TerminalNode *ID();
-
-    virtual std::any accept(antlr4::tree::ParseTreeVisitor *visitor) override;
-  };
-
   class  FunctionCallContext : public ExpressionContext {
   public:
     FunctionCallContext(ExpressionContext *ctx);
@@ -960,8 +951,82 @@ public:
     virtual std::any accept(antlr4::tree::ParseTreeVisitor *visitor) override;
   };
 
+  class  ReturnContext : public ExpressionContext {
+  public:
+    ReturnContext(ExpressionContext *ctx);
+
+    ExpressionContext *expression();
+
+    virtual std::any accept(antlr4::tree::ParseTreeVisitor *visitor) override;
+  };
+
   ExpressionContext* expression();
   ExpressionContext* expression(int precedence);
+  class  SwitchCaseContext : public antlr4::ParserRuleContext {
+  public:
+    braneParser::ExpressionContext *value = nullptr;
+    SwitchCaseContext(antlr4::ParserRuleContext *parent, size_t invokingState);
+    virtual size_t getRuleIndex() const override;
+    std::vector<ExpressionContext *> expression();
+    ExpressionContext* expression(size_t i);
+
+
+    virtual std::any accept(antlr4::tree::ParseTreeVisitor *visitor) override;
+   
+  };
+
+  SwitchCaseContext* switchCase();
+
+  class  MatchCaseContext : public antlr4::ParserRuleContext {
+  public:
+    braneParser::ExpressionContext *pattern = nullptr;
+    MatchCaseContext(antlr4::ParserRuleContext *parent, size_t invokingState);
+    virtual size_t getRuleIndex() const override;
+    std::vector<ExpressionContext *> expression();
+    ExpressionContext* expression(size_t i);
+
+
+    virtual std::any accept(antlr4::tree::ParseTreeVisitor *visitor) override;
+   
+  };
+
+  MatchCaseContext* matchCase();
+
+  class  MagicFunctionContext : public antlr4::ParserRuleContext {
+  public:
+    MagicFunctionContext(antlr4::ParserRuleContext *parent, size_t invokingState);
+   
+    MagicFunctionContext() = default;
+    void copyFrom(MagicFunctionContext *context);
+    using antlr4::ParserRuleContext::copyFrom;
+
+    virtual size_t getRuleIndex() const override;
+
+   
+  };
+
+  class  SizeOfPackContext : public MagicFunctionContext {
+  public:
+    SizeOfPackContext(MagicFunctionContext *ctx);
+
+    antlr4::Token *id = nullptr;
+    antlr4::tree::TerminalNode *ID();
+
+    virtual std::any accept(antlr4::tree::ParseTreeVisitor *visitor) override;
+  };
+
+  class  SizeOfTypeContext : public MagicFunctionContext {
+  public:
+    SizeOfTypeContext(MagicFunctionContext *ctx);
+
+    braneParser::TypeContext *t = nullptr;
+    TypeContext *type();
+
+    virtual std::any accept(antlr4::tree::ParseTreeVisitor *visitor) override;
+  };
+
+  MagicFunctionContext* magicFunction();
+
 
   bool sempred(antlr4::RuleContext *_localctx, size_t ruleIndex, size_t predicateIndex) override;
 

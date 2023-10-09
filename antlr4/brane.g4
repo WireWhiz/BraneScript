@@ -33,7 +33,7 @@ moduleComponent : function
                 | global
                 ;
 
-global        : type id=ID ';';
+global          : type id=ID ';';
 
 
 templateDefArgument : ((exprType=type) | (isTypedef='typedef')) isPack='...'? id=ID;
@@ -44,10 +44,14 @@ templateArg      : t=type          #templateTypeArg
                  ;
 templateArgs     : '<' templateArg (',' templateArg)* '>';
 
-scopedID    : id=(ID | 'Lambda') (template=templateArgs)? ('::' child=scopedID)?;
+scopedID    : id=(ID | 'lambda') (template=templateArgs)? ('::' child=scopedID)?;
 
-type        : isConst='const'? (isRef='ref' | isArrayRef='ref' '[' size=INT? ']')?  name=scopedID;
-declaration : type id=ID;
+type        : (valueType | refType | sliceType);
+valueType   : name=scopedID;
+refType     : 'ref' type;
+sliceType   : '['type (';' size=INT)? ']';
+
+declaration : mut='mut'? type id=ID;
 argumentListItem : declaration | pack=ID '...' id=ID;
 argumentList: (argumentListItem (',' argumentListItem)*)?;
 argumentPackItem : expr=expression | packID=ID '...';
@@ -55,39 +59,37 @@ argumentPack: (argumentPackItem (',' argumentPackItem)*)?;
 bracketOpr : ('('')') | ('['']');
 functionSig : funcTags=tags? (template=templateDef)? isConstexpr='constexpr'? ((type (id=ID | ('opr' (oprID=(ADD|SUB|MUL|DIV|'=='|'!='|'<'|'>'|'<='|'>='|'!'|LOGIC) | bracketOprID=bracketOpr)))) | ('opr' castType=type));
 functionStub: sig=functionSig '(' arguments=argumentList ')' isConst='const'? 'ext';
-function    : sig=functionSig '(' arguments=argumentList ')' isConst='const'? '{' statements=statement* '}';
+function    : sig=functionSig '(' arguments=argumentList ')' isConst='const'? '{' expressions=expression* '}';
 
 capturedVar : isRef='ref'? id=scopedID;
 varCapture : capturedVar (',' capturedVar)*;
 
-structDef     : structTags=tags? (template=templateDef)?  packed='packed'? 'struct' id=(ID | 'Lambda') '{' memberVars=structMember* '}';
+structDef     : structTags=tags? (template=templateDef)?  packed='packed'? 'struct' id=(ID | 'lambda') '{' memberVars=structMember* '}';
 structMember  : functionStub ';'    #memberFunctionStub
               | func=function       #memberFunction
               | var=declaration ';' #memberVariable
               ;
-
-statement   : expression ';'                                                              #exprStatement
-            | '{' statement* '}'                                                          #scope
-            | 'return' expression? ';'                                                    #return
-            | 'if' '(' cond=expression ')' operation=statement ('else' elseOp=statement)? #if
-            | 'while' '(' cond=expression ')' operation=statement                         #while
-            | 'for' '(' init=expression? ';' cond=expression ';' step=expression? ')' operation=statement #for
-            | ';'                                                                         #empty
-            ;
 
 expression  : INT                                                           #constInt
             | FLOAT                                                         #constFloat
             | CHAR                                                          #constChar
             | STRING                                                        #constString
             | BOOL                                                          #constBool
-            | 'sizeof' '(' t=type ')'                                       #sizeOfType
-            | 'sizeof' '...' '(' id=ID ')'                                  #sizeOfPack
+            | 'return' expression? ';'                                      #return
+            | 'if' '(' cond=expression ')' operation=expression ('else' elseOp=expression)? #if
+            | 'while' '(' cond=expression ')' operation=expression                          #while
+            | 'for' '(' init=expression? ';' cond=expression ';' step=expression? ')' operation=expression #for
+            | 'switch' '(' value=expression ')' '{' switchCase* '}'         #switch
+            | 'match' '(' value=expression ')' '{' matchCase* '}'           #match
+            | ';'                                                           #empty
+            | expression ';'                                                #voidExpression
+            | magicFunction                                                 #magicFunctionCall
             | declaration                                                   #decl
             | overrides=expression '(' argumentPack ')'                     #functionCall
             | scopedID                                                      #id
             | base=expression '[' arg=expression ']'                        #indexAccess
             | base=expression '.' member=ID  (template=templateArgs)?       #memberAccess
-            | '(' type ')' expression                                       #cast
+            | expr=expression 'as' type                                     #cast
             | '++' value=expression                                         #preInc
             | '--' value=expression                                         #preDec
             | value=expression '++'                                         #postInc
@@ -95,10 +97,23 @@ expression  : INT                                                           #con
             | left=expression opr=(MUL | DIV) right=expression              #muldiv
             | left=expression opr=(ADD | SUB) right=expression              #addsub
             | left=expression opr=('==' | '!=' | '<' | '>' | '<=' | '>=') right=expression #comparison
-            | left=expression opr=LOGIC       right=expression              #logic
+            | left=expression opr=LOGIC right=expression                    #logic
             | '!' value=expression                                          #not
             | '(' expression ')'                                            #paren
-            | returnType=type label='Lambda' ('[' capture=varCapture ']')? '(' arguments=argumentList ')' '{' statement* '}' #lambda
+            | '{' expression* '}'                                            #scope
+            | returnType=type label='lambda' ('[' capture=varCapture ']')? '(' arguments=argumentList ')' '{' expression* '}' #lambda
             | lValue=expression '=' rValue=expression                       #assignment
             | lValue=expression '<-' rValue=expression                      #refAssignment
             ;
+
+switchCase  : 'case' value=expression '{' expression* '}'
+            | 'default' '{' expression* '}'
+            ;
+
+matchCase   : 'case' pattern=expression '{' expression* '}'
+            | 'default' '{' expression* '}'
+            ;
+
+magicFunction : 'sizeof' '(' t=type ')'                                       #sizeOfType
+              | 'sizeof' '...' '(' id=ID ')'                                  #sizeOfPack
+              ;

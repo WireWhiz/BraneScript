@@ -1,6 +1,6 @@
 add_subdirectory(scriptRuntime)
 add_subdirectory(compiler)
-add_subdirectory(lspServer)
+add_subdirectory(documentBackend)
 add_subdirectory(cliTool)
 
 file(MAKE_DIRECTORY ${EXECUTABLE_OUTPUT_PATH}/include)
