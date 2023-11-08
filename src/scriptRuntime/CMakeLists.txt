@@ -4,7 +4,7 @@ add_library(BraneScriptRuntime STATIC
         typeDef.cpp
         scriptRuntime.cpp
         irScript.cpp
-        valueIndex.cpp
+        valueType.cpp
         funcRef.cpp
         structDef.cpp
         script.cpp

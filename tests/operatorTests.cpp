@@ -110,7 +110,7 @@ TEST(BraneScript, Operators)
 
     testString += "}";
 
-    Analyzer analyzer;
+    Parser analyzer;
     std::string path = "testScripts/operatorTests.bs";
     analyzer.load(path, testString);
     analyzer.validate(path);

@@ -9,7 +9,7 @@ using namespace BraneScript;
 
 TEST(BraneScript, FlowStatements)
 {
-    Analyzer analyzer;
+    Parser analyzer;
     std::string path = "testScripts/flowStatementTests.bs";
     analyzer.load(path);
     analyzer.validate(path);

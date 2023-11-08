@@ -18,7 +18,7 @@ int addTwo(int a)
 
 TEST(BraneScript, FunctionRefs)
 {
-    Analyzer analyzer;
+    Parser analyzer;
     std::string path = "testScripts/functionRefTests.bs";
     analyzer.load(path);
     analyzer.validate(path);

@@ -9,17 +9,75 @@
 #include <string>
 #include <robin_hood.h>
 
-struct Definition
-{
-    virtual ~Definition() = default;
-};
+#include "ast.h"
+#include "expressions.h"
+#include "scopedId.h"
+#include "typeDef.h"
 
-struct Module
+namespace BraneScript::ast
 {
-    std::string name;
-    std::vector<std::string> importedModules;
-    robin_hood::unordered_map<std::string, Definition> defines;
-};
+    struct Definition
+    {
+        bool isExported = false;
+        virtual ~Definition() = default;
+    };
+
+    struct Import
+    {
+        virtual ~Import() = default;
+    };
+
+    struct Module : public AstNode
+    {
+        ScopedId name;
+        std::vector<std::string> tags;
+
+        std::vector<std::unique_ptr<Definition>> exports;
+        std::vector<std::unique_ptr<Import>> imports;
+    };
+
+    struct ModuleImport : public Import
+    {
+        ScopedId id;
+        std::optional<std::string> alias;
+    };
+
+    struct MemoryImport : public Import
+    {
+        ScopedId id;
+        std::optional<std::string> alias;
+    };
+
+    struct MemoryDefinition : public Definition
+    {
+        ScopedId id;
+    };
+
+    struct GlobalDefinition : public Definition
+    {
+        ScopedId id;
+        ScopedId type;
+    };
+
+    struct FunctionDefinition : public Definition
+    {
+        ScopedId id;
+        std::vector<ScopedId> templateArgs;
+
+        ScopedId returnType;
+        std::vector<ScopedId> parameters;
+
+        std::unique_ptr<Expression> body;
+    };
+
+    struct StructDefinition : public Definition
+    {
+        ScopedId id;
+
+        std::vector<ScopedId> templateArgs;
+        std::vector<ScopedId> members;
+    };
+}
 
 
 #endif // BRANESCRIPT_MODULE_H

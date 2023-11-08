@@ -6,7 +6,7 @@
 #include "irScript.h"
 #include "script.h"
 #include "structDef.h"
-#include "valueIndex.h"
+#include "valueType.h"
 
 #include "llvm/Analysis/CGSCCPassManager.h"
 #include "llvm/Bitcode/BitcodeReader.h"
@@ -47,7 +47,7 @@ namespace BraneScript
     {
         if(nativeTypes.empty())
         {
-            nativeTypes.emplace_back(new TypeDef("void", ValueType::Void, 0));
+            nativeTypes.emplace_back(new TypeDef("void", ValueType::None, 0));
             nativeTypes.emplace_back(new TypeDef("bool", ValueType::Bool, 1));
             nativeTypes.emplace_back(new TypeDef("char", ValueType::Char, 1));
             nativeTypes.emplace_back(new TypeDef("uint", ValueType::UInt32, 4));

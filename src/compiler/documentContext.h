@@ -12,9 +12,8 @@
 #include <string>
 #include <vector>
 #include "robin_hood.h"
-#include "src/scriptRuntime/valueIndex.h"
+#include "src/scriptRuntime/valueType.h"
 #include "structDef.h"
-#include "textPos.h"
 #include <json/json.h>
 #include <llvm/IR/PassManager.h>
 
@@ -36,7 +35,7 @@ namespace llvm
 
 namespace BraneScript
 {
-    class Analyzer;
+    class Parser;
     struct FunctionContext;
     struct StructContext;
     class TypeDef;
@@ -54,7 +53,7 @@ namespace BraneScript
     struct TypeContext
     {
         std::string identifier = "void";
-        ValueType storageType = ValueType::Void;
+        ValueType storageType = ValueType::None;
         StructContext* structCtx = nullptr;
 
         bool operator==(const TypeContext&) const;

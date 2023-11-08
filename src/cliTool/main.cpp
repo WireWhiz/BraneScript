@@ -110,7 +110,7 @@ int main(int argc, char** argv)
     if(!std::filesystem::exists(outputPath))
         std::filesystem::create_directory(outputPath);
 
-    Analyzer analyzer;
+    Parser analyzer;
 
     const bool allowUnsafe = hasOption("-u", args) || hasOption("--unsafe", args);
 

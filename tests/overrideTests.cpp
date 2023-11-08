@@ -10,7 +10,7 @@ using namespace BraneScript;
 
 TEST(BraneScript, Overrides)
 {
-    Analyzer analyzer;
+    Parser analyzer;
     std::string path = "testScripts/overrideTests.bs";
     analyzer.load(path);
     analyzer.validate(path);

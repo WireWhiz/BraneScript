@@ -9,7 +9,7 @@ using namespace BraneScript;
 
 TEST(BraneScript, Refs)
 {
-    Analyzer analyzer;
+    Parser analyzer;
     std::string path = "testScripts/refTests.bs";
     analyzer.load(path);
     analyzer.validate(path);

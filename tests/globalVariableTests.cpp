@@ -10,7 +10,7 @@ using namespace BraneScript;
 
 TEST(BraneScript, GlobalVariables)
 {
-    Analyzer analyzer;
+    Parser analyzer;
     std::string path = "testScripts/globalVariableTests.bs";
     analyzer.load(path);
     analyzer.validate(path);

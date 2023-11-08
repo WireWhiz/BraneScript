@@ -10,7 +10,7 @@ using namespace BraneScript;
 
 TEST(BraneScript, Strings)
 {
-    Analyzer analyzer;
+    Parser analyzer;
     std::string path = "testScripts/stringTests.bs";
     analyzer.load(path);
     analyzer.validate(path);

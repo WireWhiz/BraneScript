@@ -2,15 +2,15 @@
 // Created by wirewhiz on 17/10/22.
 //
 
-#ifndef BRANESCRIPT_VALUEINDEX_H
-#define BRANESCRIPT_VALUEINDEX_H
+#ifndef BRANESCRIPT_VALUETYPE_H
+#define BRANESCRIPT_VALUETYPE_H
 
 #include <cstdint>
 namespace BraneScript
 {
     enum class ValueType : uint8_t
     {
-        Void = 0,
+        None = 0,
         Bool    = 1,
         Char    = 2,
         Scalar_Begin   = 3,
@@ -27,32 +27,14 @@ namespace BraneScript
         Float64 = 8,
         Float_End      = 8,
         Scalar_End     = 8,
-        Struct  = 9,
-        FuncRef = 10,
+        Ref = 9,
+        Struct  = 10,
+        Func = 11,
     };
     bool isValueTypeScalar(ValueType type);
     bool isValueTypeInt(ValueType type);
     bool isValueTypeUnsigned(ValueType type);
     bool isValueTypeFloat(ValueType type);
-
-    enum ValueStorageType : uint8_t
-    {
-        ValueStorageType_Null = 0,
-        ValueStorageType_Reg = 1,
-        ValueStorageType_Const = 2,
-        ValueStorageType_Global = 3,
-        ValueStorageType_GlobalPtr = 4,
-        ValueStorageType_Ptr = 5,
-        ValueStorageType_DerefPtr = 6
-    };
-
-    struct alignas(2) SerializedValue
-    {
-        uint16_t index = 0;
-        uint16_t offset = 0;
-        ValueType valueType;
-        ValueStorageType storageType;
-    };
 }
 
-#endif //BRANESCRIPT_VALUEINDEX_H
+#endif // BRANESCRIPT_VALUETYPE_H

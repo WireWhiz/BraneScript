@@ -80,7 +80,7 @@ TEST(BraneScript, Objects)
         destructorCalled++;
     });
 
-    Analyzer analyzer;
+    Parser analyzer;
     analyzer.load("header", header);
     std::string path = "testScripts/objectTests.bs";
     analyzer.load(path);

@@ -25,7 +25,7 @@ TEST(BraneScript, ParseWhileTyping)
     std::string testString;
 
     ConstexprEvaluator evaluator;
-    Analyzer analyzer;
+    Parser analyzer;
     analyzer.setConstexprEvaluator(&evaluator);
     analyzer.load(path, testString);
 

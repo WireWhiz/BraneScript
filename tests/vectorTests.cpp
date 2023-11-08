@@ -11,7 +11,7 @@ using namespace BraneScript;
 
 TEST(BraneScript, VectorTests)
 {
-    Analyzer analyzer;
+    Parser analyzer;
     std::string path = "testScripts/vectorTests.bs";
     analyzer.load(path);
     analyzer.validate(path);

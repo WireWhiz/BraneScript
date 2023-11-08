@@ -34,7 +34,7 @@ namespace lsp
         std::recursive_mutex lock;
         bool initialized = false;
 
-        BraneScript::Analyzer analyzer;
+        BraneScript::Parser analyzer;
     };
 
     class LspServer

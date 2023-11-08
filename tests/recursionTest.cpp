@@ -8,7 +8,7 @@ using namespace BraneScript;
 
 TEST(BraneScript, Recursion)
 {
-    Analyzer analyzer;
+    Parser analyzer;
     std::string path = "testScripts/recursionTest.bs";
     analyzer.load(path);
     analyzer.validate(path);

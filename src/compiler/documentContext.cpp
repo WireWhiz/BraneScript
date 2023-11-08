@@ -73,7 +73,7 @@ namespace BraneScript
     {
         switch(storageType)
         {
-            case ValueType::Void:
+            case ValueType::None:
             case ValueType::Bool:
             case ValueType::Char:
                 return 1;
@@ -234,7 +234,7 @@ namespace BraneScript
 
         switch(valueCtx.type.storageType)
         {
-            case ValueType::Void:
+            case ValueType::None:
                 if(valueCtx.isRef)
                     return llvm::PointerType::get(llvm::Type::getInt32Ty(*llvmCtx), 0);
                 else
@@ -775,7 +775,7 @@ namespace BraneScript
         }
 
         // TEMPORARY WORKAROUND until we have a proper metaprogramming system
-        if(value->returnType.type.storageType == ValueType::Void)
+        if(value->returnType.type.storageType == ValueType::None)
         {
             assert(ctx.func->getReturnType()->isVoidTy());
             value->createAST(ctx);
@@ -1574,7 +1574,7 @@ namespace BraneScript
     bool NativeCastContext::validCast(const ValueContext& from, const ValueContext& to)
     {
         if(from.isRef && to.isRef)
-            return from.type.storageType == ValueType::Void || to.type.storageType == ValueType::Void;
+            return from.type.storageType == ValueType::None || to.type.storageType == ValueType::None;
         switch(from.type.storageType)
         {
             case ValueType::Bool:
@@ -2295,7 +2295,7 @@ namespace BraneScript
             if(ctx.dBuilder)
                 ctx.builder.SetCurrentDebugLocation(llvm::DebugLoc());
             body->createAST(ctx);
-            if(returnType.type.storageType == ValueType::Void)
+            if(returnType.type.storageType == ValueType::None)
             {
                 if(!ctx.currentBlock)
                     ctx.setInsertPoint(llvm::BasicBlock::Create(*ctx.llvmCtx, "", ctx.func));

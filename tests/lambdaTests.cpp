@@ -26,7 +26,7 @@ TEST(BraneScript, Lambdas)
     ASSERT_EQ(testLambda(), 5);
     ASSERT_EQ(testLambda2(), 5);
 
-    Analyzer analyzer;
+    Parser analyzer;
     std::string path = "testScripts/lambdaTests.bs";
     analyzer.load(path);
     analyzer.validate(path);

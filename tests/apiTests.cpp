@@ -26,7 +26,7 @@ TEST(BraneScript, API)
     NativeLibrary testLib("testLib");
     testLib.addFunction("testLib::setRef(int)", setRef);
 
-    Analyzer analyzer;
+    Parser analyzer;
     std::string path = "testScripts/apiTests.bs";
     analyzer.load(path);
     analyzer.load("header", header);

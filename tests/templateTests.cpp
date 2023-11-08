@@ -10,7 +10,7 @@ using namespace BraneScript;
 TEST(BraneScript, Templates)
 {
     ConstexprEvaluator evaluator;
-    Analyzer analyzer;
+    Parser analyzer;
     analyzer.setConstexprEvaluator(&evaluator);
     std::string path = "testScripts/templateTests.bs";
     analyzer.load(path);

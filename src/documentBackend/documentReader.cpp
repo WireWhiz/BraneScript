@@ -8,7 +8,6 @@
 namespace BraneScript
 {
 
-
     std::expected<ast::Ast, std::string> DocumentReader::readDocument(const std::string& text, std::optional<std::string> file)
     {
 

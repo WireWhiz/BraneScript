@@ -10,7 +10,6 @@ execute_process(COMMAND conan install ${CMAKE_CURRENT_SOURCE_DIR} --build=missin
 include(${CMAKE_BINARY_DIR}/conan_paths.cmake)
 
 set(EXECUTABLE_OUTPUT_PATH ${CMAKE_BINARY_DIR}/executables)
-add_subdirectory(antlr4)
 add_subdirectory(src)
 
 if(BS_BUILD_TESTS)

@@ -1,20 +1,20 @@
 #ifndef BRANESCRIPT_ANALYZER_H
 #define BRANESCRIPT_ANALYZER_H
 
-#include "documentContext.h"
-#include "textPos.h"
+#include <ANTLRErrorListener.h>
 #include <filesystem>
+#include <mutex>
 #include <string>
 #include <vector>
-#include <mutex>
-#include <antlr4-runtime/ANTLRErrorListener.h>
+#include "documentContext.h"
+#include "textPos.h"
 
 namespace antlr4
 {
     class ParserRuleContext;
     class ANTLRInputStream;
     class CommonTokenStream;
-}
+} // namespace antlr4
 class braneLexer;
 class braneParser;
 
@@ -37,15 +37,6 @@ namespace BraneScript
         {
             std::string source;
             std::string document;
-            struct ParseContext
-            {
-                std::unique_ptr<antlr4::ANTLRErrorListener> lexErrorListener;
-                std::unique_ptr<antlr4::ANTLRErrorListener> parseErrorListener;
-                std::unique_ptr<antlr4::ANTLRInputStream> inputStream;
-                std::unique_ptr<braneLexer> lexer;
-                std::unique_ptr<antlr4::CommonTokenStream> tokenStream;
-                std::unique_ptr<braneParser> parser;
-            } parseCtx;
 
             std::unique_ptr<ScriptContext> scriptContext;
             std::vector<AnalyzationMessage> errors;
@@ -54,14 +45,15 @@ namespace BraneScript
             uint16_t version = 0;
             std::mutex lock;
         };
-      private:
 
+      private:
         std::vector<std::string> _workspaceRoots;
         robin_hood::unordered_set<ModuleContext*> _nativeModules;
         robin_hood::unordered_map<std::string, ModuleContext*> _modules;
         robin_hood::unordered_map<std::string, std::unique_ptr<ParserContext>> _analyzationContexts;
 
         ConstexprEvaluator* _evaluator = nullptr;
+
       public:
         Parser();
         ~Parser();
@@ -74,7 +66,7 @@ namespace BraneScript
 
         bool isLoaded(const std::string& path);
         void load(const std::string& path, bool cacheDocument = true, bool allowUnsafe = false);
-        void load(const std::string& path, std::string document, bool cacheDocument = true,  bool allowUnsafe = false);
+        void load(const std::string& path, std::string document, bool cacheDocument = true, bool allowUnsafe = false);
         void reload(const std::string& path);
 
         bool isValid(const std::string& path);
@@ -94,7 +86,6 @@ namespace BraneScript
          * @return Document will compile
          * */
         bool validate(const std::string& path, bool allowUnsafe = false);
-
     };
 
 } // namespace BraneScript

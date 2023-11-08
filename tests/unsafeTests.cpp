@@ -16,7 +16,7 @@ struct TestStruct
 TEST(BraneScript, UnsafeTests)
 {
 
-    Analyzer analyzer;
+    Parser analyzer;
     std::string path = "testScripts/unsafeTests.bs";
     analyzer.load(path);
     analyzer.validate(path, false);
