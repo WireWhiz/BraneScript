@@ -12,6 +12,7 @@
 #include <robin_hood.h>
 
 #include "source.h"
+#include <list>
 
 namespace BraneScript::ast
 {
@@ -20,7 +21,15 @@ namespace BraneScript::ast
     struct Message
     {
         std::string message;
-        std::optional<Source> source;
+        std::optional<std::shared_ptr<Source>> source;
+
+        enum Severity
+        {
+            Error,
+            Warning,
+            Info,
+            Verbose
+        } severity;
     };
 
     struct AstContext
@@ -32,7 +41,7 @@ namespace BraneScript::ast
 
     struct AstNode
     {
-        std::optional<Source> source;
+        std::optional<std::shared_ptr<Source>> source;
         std::vector<std::unique_ptr<AstContext>> contextItems;
 
         /**
@@ -41,7 +50,7 @@ namespace BraneScript::ast
          * @return pointer to a struct of type T or nullptr if not found.
          */
         template<typename T>
-        T* context()
+        T* getContext()
         {
             for(auto& item : contextItems)
             {
@@ -51,7 +60,7 @@ namespace BraneScript::ast
                 }
             }
 
-            return nullptr;
+            return {};
         }
 
         /**
@@ -59,7 +68,7 @@ namespace BraneScript::ast
          * @tparam T the type to create, must be a subclass of AstContext
          */
         template<typename T>
-        T* createContext()
+        T* addContext()
         {
             static_assert(std::is_base_of_v<AstContext, T>, "T must be a subclass of AstContext");
             auto item = std::make_unique<T>();
@@ -68,7 +77,28 @@ namespace BraneScript::ast
             return ptr;
         }
 
+        /**
+         * Creates a new context item of type T and returns a pointer to it.
+         * @tparam T the type to create, must be a subclass of AstContext
+         */
+        template<typename T>
+        T* addContext(T&& ctx)
+        {
+            static_assert(std::is_base_of_v<AstContext, T>, "T must be a subclass of AstContext");
+            auto item = std::make_unique<T>(std::forward(ctx));
+            auto ptr = item.get();
+            contextItems.push_back(std::move(item));
+            return ptr;
+        }
+
+
+        /**
+         * Redirects to call the correct visit method on the walker.
+         * @param walker the walker to accept
+         */
         virtual void accept(AstWalkerBase* walker) = 0;
+
+        virtual ~AstNode() = default;
     };
 
     /**
@@ -76,9 +106,8 @@ namespace BraneScript::ast
      */
     struct Ast
     {
-        std::vector<Message> errors;
-        std::vector<Message> warnings;
-        robin_hood::unordered_map<std::string, std::unique_ptr<Module>> module;
+        std::list<Message> messages;
+        robin_hood::unordered_map<std::string, std::shared_ptr<Module>> modules;
         bool isValid = false;
     };
 }

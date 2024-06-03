@@ -15,6 +15,7 @@ namespace BraneScript::ast
     {
         TextRange range;
         std::shared_ptr<std::string> file;
+        DocSource(TextRange range, std::shared_ptr<std::string> file) : range(range), file(file) {}
     };
 }
 

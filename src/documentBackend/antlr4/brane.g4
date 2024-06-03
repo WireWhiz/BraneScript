@@ -19,7 +19,7 @@ ADD     : '+';
 SUB     : '-';
 LOGIC   : '&&'|'||';
 
-modules       : module* EOF?;
+modules       : module* EOF? {setType()};
 
 tags          : '[' (tag=STRING (',' tag=STRING)*)? ']';
 module        : modTags=tags? 'module' id=STRING module_item*;

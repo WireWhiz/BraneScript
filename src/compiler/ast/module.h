@@ -34,6 +34,10 @@ namespace BraneScript::ast
 
         std::vector<std::unique_ptr<Definition>> exports;
         std::vector<std::unique_ptr<Import>> imports;
+
+        void accept(AstWalkerBase* walker) override;
+
+        Module() = default;
     };
 
     struct ModuleImport : public Import
