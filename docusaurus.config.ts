@@ -59,9 +59,9 @@ const config: Config = {
       items: [
         {
           type: 'docSidebar',
-          sidebarId: 'tutorialSidebar',
+          sidebarId: 'docsSidebar',
           position: 'left',
-          label: 'Tutorials',
+          label: 'Documentation',
         },
         {
           href: 'https://github.com/wirewhiz/branescript',
@@ -77,7 +77,7 @@ const config: Config = {
           title: 'Docs',
           items: [
             {
-              label: 'Tutorials',
+              label: 'Documentation',
               to: '/docs/intro',
             },
           ],
