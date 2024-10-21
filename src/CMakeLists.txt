@@ -1,10 +1,13 @@
-add_subdirectory(scriptRuntime)
-add_subdirectory(compiler)
-add_subdirectory(lspServer)
-add_subdirectory(cliTool)
 
-file(MAKE_DIRECTORY ${EXECUTABLE_OUTPUT_PATH}/include)
-file(COPY bsIncludes/ DESTINATION ${EXECUTABLE_OUTPUT_PATH}/include)
+# LLVM package stuff
 
-file(MAKE_DIRECTORY ${EXECUTABLE_OUTPUT_PATH}/modules)
-file(COPY bsModules/ DESTINATION ${EXECUTABLE_OUTPUT_PATH}/modules)
+#[[find_package(LLVM CONFIG REQUIRED)
+list(APPEND CMAKE_MODULE_PATH "${LLVM_CMAKE_DIR}")
+include(HandleLLVMOptions)
+add_definitions(${LLVM_DEFINITIONS})
+target_include_directories(main PRIVATE ${LLVM_INCLUDE_DIRS})
+# Find the libraries that correspond to the LLVM components that we wish to use
+llvm_map_components_to_libnames(llvm_libs Support Core IRReader ...)
+# Link against LLVM libraries
+target_link_libraries(main PRIVATE ${llvm_libs})]]
+

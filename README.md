@@ -1,31 +1,40 @@
 # Brane Script
 
-Embeddable scripting language in development with and intended for use in [Brane Engine](https://github.com/WireWhiz/BraneEngine).
+Embeddable scripting system in development with and intended for use in [Brane Engine](https://github.com/WireWhiz/BraneEngine).
 
-## Why not use a different language?
+Read more about why we're using a custom scripting system instead of a pre-existing one [here](https://wirewhiz.github.io/BraneScript/docs/spec/goals).
 
-Brane script is being developed with the goal of creating a high performance embeddable 
-statically typed scripting system for ECS based game engines. BS functions are AOT optimized
-to a cross-platform IR and jit compiled to allow native speeds. With a focus on runtime 
-loading and linking for highly modular use cases.
+## Setup
+
+You will need to install the tree-sitter cli, this can be done with npm or cargo.
+As tree-sitter also has a dependency on [nodejs](https://nodejs.org/en/download/package-manager), 
+it usually makes sense to use npm.
+
+```bash
+npm install tree-sitter-cil
+or
+cargo install tree-sitter-cil
+```
+
+We recommend using vcpkg for package dependencies, but you may use any package manager that you can set a `CMAKE_TOOLCHAIN_FILE` with, 
+and if you're on linux you might get away with just using apt. When using other package managers refer to vcpkg.json 
+for what packages to install.
+
+Run vcpkg to install packages locally
+```bash
+vcpkg install
+```
 
 ## Building
-We use the conan package manager version 1.x, we will update to conan 2.x once all our dependencies supported by the new version, for now install it with:
-```
-pip install --upgrade conan==1.59
-conan profile update settings.compiler.libcxx=libstdc++11 default
-```
-If you wish to edit the grammar file, you will also need [Antlr](https://www.antlr.org/download.html).
 
-Cmake automatically calls conan to instal the dependencies so all you need to run is:
-```  
+if on windows, add `-DCMAKE_TOOLCHAIN_FILE=<path to vcpkg>` when calling the first cmake command
+
+```bash
 mkdir build && cd build
-cmake .. -DCMAKE_BUILD_TYPE=[Debug or Release] -DBUILD_TESTS=[ON/OFF]
+cmake .. -DCMAKE_BUILD_TYPE=[Debug or Release] -DBUILD_TESTS=[ON/OFF] 
 cmake --build
 ```
 
 ### CMake options
 * BUILD_TESTS<br>
 builds tests target
-* BS_BUILD_EXECUTABLE<br>
-builds compiler example (wip)

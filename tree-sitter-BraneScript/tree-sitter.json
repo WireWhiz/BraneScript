@@ -1,0 +1,33 @@
+{
+  "grammars": [
+    {
+      "name": "branescript_parser",
+      "camelcase": "BraneScriptParser",
+      "scope": "source.branescript_parser",
+      "path": ".",
+      "file-types": null,
+      "injection-regex": "^branescript_parser$"
+    }
+  ],
+  "metadata": {
+    "version": "0.1.0",
+    "license": "Apache 2.0",
+    "description": "Parser for BraneScript text files",
+    "authors": [
+      {
+        "name": "WireWhiz"
+      }
+    ],
+    "links": {
+      "repository": "https://github.com/WireWhiz/BraneScript"
+    }
+  },
+  "bindings": {
+    "c": true,
+    "go": true,
+    "node": true,
+    "python": true,
+    "rust": true,
+    "swift": true
+  }
+}

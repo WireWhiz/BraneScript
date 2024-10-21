@@ -2,26 +2,8 @@ find_package(GTest)
 
 enable_testing()
 
-add_executable(bs_tests
-        operatorTests.cpp
-        testing.cpp
-        flowStatementTests.cpp
-        overrideTests.cpp
-        recursionTest.cpp
-        apiTests.cpp
-        objectTests.cpp
-        #speedTests.cpp
-        stringTests.cpp
-        templateTests.cpp
-        globalVariableTests.cpp
-        lambdaTests.cpp
-        refTests.cpp
-        unsafeTests.cpp
-        functionRefTests.cpp
-        arrayTests.cpp
-        vectorTests.cpp
-        parseWhileTypingTest.cpp)
-target_link_libraries(bs_tests PUBLIC GTest::gtest_main BraneScriptCompiler)
+add_executable(bs_tests emptyPlaceholder.cpp)
+#target_link_libraries(bs_tests PUBLIC GTest::gtest_main BraneScriptCompiler)
 target_compile_definitions(bs_tests PUBLIC TESTS)
 
 include(GoogleTest)
