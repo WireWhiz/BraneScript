@@ -6,6 +6,7 @@ project(tree-sitter-branescript_parser
         HOMEPAGE_URL "https://github.com/wirewhiz/branescript"
         LANGUAGES C)
 
+
 option(BUILD_SHARED_LIBS "Build using shared libraries" ON)
 option(TREE_SITTER_REUSE_ALLOCATOR "Reuse the library allocator" OFF)
 
@@ -39,6 +40,7 @@ set_target_properties(tree-sitter-branescript_parser
                       C_STANDARD 11
                       POSITION_INDEPENDENT_CODE ON
                       SOVERSION "${TREE_SITTER_ABI_VERSION}.${PROJECT_VERSION_MAJOR}"
+                      LINKER_LANGUAGE CXX
                       DEFINE_SYMBOL "")
 
 configure_file(bindings/c/tree-sitter-branescript_parser.pc.in
