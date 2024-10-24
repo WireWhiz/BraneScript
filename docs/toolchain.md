@@ -27,10 +27,10 @@ flowchart TD
     Nodes3D --> NodeToCode
 
     end
-    Code --> ANTLR[ANTLR Parser]
+    Code --> Parser[Tree-Sitter]
     subgraph Build System
-    ANTLR --> Error
-    ANTLR --> Validator[Validator]
+    Parser --> Error
+    Parser --> Validator[Validator]
     Validator --> Error
     Validator --> LLVM
 

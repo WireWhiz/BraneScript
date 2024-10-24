@@ -18,3 +18,10 @@
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
+
+# VS Code cache
+.idea/
+vcpkg_installed/
+cmake-build-debug/
+cmake-build-release/
+cmake-build-relDebug/
