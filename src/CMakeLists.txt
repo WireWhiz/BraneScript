@@ -12,3 +12,6 @@ llvm_map_components_to_libnames(llvm_libs Support Core IRReader ...)
 target_link_libraries(main PRIVATE ${llvm_libs})]]
 
 add_subdirectory(cli)
+add_subdirectory(parser)
+
+include_directories(${CMAKE_CURRENT_SOURCE_DIR})

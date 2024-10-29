@@ -6,6 +6,12 @@ Read more about why we're using a custom scripting system instead of a pre-exist
 
 ## Setup
 
+We use git submodules to bring in the TreeSitterBraneScript repo so we can edit and build it locally, so you'll need to periodically run:
+```bash
+git submodules update --init --recursive --remote
+```
+this command will both init submodules, and fetch the latest version if re-run
+
 You will need to install the tree-sitter cli, this can be done with npm or cargo.
 As tree-sitter also has a dependency on [nodejs](https://nodejs.org/en/download/package-manager), 
 it usually makes sense to use npm.
@@ -35,6 +41,15 @@ cmake .. -DCMAKE_BUILD_TYPE=[Debug or Release] -DBUILD_TESTS=[ON/OFF]
 cmake --build
 ```
 
+### IDEs 
+IDEs with cmake support should automatically detect the project's CMakeLists.txt files, 
+you will still need to add `-DCMAKE_TOOLCHAIN_FILE=<path to vcpkg>` to your toolchain configuration.
+
+For vscode (using CodeLLVM) and nvim (using nvimp-dap & Overseer) I've set up launch and tasks json configs that you can use as-is
+or modify to suit your needs. You will need to set the VCPKG_ROOT environment variable for them to be able to correctly direct cmake
+to the vcpkg toolchain file.
+
 ### CMake options
 * BUILD_TESTS<br>
 builds tests target
+

@@ -1,0 +1,66 @@
+{
+    "version": "2.0.0",
+    "showOutput": "always",
+    "tasks": [
+        
+        {
+            "taskName": "cmake-configure-debug",
+            "label": "cmake-configure-debug",
+            "type": "shell",
+            "options": {
+                "cwd": "${workspaceRoot}"
+            },
+            "command": "cmake -S. -B./build/Debug -DCMAKE_BUILD_TYPE=Debug -DCMAKE_TOOLCHAIN_FILE=\"${env:VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake\" -DCMAKE_EXPORT_COMPILE_COMMANDS=ON",
+            "presentation": "always"
+        },
+        {
+            "taskName": "cmake-build-debug",
+            "label": "cmake-build-debug",
+            "type": "shell",
+            "dependsOn": [
+                "cmake-configure-debug"
+            ],
+            "options": {
+                "cwd": "${workspaceRoot}"
+            },
+            "command": "cmake --build ./build/Debug  --target BraneScriptCli",
+            "presentation": "always"
+        },
+        {
+            "taskName": "cmake-configure-release",
+            "label": "cmake-confgure-release",
+            "type": "shell",
+            "options": {
+                "cwd": "${workspaceRoot}"
+            },
+            "command": "cmake -S. -B./build/Release -DCMAKE_BUILD_TYPE=Release -DCMAKE_TOOLCHAIN_FILE=\"${env:VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake\" -DCMAKE_EXPORT_COMPILE_COMMANDS=ON",
+            "presentation": "always"
+        },
+        {
+            "taskName": "cmake-build-release",
+            "label": "cmake-build-release",
+            "type": "shell",
+            "dependsOn":[
+                "cmake-configure-release"
+            ],
+            "options": {
+                "cwd": "${workspaceRoot}"
+            },
+            "command": "cmake --build ./build/Release --target BraneScriptCli"
+        },
+        {
+            "taskName": "cmake-configure",
+            "label": "cmake-configure",
+            "type": "shell",
+            "options": {
+                "cwd": "${workspaceRoot}"
+            },
+            "dependsOn": [
+                "cmake-configure-release",
+                "cmake-configure-debug"
+            ],
+            "command": "cmake -S. -B./build/Unix -DCMAKE_BUILD_TYPE=Debug -DCMAKE_TOOLCHAIN_FILE=\"${env:VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake\" -DCMAKE_EXPORT_COMPILE_COMMANDS=ON -G \"Unix Makefiles\""
+        }
+    ]
+}
+

@@ -5,29 +5,55 @@ project(BraneScript
         HOMEPAGE_URL "https://github.com/wirewhiz/branescript"
         LANGUAGES CXX)
 
-set(CMAKE_CXX_STANDARD 17)
-#option(BS_BUILD_EXECUTABLE "Build standalone compiler/interpreter" ON)
+set(CMAKE_CXX_STANDARD 23)
+set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 option(BS_BUILD_TESTS "Build tests" ON)
 
-#[[execute_process(COMMAND conan install ${CMAKE_CURRENT_SOURCE_DIR} --build=missing
-        WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})]]
-#include(${CMAKE_BINARY_DIR}/conan_paths.cmake)
 
-set(EXECUTABLE_OUTPUT_PATH ${CMAKE_BINARY_DIR}/executables)
+set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/executables/$<0:>)
 
-add_subdirectory(src)
-execute_process(
-        COMMAND ${CMAKE_COMMAND} -DBUILD_SHARED_LIBS=OFF -DBUILD_STATIC_LIBS=ON -S ${CMAKE_SOURCE_DIR}/tree-sitter-BraneScript -B ${CMAKE_BINARY_DIR}/tree-sitter-bs-build -DCMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE} -DCMAKE_INSTALL_PREFIX=${CMAKE_BINARY_DIR}/tree-sitter-bs
-        COMMAND ${CMAKE_COMMAND} --build ${CMAKE_BINARY_DIR}/tree-sitter-bs-build --config Release --target install
-        COMMAND ${CMAKE_COMMAND} -E touch tree_sitter_bs
+set(GRAMMAR_DIR ${CMAKE_SOURCE_DIR}/TreeSitterBraneScript)
+set(GRAMMAR_FILE ${CMAKE_SOURCE_DIR}/TreeSitterBraneScript/grammar.js)
+set(GRAMMAR_BUILD_DIR ${CMAKE_BINARY_DIR}/ts-branescript)
+set(GENERATE_PARSER_CMD tree-sitter generate -b ${GRAMMAR_FILE})
+set(PARSER_LIB_NAME parser${CMAKE_SHARED_LIBRARY_SUFFIX})
+set(BUILD_PARSER_CMD tree-sitter build -o ${GRAMMAR_BUILD_DIR}/${PARSER_LIB_NAME})
+
+file(MAKE_DIRECTORY ${GRAMMAR_BUILD_DIR})
+
+message("Watching grammar at ${GRAMMAR_FILE}")
+add_custom_command(
+    OUTPUT ${GRAMMAR_BUILD_DIR}/ts-build-command
+    COMMAND 
+        echo ${GENERATE_PARSER_CMD} 
+        && 
+        ${GENERATE_PARSER_CMD} 
+        &&  
+        echo ${BUILD_PARSER_CMD}
+        &&
+        ${BUILD_PARSER_CMD}
+        &&
+        ${CMAKE_COMMAND} -E copy
+        ${GRAMMAR_BUILD_DIR}/${PARSER_LIB_NAME}
+        ${LIBRARY_OUTPUT_DIRECTORY}/${PARSER_LIB_NAME}
+
+    WORKING_DIRECTORY ${GRAMMAR_BUILD_DIR}
+    DEPENDS ${GRAMMAR_FILE}
+    COMMENT "Generate ts parser because grammar.js changed"
 )
-add_custom_target(tree_sitter_bs_project ALL DEPENDS tree_sitter_bs)
+add_custom_target(
+    tree_sitter_bs_parser 
+    DEPENDS 
+    ${GRAMMAR_BUILD_DIR}/ts-build-command
+)
 
 add_library(TreeSitterBraneScript INTERFACE)
-add_dependencies(TreeSitterBraneScript tree_sitter_bs_project)
+add_dependencies(TreeSitterBraneScript tree_sitter_bs_parser)
 
-target_link_libraries(TreeSitterBraneScript INTERFACE ${CMAKE_BINARY_DIR}/tree-sitter-bs/lib/tree-sitter-branescript_parser${CMAKE_STATIC_LIBRARY_SUFFIX})
-target_include_directories(TreeSitterBraneScript INTERFACE ${CMAKE_BINARY_DIR}/tree-sitter-bs/include)
+target_link_libraries(TreeSitterBraneScript INTERFACE ${GRAMMAR_BUILD_DIR}/parser${CMAKE_STATIC_LIBRARY_SUFFIX}) 
+target_include_directories(TreeSitterBraneScript INTERFACE ${GRAMMAR_DIR}/bindings/c)
+
+add_subdirectory(src)
 
 if(BS_BUILD_TESTS)
     add_subdirectory(tests)

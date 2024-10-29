@@ -11,8 +11,7 @@ llvm_map_components_to_libnames(llvm_libs Support Core IRReader ...)
 # Link against LLVM libraries
 target_link_libraries(main PRIVATE ${llvm_libs})]]
 
-find_package(unofficial-tree-sitter CONFIG REQUIRED)
 
 add_executable(BraneScriptCli main.cpp)
-target_link_libraries(BraneScriptCli PRIVATE unofficial::tree-sitter::tree-sitter TreeSitterBraneScript)
+target_link_libraries(BraneScriptCli PRIVATE parser)
 

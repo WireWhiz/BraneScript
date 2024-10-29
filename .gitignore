@@ -1,9 +1,9 @@
-cmake-build-debug
-cmake-build-release
-cmake-build-linux-debug
-
+build/*
 docs/*
 
 .idea
 /graph_info.json
 /vcpkg_installed/
+/node_modules/
+/.docusaurus/
+

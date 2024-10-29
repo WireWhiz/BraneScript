@@ -1,0 +1,27 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Cli-Debug",
+            "preLaunchTask": "cmake-build-debug",
+            "expressions": "native",
+            "program": "./build/Debug/executables/BraneScriptCli",
+            "console": "integratedTerminal",
+            "args": [
+                "test.bscript"
+            ]
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Cli-Release",
+            "preLaunchTask": "cmake-build-release",
+            "expressions": "native",
+            "program": "./build/Release/executables/BraneScriptCli",
+            "console": "integratedTerminal"
+
+        }
+    ]
+}

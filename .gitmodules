@@ -1,0 +1,3 @@
+[submodule "TreeSitterBraneScript"]
+	path = TreeSitterBraneScript
+	url = https://github.com/WireWhiz/TreeSitterBraneScript
