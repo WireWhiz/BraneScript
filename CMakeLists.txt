@@ -23,19 +23,18 @@ file(MAKE_DIRECTORY ${GRAMMAR_BUILD_DIR})
 
 message("Watching grammar at ${GRAMMAR_FILE}")
 add_custom_command(
-    OUTPUT ${GRAMMAR_BUILD_DIR}/ts-build-command
+    OUTPUT ${GRAMMAR_BUILD_DIR}/ts-build-command.stamp
+    COMMAND echo ${GENERATE_PARSER_CMD} 
+    COMMAND ${GENERATE_PARSER_CMD} 
+    COMMAND echo ${BUILD_PARSER_CMD}
+    COMMAND ${BUILD_PARSER_CMD}
     COMMAND 
-        echo ${GENERATE_PARSER_CMD} 
-        && 
-        ${GENERATE_PARSER_CMD} 
-        &&  
-        echo ${BUILD_PARSER_CMD}
-        &&
-        ${BUILD_PARSER_CMD}
-        &&
+        ${CMAKE_COMMAND} -E rm
+        ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/${PARSER_LIB_NAME}
+    COMMAND 
         ${CMAKE_COMMAND} -E copy
         ${GRAMMAR_BUILD_DIR}/${PARSER_LIB_NAME}
-        ${LIBRARY_OUTPUT_DIRECTORY}/${PARSER_LIB_NAME}
+        ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/${PARSER_LIB_NAME}
 
     WORKING_DIRECTORY ${GRAMMAR_BUILD_DIR}
     DEPENDS ${GRAMMAR_FILE}
@@ -44,7 +43,7 @@ add_custom_command(
 add_custom_target(
     tree_sitter_bs_parser 
     DEPENDS 
-    ${GRAMMAR_BUILD_DIR}/ts-build-command
+    ${GRAMMAR_BUILD_DIR}/ts-build-command.stamp
 )
 
 add_library(TreeSitterBraneScript INTERFACE)
