@@ -1,2 +1,28 @@
-2 + 2 
-4*3
+asdf
+mod test
+{
+    pipe Foo
+    (a: i32, b: i32){
+    [
+        let r: i32 = a + b;
+    ]
+    call (r)Bar(let mut o)
+    [
+        o = o + 2f32;
+    ]
+    }(value: o)
+
+
+    pipe Bar
+    (a: i32){
+    [ 
+        let o: f32 = (a)f32;
+    ]
+    }(value: o)
+}
+
+mod test2
+{}
+
+mod hello_world{}
+

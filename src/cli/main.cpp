@@ -1,16 +1,16 @@
-//
+
 // Created by WireWhiz on 10/22/2024.
 //
 
 #include <fstream>
 #include <iostream>
+#include "parser/documentParser.h"
 #include <string_view>
 #include <string>
 #include <filesystem>
 #include <charconv>
 
 #include "tree_sitter/api.h"
-#include "../parser/SymbolLookupTable.h"
 #include "../parser/tree_sitter_branescript.h"
 
 //#include "TSBindings.h"
@@ -27,10 +27,13 @@ void print_tree(TSNode node, std::string_view source, int currentDepth = 0)
         return;
     }
 
-    auto start = ts_node_start_byte(node);
-    auto end = ts_node_end_byte(node);
-
-    printf("%s   [   %.*s   ]", ts_node_type(node), end - start, source.data() + start);
+    printf("%s", ts_node_type(node));
+    if (ts_node_child_count(node) == 0)
+    {
+        auto start = ts_node_start_byte(node);
+        auto end = ts_node_end_byte(node);
+        printf(" text:\"%.*s\"", end-start, source.data() + start);
+    }
 
     if (ts_node_is_extra(node))
         printf(" - Extra");
@@ -39,76 +42,21 @@ void print_tree(TSNode node, std::string_view source, int currentDepth = 0)
     if (!ts_node_is_named(node))
         printf(" - Unnamed");
 
+
     printf("\n");
 
     for (int i = 0; i < ts_node_child_count(node); i++)
-        print_tree(ts_node_child(node, i), source, currentDepth + 1);
-}
-
-
-
-
-class Evaluator
-{
-  private:
-    SymbolLookupTable _lut;
-    std::string _source;
-  public:
-    Evaluator(SymbolLookupTable lut, std::string sourceCode): _lut(std::move(lut)), _source(std::move(sourceCode))
     {
-    }
-
-    float run(TSNode node)
-    {
-        NodeType type;
-        if(!_lut.tryToNodeType(ts_node_symbol(node), type))
-            return NAN;
-
-        switch(type)
+        const char* field = ts_node_field_name_for_child(node, i);
+        if (field)
         {
-            case NodeType::Number:
-            {
-                float parsed;
-                auto res = std::from_chars(_source.data() + ts_node_start_byte(node),
-                                           _source.data() + ts_node_end_byte(node),
-                                           parsed,
-                                           (std::chars_format)(std::chars_format::general));
-                if(res.ec != std::errc{})
-                    std::cerr << "Failed to parse number!";
-
-                return parsed;
-            }
-            case NodeType::Add:
-            {
-                auto left = ts_node_named_child(node, 0);
-                auto right = ts_node_named_child(node, 1);
-
-                return run(left) + run(right);
-            }
-            case NodeType::Sub:
-            {
-                auto left = ts_node_named_child(node, 0);
-                auto right = ts_node_named_child(node, 1);
-
-                return run(left) - run(right);
-            }
-            case NodeType::Mul:
-            {
-                auto left = ts_node_named_child(node, 0);
-                auto right = ts_node_named_child(node, 1);
-
-                return run(left) * run(right);
-            }
-            case NodeType::Div:
-            {
-                auto left = ts_node_named_child(node, 0);
-                auto right = ts_node_named_child(node, 1);
-
-                return run(left) / run(right);
-            }
+            for (int i = 0; i < currentDepth; i++)
+                printf(" | ");
+            printf("field: \"%s\"\n", field);
         }
+        print_tree(ts_node_child(node, i), source, currentDepth + 1);
     }
-};
+}
 
 int main(int argc, char* argv[])
 {
@@ -149,24 +97,29 @@ int main(int argc, char* argv[])
 
     TSNode root_node = ts_tree_root_node(tree);
 
-    char *string = ts_node_string(root_node);
-    printf("Syntax tree: %s\n", string);
-    free(string);
+    /*char *string = ts_node_string(root_node);*/
+    /*printf("Syntax tree: %s\n", string);*/
+    /*free(string);*/
 
     print_tree(root_node, source_code);
 
-    SymbolLookupTable lut(braneScriptLang);
-    Evaluator evaluator(lut, source_code);
+    printf("Parsing DocumentContext...\n");
+    auto bs_parser = std::make_shared<BraneScript::BraneScriptParser>();
 
-    for(int i = 0; i < ts_node_child_count(root_node); ++i)
+    BraneScript::ParsedDocument doc(argv[1], source_code, bs_parser);
+
+    auto parseRes = doc.getDocumentContext();
+
+    if(!parseRes.errors.empty())
     {
-        TSNode expression = ts_node_child(root_node, i);
-        float result = evaluator.run(expression);
-        std::cout << std::string_view(
-            source_code.data() + ts_node_start_byte(expression),
-            ts_node_end_byte(expression) - ts_node_start_byte(expression)
-            ) << " = " << result << std::endl;
+        printf("Parsed with errors!\n");
+        for(auto& err: parseRes.errors)
+            printf("[line %d, char %d]: %s\n", err.range.start_point.row, err.range.start_point.column, err.message.c_str());
     }
+
+    printf("Found modules:\n");
+    for(auto& mod: parseRes.document->modules)
+        printf("%s\n", mod.second->identifier.text.c_str());
 
     ts_tree_delete(tree);
     ts_parser_delete(parser);

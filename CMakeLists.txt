@@ -29,7 +29,7 @@ add_custom_command(
     COMMAND echo ${BUILD_PARSER_CMD}
     COMMAND ${BUILD_PARSER_CMD}
     COMMAND 
-        ${CMAKE_COMMAND} -E rm
+        ${CMAKE_COMMAND} -E rm -f
         ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/${PARSER_LIB_NAME}
     COMMAND 
         ${CMAKE_COMMAND} -E copy

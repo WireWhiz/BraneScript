@@ -10,8 +10,11 @@ target_include_directories(main PRIVATE ${LLVM_INCLUDE_DIRS})
 llvm_map_components_to_libnames(llvm_libs Support Core IRReader ...)
 # Link against LLVM libraries
 target_link_libraries(main PRIVATE ${llvm_libs})]]
+include_directories(${CMAKE_CURRENT_SOURCE_DIR})
 
+add_subdirectory(ir)
 add_subdirectory(cli)
 add_subdirectory(parser)
+add_subdirectory(compiler)
+add_subdirectory(types)
 
-include_directories(${CMAKE_CURRENT_SOURCE_DIR})

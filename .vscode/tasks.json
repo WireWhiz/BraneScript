@@ -28,7 +28,7 @@
         },
         {
             "taskName": "cmake-configure-release",
-            "label": "cmake-confgure-release",
+            "label":    "cmake-configure-release",
             "type": "shell",
             "options": {
                 "cwd": "${workspaceRoot}"
