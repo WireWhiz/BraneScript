@@ -10,13 +10,15 @@
 #include <string>
 #include "parser/documentContext.h"
 #include <tree_sitter/api.h>
+
 namespace BraneScript
 {
     class BraneScriptParser
     {
-    private:
+      private:
         TSParser* _value;
-    public:
+
+      public:
         BraneScriptParser();
         BraneScriptParser(BraneScriptParser&&) noexcept;
         ~BraneScriptParser();
@@ -24,20 +26,29 @@ namespace BraneScript
         TSParser* parser() const;
     };
 
-    struct ParserError
+    enum class MessageType
     {
+        Error = 0,
+        Warning,
+        Log,
+        Verbose
+    };
+
+    struct ParserMessage
+    {
+        MessageType type;
         TSRange range;
-        std::string message;    
+        std::string message;
     };
 
     template<class T>
     struct ParserResult
     {
         Node<T> document;
-        std::vector<ParserError> errors;
+        std::vector<ParserMessage> messages;
     };
 
-    class ParsedDocument 
+    class ParsedDocument
     {
         std::filesystem::path _path;
         std::string _source;
@@ -45,7 +56,7 @@ namespace BraneScript
 
         std::optional<ParserResult<DocumentContext>> _cachedResult;
 
-    public:
+      public:
         ParsedDocument(std::filesystem::path path, std::string source, std::shared_ptr<BraneScriptParser> parser);
 
         std::string_view source() const;
@@ -56,7 +67,6 @@ namespace BraneScript
     };
 
     TSRange nodeToRange(TSNode node);
-}
+} // namespace BraneScript
 
 #endif
-

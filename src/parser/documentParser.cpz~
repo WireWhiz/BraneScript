@@ -61,7 +61,7 @@ namespace BraneScript
         Div,
         Assign,
         Block,
-        VariableDefinition,
+        VarDefPrefix,
         SinkDef,
         SinkList,
         SourceDef,
@@ -132,7 +132,7 @@ namespace BraneScript
             add_entry(lang, "div", TSNodeType::Div);
             add_entry(lang, "assign", TSNodeType::Assign);
             add_entry(lang, "block", TSNodeType::Block);
-            add_entry(lang, "variableDefinition", TSNodeType::VariableDefinition);
+            add_entry(lang, "varDefPrefix", TSNodeType::VarDefPrefix);
             add_entry(lang, "sinkDef", TSNodeType::SinkDef);
             add_entry(lang, "sinkList", TSNodeType::SinkList);
             add_entry(lang, "sourceDef", TSNodeType::SourceDef);
@@ -170,8 +170,6 @@ namespace BraneScript
         Value,
         Mut,
         Defs,
-        Left,
-        Right,
         Sources,
         Sinks,
         Stages,
@@ -201,8 +199,6 @@ namespace BraneScript
             add_entry(lang, "value", TSFieldName::Value);
             add_entry(lang, "mut", TSFieldName::Mut);
             add_entry(lang, "defs", TSFieldName::Defs);
-            add_entry(lang, "left", TSFieldName::Left);
-            add_entry(lang, "right", TSFieldName::Right);
             add_entry(lang, "sinks", TSFieldName::Sinks);
             add_entry(lang, "sources", TSFieldName::Sources);
             add_entry(lang, "stages", TSFieldName::Stages);
@@ -404,8 +400,6 @@ namespace BraneScript
                     return parseSourceList(node);
                 case TSNodeType::SinkList:
                     return parseSinkList(node);
-                case TSNodeType::VariableDefinition:
-                    return parseVariableDefinition(node);
                 case TSNodeType::Block:
                     return parseBlock(node);
                 case TSNodeType::Assign:
@@ -434,13 +428,11 @@ namespace BraneScript
                     return parseSourceDef(node);
                 case TSNodeType::SinkDef:
                     return parseSinkDef(node);
+                case TSNodeType::VarDefPrefix:
+                    assert(false && "This node cannot be parsed independently!");
+                    return std::nullopt;
                 case TSNodeType::Unknown:
                 default:
-                    if(ts_node_has_error(node))
-                    {
-                        errorMessage(node, std::format("Unexpected \"{}\"", nodeText(node)));
-                        return std::nullopt;
-                    }
                     std::cout << "Unknown TSNode type for: " << nodeText(node) << std::endl;
                     assert(false && "TSNodeType unhandled!");
                     return std::nullopt;
@@ -457,6 +449,10 @@ namespace BraneScript
             tryCastVariant(*parsed, out);
             return out;
         }
+
+        template<typename T>
+        std::optional<T> parseT(TSNode node)
+        {}
 
         std::optional<Node<ConstValueContext>> parseNumber(TSNode root)
         {
@@ -561,156 +557,32 @@ namespace BraneScript
         // std::optional<Node<TemplateArgContext>> parseTemplateArgument(TSNode root);
         std::optional<Node<BinaryOperatorContext>> parseAdd(TSNode root)
         {
-            if(!expectNode(root, TSNodeType::Add))
-                return std::nullopt;
-            auto opr = makeNode<BinaryOperatorContext>(root);
-            auto scope = pushScope(opr);
-
-            opr->opType = BinaryOperator::Add;
-
-            auto tsLeft = getField(root, TSFieldName::Left);
-            Expect(root, tsLeft, "Expected lvalue");
-            auto leftNode = parseExpression(*tsLeft);
-            if(!leftNode)
-                return std::nullopt;
-            opr->left = *leftNode;
-
-            auto tsRight = getField(root, TSFieldName::Left);
-            Expect(root, tsRight, "Expected rvalue");
-            auto rightNode = parseExpression(*tsRight);
-            if(!rightNode)
-                return std::nullopt;
-            opr->right = *rightNode;
-
-            return opr;
+            warningMessage(root, std::format("This operator not supported yet, ignoring {}", nodeText(root)));
+            return std::nullopt;
         }
 
         std::optional<Node<BinaryOperatorContext>> parseSub(TSNode root)
         {
-            if(!expectNode(root, TSNodeType::Sub))
-                return std::nullopt;
-            auto opr = makeNode<BinaryOperatorContext>(root);
-            auto scope = pushScope(opr);
-
-            opr->opType = BinaryOperator::Sub;
-
-            auto tsLeft = getField(root, TSFieldName::Left);
-            Expect(root, tsLeft, "Expected lvalue");
-            auto leftNode = parseExpression(*tsLeft);
-            if(!leftNode)
-                return std::nullopt;
-            opr->left = *leftNode;
-
-            auto tsRight = getField(root, TSFieldName::Left);
-            Expect(root, tsRight, "Expected rvalue");
-            auto rightNode = parseExpression(*tsRight);
-            if(!rightNode)
-                return std::nullopt;
-            opr->right = *rightNode;
-
-            return opr;
+            warningMessage(root, std::format("This operator not supported yet, ignoring {}", nodeText(root)));
+            return std::nullopt;
         }
 
         std::optional<Node<BinaryOperatorContext>> parseMul(TSNode root)
         {
-            if(!expectNode(root, TSNodeType::Mul))
-                return std::nullopt;
-            auto opr = makeNode<BinaryOperatorContext>(root);
-            auto scope = pushScope(opr);
-
-            opr->opType = BinaryOperator::Mul;
-
-            auto tsLeft = getField(root, TSFieldName::Left);
-            Expect(root, tsLeft, "Expected lvalue");
-            auto leftNode = parseExpression(*tsLeft);
-            if(!leftNode)
-                return std::nullopt;
-            opr->left = *leftNode;
-
-            auto tsRight = getField(root, TSFieldName::Left);
-            Expect(root, tsRight, "Expected rvalue");
-            auto rightNode = parseExpression(*tsRight);
-            if(!rightNode)
-                return std::nullopt;
-            opr->right = *rightNode;
-
-            return opr;
+            warningMessage(root, std::format("This operator not supported yet, ignoring {}", nodeText(root)));
+            return std::nullopt;
         }
 
         std::optional<Node<BinaryOperatorContext>> parseDiv(TSNode root)
         {
-            if(!expectNode(root, TSNodeType::Div))
-                return std::nullopt;
-            auto opr = makeNode<BinaryOperatorContext>(root);
-            auto scope = pushScope(opr);
-
-            opr->opType = BinaryOperator::Div;
-
-            auto tsLeft = getField(root, TSFieldName::Left);
-            Expect(root, tsLeft, "Expected lvalue");
-            auto leftNode = parseExpression(*tsLeft);
-            if(!leftNode)
-                return std::nullopt;
-            opr->left = *leftNode;
-
-            auto tsRight = getField(root, TSFieldName::Left);
-            Expect(root, tsRight, "Expected rvalue");
-            auto rightNode = parseExpression(*tsRight);
-            if(!rightNode)
-                return std::nullopt;
-            opr->right = *rightNode;
-
-            return opr;
-        }
-
-        std::optional<Node<VariableDefinitionContext>> parseVariableDefinition(TSNode root)
-        {
-            if(!expectNode(root, TSNodeType::VariableDefinition))
-                return std::nullopt;
-            auto def = makeNode<VariableDefinitionContext>(root);
-            auto scope = pushScope(def);
-
-            def->definedValue = makeNode<ValueContext>(root);
-
-            auto tsMut = getField(root, TSFieldName::Mut);
-            def->definedValue->isMut = tsMut.has_value();
-
-            auto tsIdNode = getField(root, TSFieldName::Id);
-            Expect(root, tsIdNode, "Expected Identifier!");
-            auto idNode = parseIdentifier(*tsIdNode);
-            if(!idNode)
-                return std::nullopt;
-            def->definedValue->label = idNode;
-
-            auto tsTypeNode = getField(root, TSFieldName::Type);
-            if(tsTypeNode)
-                def->definedValue->type = parseType(*tsTypeNode);
-
-            return def;
+            warningMessage(root, std::format("This operator not supported yet, ignoring {}", nodeText(root)));
+            return std::nullopt;
         }
 
         std::optional<Node<AssignmentContext>> parseAssign(TSNode root)
         {
-            if(!expectNode(root, TSNodeType::Assign))
-                return std::nullopt;
-            auto assign = makeNode<AssignmentContext>(root);
-            auto scope = pushScope(assign);
-
-            auto tsLeft = getField(root, TSFieldName::Left);
-            Expect(root, tsLeft, "Expected lvalue");
-            auto leftNode = parseExpression(*tsLeft);
-            if(!leftNode)
-                return std::nullopt;
-            assign->lValue = *leftNode;
-
-            auto tsRight = getField(root, TSFieldName::Left);
-            Expect(root, tsRight, "Expected rvalue");
-            auto rightNode = parseExpression(*tsRight);
-            if(!rightNode)
-                return std::nullopt;
-            assign->rValue = *rightNode;
-
-            return assign;
+            warningMessage(root, std::format("Assignments not supported yet, ignoring {}", nodeText(root)));
+            return std::nullopt;
         }
 
         std::optional<Node<BlockContext>> parseBlock(TSNode root)

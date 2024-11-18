@@ -4,26 +4,19 @@
 
 namespace BraneScript
 {
-    std::optional<DocumentContextNode> TextContext::getNodeAtChar(TSPoint pos)
-    {
-        return std::nullopt;
-    }
+    std::optional<TextContextNode> TextContext::getNodeAtChar(TSPoint pos) { return std::nullopt; }
 
-    std::optional<DocumentContextNode> TextContext::findIdentifier(std::string_view identifier)
+    std::optional<TextContextNode> TextContext::findIdentifier(std::string_view identifier)
     {
         return findIdentifier(identifier, 0);
     }
 
-    std::optional<DocumentContextNode> TextContext::findIdentifier(std::string_view identifier, uint8_t searchOptions)
+    std::optional<TextContextNode> TextContext::findIdentifier(std::string_view identifier, uint8_t searchOptions)
     {
         return std::nullopt;
     }
 
-    std::string TextContext::longId() const
-    {
-        return "";
-    }
-
+    std::string TextContext::longId() const { return ""; }
 
     std::string ValueContext::signature() const
     {
@@ -32,47 +25,60 @@ namespace BraneScript
         return sig;
     }
 
-
     std::string ValueContext::longId() const
     {
         std::string id;
-        if(auto p = parent.lock())
-            id += p->longId() + "::"; 
+        if(parent)
+        {
+            if(auto p = parent->lock())
+                id += p->longId() + "::";
+        }
         if(label)
-            id += label.value().text;
+            id += label.value()->text;
         else
             id += "unnamed_value";
         return id;
     }
 
-    std::optional<DocumentContextNode> ModuleContext::getNodeAtChar(TSPoint pos)
+    std::optional<TextContextNode> PipelineContext::findIdentifier(std::string_view identifier, uint8_t searchOptions)
     {
         return std::nullopt;
     }
 
-    std::optional<DocumentContextNode> ModuleContext::findIdentifier(std::string_view identifier, uint8_t searchOptions)
+    std::string PipelineContext::longId() const
     {
-        return std::nullopt;
+        std::string idText;
+        if(parent)
+        {
+            if(auto p = parent->lock())
+                idText += p->longId() + "::";
+        }
+        idText += identifier->text;
+        return idText;
     }
-    
-    std::optional<DocumentContextNode> DocumentContext::getNodeAtChar(TSPoint pos)
+
+    std::optional<TextContextNode> ModuleContext::getNodeAtChar(TSPoint pos) { return std::nullopt; }
+
+    std::optional<TextContextNode> ModuleContext::findIdentifier(std::string_view identifier, uint8_t searchOptions)
     {
         return std::nullopt;
     }
 
-    std::optional<DocumentContextNode> DocumentContext::findIdentifier(std::string_view identifier, uint8_t searchOptions)
+    std::optional<TextContextNode> DocumentContext::getNodeAtChar(TSPoint pos) { return std::nullopt; }
+
+    std::optional<TextContextNode> DocumentContext::findIdentifier(std::string_view identifier, uint8_t searchOptions)
     {
         return std::nullopt;
     }
-    
+
     std::string ModuleContext::longId() const
     {
         std::string id;
-        if(auto p = parent.lock())
-            id += p->longId() + "::" ;
-        return id + identifier.text;
+        if(parent)
+        {
+            if(auto p = parent->lock())
+                id += p->longId() + "::";
+        }
+        return id + identifier->text;
     }
-}
-
-
-
+} // namespace BraneScript

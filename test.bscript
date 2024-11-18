@@ -1,14 +1,13 @@
 asdf
-mod test
-{
+mod test {
     pipe Foo
     (a: i32, b: i32){
     [
         let r: i32 = a + b;
     ]
-    call (r)Bar(let mut o)
+    call (r)Bar(o: f32)
     [
-        o = o + 2f32;
+        o = o + 2;
     ]
     }(value: o)
 
@@ -16,7 +15,7 @@ mod test
     pipe Bar
     (a: i32){
     [ 
-        let o: f32 = (a)f32;
+        (in: a)f32(o: f32);
     ]
     }(value: o)
 }

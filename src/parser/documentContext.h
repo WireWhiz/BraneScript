@@ -1,15 +1,15 @@
 #ifndef BRANESCRIPT_DOCUMENTCONTEXT_H
 #define BRANESCRIPT_DOCUMENTCONTEXT_H
 
+#include <filesystem>
 #include <memory>
 #include <optional>
 #include <string>
 #include <variant>
 #include <vector>
-#include <tree_sitter/api.h>
 #include "../types/valueType.h"
+#include <tree_sitter/api.h>
 #include <unordered_map>
-#include <filesystem>
 
 namespace BraneScript
 {
@@ -18,55 +18,51 @@ namespace BraneScript
     template<typename T>
     using LabeledNodeMap = std::unordered_map<std::string, Node<T>>;
     template<typename T>
-    using LabeledNodeList = std::vector<Node<T>>;
-     
-    struct Identifier
-    {
-        TSRange range;
-        std::string text;
-        operator std::string&();
-        bool operator==(const Identifier&) const;
-        bool operator!=(const Identifier&) const;
-    };
-    
-    struct BaseType
-    {
-        ValueType value = ValueType::Void;
-
-        bool operator==(const BaseType&) const;
-        bool operator!=(const BaseType&) const;
-        bool isScalar() const;
-        bool isUnsigned() const;
-        bool isInt() const;
-        bool isFloat() const;
-        uint8_t size() const;
-    };
-
-    struct RefTypeContext;
-    struct StructContext;
-
-    using TypeContext = std::variant<
-        Node<RefTypeContext>, 
-        Node<StructContext>, 
-        Node<BaseType>
-    >;
-
-    struct RefTypeContext
-    {
-        bool isMut = false;
-        // If this is a local pointer we don't need a handle value, otherwise we describe this with a wide pointer.
-        bool isLocal = false;
-        TypeContext containedType;
-    };
+    using NodeList = std::vector<Node<T>>;
 
 
-   
     struct TextContext;
     struct ValueContext;
-    using DocumentContextNode = std::variant<
-        Node<TextContext>,
-        Node<ValueContext>
-    >;
+    struct ConstValueContext;
+    struct Identifier;
+    struct ScopedIdentifier;
+    struct RefTypeContext;
+    struct StructContext;
+    struct BaseTypeContext;
+    struct TypeContext;
+    struct BinaryOperatorContext;
+    struct VariableDefinitionContext;
+    struct AssignmentContext;
+    struct BlockContext;
+    struct SinkListContext;
+    struct SourceListContext;
+    struct CallContext;
+    struct PipelineStageContext;
+    struct AsyncExpressionContext;
+    struct SinkDefContext;
+    struct FunctionContext;
+    struct PipelineContext;
+    struct ModuleContext;
+    struct DocumentContext;
+    using TextContextNode = std::variant<Node<ValueContext>,
+                                         Node<ConstValueContext>,
+                                         Node<Identifier>,
+                                         Node<ScopedIdentifier>,
+                                         Node<TypeContext>,
+                                         Node<BinaryOperatorContext>,
+                                         Node<VariableDefinitionContext>,
+                                         Node<AssignmentContext>,
+                                         Node<BlockContext>,
+                                         Node<SinkListContext>,
+                                         Node<SourceListContext>,
+                                         Node<CallContext>,
+                                         Node<AsyncExpressionContext>,
+                                         Node<PipelineStageContext>,
+                                         Node<SinkDefContext>,
+                                         Node<FunctionContext>,
+                                         Node<PipelineContext>,
+                                         Node<ModuleContext>,
+                                         Node<DocumentContext>>;
 
     enum IDSearchOptions : uint8_t
     {
@@ -74,31 +70,34 @@ namespace BraneScript
         IDSearchOptions_ParentsOnly = 1 << 1,  // Don't search downwards through the tree
     };
 
-
     struct TextContext : public std::enable_shared_from_this<TextContext>
     {
         TSRange range;
-        std::weak_ptr<TextContext> parent;
+        std::optional<std::weak_ptr<TextContext>> parent;
 
         virtual ~TextContext() = default;
-        virtual std::optional<DocumentContextNode> getNodeAtChar(TSPoint pos);
-        virtual std::optional<DocumentContextNode> findIdentifier(std::string_view identifier);
-        virtual std::optional<DocumentContextNode> findIdentifier(std::string_view identifier, uint8_t searchOptions);
+        virtual std::optional<TextContextNode> getNodeAtChar(TSPoint pos);
+        virtual std::optional<TextContextNode> findIdentifier(std::string_view identifier);
+        virtual std::optional<TextContextNode> findIdentifier(std::string_view identifier, uint8_t searchOptions);
         virtual std::string longId() const;
 
         template<typename T>
-        Node<T> as()
+        std::optional<Node<T>> as()
         {
             static_assert(std::is_base_of<TextContext, T>::value, "T must be a subclass of DocumentContext");
             auto* r = std::dynamic_pointer_cast<T>(shared_from_this());
+            if(!r)
+                return std::nullopt;
             return r;
         }
 
         template<typename T>
-        Node<T> as() const
+        std::optional<Node<T>> as() const
         {
             static_assert(std::is_base_of<TextContext, T>::value, "T must be a subclass of DocumentContext");
             auto* r = std::dynamic_pointer_cast<T>(shared_from_this());
+            if(!r)
+                return std::nullopt;
             return r;
         }
 
@@ -109,17 +108,20 @@ namespace BraneScript
         }
 
         template<typename T>
-        Node<T> getParent() const
+        std::optional<Node<T>> getParent() const
         {
-            if(auto p = parent.lock())
+            if(!parent)
+                return std::nullopt;
+            if(auto p = parent->lock())
             {
                 auto pt = p->as<T>();
                 if(pt)
                     return pt;
                 return p->getParent<T>();
             }
-            return nullptr;
+            return std::nullopt;
         }
+
         template<typename T>
         Node<T> getLast()
         {
@@ -137,17 +139,37 @@ namespace BraneScript
                 return o;
             return getParent<T>();
         }
-
     };
 
-    struct ValueContext: public TextContext
+    struct Identifier : public TextContext
     {
-        //What data does this value store
-        std::optional<Identifier> label;
-        TypeContext type;
+        std::string text;
+        operator std::string&();
+        bool operator==(const Identifier&) const;
+        bool operator!=(const Identifier&) const;
+    };
+
+    enum class TypeModifiers
+    {
+        MutRef,
+        ConstRef,
+    };
+
+    struct TypeContext : public TextContext
+    {
+        Node<ScopedIdentifier> baseType;
+        std::vector<TypeModifiers> modifiers;
+    };
+
+    struct ValueContext : public TextContext
+    {
+        // What data does this value store
+        std::optional<Node<Identifier>> label;
+        std::optional<Node<TypeContext>> type;
 
         // Is stored on the heap or the stack, instead of being a temporary value holder
         bool isLValue = false;
+        bool isMut = false;
 
         /*bool operator==(const ValueContext& o) const;*/
         /*bool operator!=(const ValueContext& o) const;*/
@@ -165,35 +187,44 @@ namespace BraneScript
         std::string longId() const override;
     };
 
-    struct TemplateDefArgumentContext
+    struct TemplateDefArgumentContext : public TextContext
     {
         std::string identifier;
-        enum ArgType {
+
+        enum ArgType
+        {
             Typedef,
             TypedefPack,
             Value
         } type = Typedef;
-        TypeContext valueType;
+
+        Node<TypeContext> valueType;
     };
 
     struct ConstValueContext;
-    struct TemplateArgContext
+
+    struct TemplateArgContext : public TextContext
     {
         std::string identifier;
         std::variant<ValueContext, std::vector<ValueContext>, Node<ConstValueContext>> value;
     };
 
+    using ScopeSegment = std::variant<Node<Identifier>>;
+
+    struct ScopedIdentifier : public TextContext
+    {
+        std::vector<ScopeSegment> scopes;
+    };
+
     struct ErrorContext
     {
         std::string message;
-        size_t line = 0;
     };
 
     struct ExpressionContext : public TextContext
     {
         ValueContext returnType;
         // Is the result of this expression a constant?
-        virtual bool isConstexpr() const = 0;
     };
 
     struct ExpressionErrorContext;
@@ -201,26 +232,27 @@ namespace BraneScript
     struct UnaryOperatorContext;
     struct BinaryOperatorContext;
 
-    using ExpressionContextNode = std::variant<
-Node<ExpressionErrorContext>,
-Node<ScopeContext>,
-Node<UnaryOperatorContext>,
-Node<BinaryOperatorContext>
->;
+    using ExpressionContextNode = std::variant<Node<ExpressionErrorContext>,
+                                               Node<ScopeContext>,
+                                               Node<UnaryOperatorContext>,
+                                               Node<BinaryOperatorContext>>;
 
     struct AsyncExpressionContext : public TextContext
     {
-        
     };
 
     struct ExpressionErrorContext : public ExpressionContext, ErrorContext
     {
-        inline ExpressionErrorContext(std::string message, size_t line)
+        inline ExpressionErrorContext(std::string message, TSRange range)
         {
             this->message = std::move(message);
-            this->line = line;
+            this->range = range;
         }
-        bool isConstexpr() const override;
+    };
+
+    struct VariableDefinitionContext : public ExpressionContext
+    {
+        Node<ValueContext> definedValue;
     };
 
     struct ScopeContext : public ExpressionContext
@@ -229,15 +261,13 @@ Node<BinaryOperatorContext>
         std::vector<Node<ValueContext>> localVariables;
         std::vector<ExpressionContextNode> expressions;
 
-        virtual std::optional<DocumentContextNode> findIdentifier(std::string_view identifier, uint8_t searchOptions);
-
-        bool isConstexpr() const override;
+        virtual std::optional<TextContextNode> findIdentifier(std::string_view identifier, uint8_t searchOptions);
     };
 
     struct PipelineStageContext : public TextContext
     {
         std::vector<Node<ValueContext>> localVariables;
-        std::vector<ExpressionContextNode> expressions;            
+        std::vector<ExpressionContextNode> expressions;
         std::vector<Node<AsyncExpressionContext>> asyncExpressions;
     };
 
@@ -247,7 +277,6 @@ Node<BinaryOperatorContext>
         ExpressionContextNode condition;
         ExpressionContextNode body;
         ExpressionContextNode elseBody;
-        bool isConstexpr() const override;
     };
 
     struct WhileContext : public ExpressionContext
@@ -255,7 +284,6 @@ Node<BinaryOperatorContext>
         Node<ScopeContext> loopScope;
         ExpressionContextNode condition;
         ExpressionContextNode body;
-        bool isConstexpr() const override;
     };
 
     struct ForContext : public ExpressionContext
@@ -265,14 +293,12 @@ Node<BinaryOperatorContext>
         ExpressionContextNode condition;
         ExpressionContextNode step;
         ExpressionContextNode body;
-        bool isConstexpr() const override;
     };
 
     struct AssignmentContext : public ExpressionContext
     {
         ExpressionContextNode lValue;
         ExpressionContextNode rValue;
-        bool isConstexpr() const override;
 
         AssignmentContext() = default;
         AssignmentContext(ExpressionContext* lValue, ExpressionContext* rValue);
@@ -282,16 +308,12 @@ Node<BinaryOperatorContext>
     struct ConstValueContext : public ExpressionContext
     {
         std::variant<bool, char, int64_t, uint64_t, double, std::string> value;
-        virtual std::string toString() const = 0;
-        bool isConstexpr() const override;
     };
 
     struct LabeledValueReferenceContext : public ExpressionContext
     {
         std::string identifier;
         LabeledValueReferenceContext(const ValueContext& value);
-
-        bool isConstexpr() const override;
     };
 
     struct MemberAccessContext : public ExpressionContext
@@ -300,40 +322,97 @@ Node<BinaryOperatorContext>
         size_t member = -1;
         MemberAccessContext() = default;
         MemberAccessContext(ExpressionContext* base, StructContext* baseType, size_t member);
-
-        bool isConstexpr() const override;
     };
 
     struct CreateReferenceContext : public ExpressionContext
     {
         ExpressionContextNode _source;
         CreateReferenceContext(ExpressionContext* source);
-
-        bool isConstexpr() const override;
     };
 
     struct DereferenceContext : public ExpressionContext
     {
         ExpressionContextNode _source;
         DereferenceContext(ExpressionContext* source);
-
-        bool isConstexpr() const override;
     };
 
-    /*struct FunctionCallContext : public ExpressionContext*/
-    /*{*/
-    /*    FunctionContext* function = nullptr;*/
-    /*    ExpressionContextNode functionRef;*/
-    /*    std::vector<ExpressionContextNode> arguments;*/
-    /**/
-    /*    bool isConstexpr() const override;*/
-    /*};*/
+    enum class UnaryOperator : uint8_t
+    {
+        Deref = 0,
+        Ref,
+        Negate,
+        LogicNot,
+        BitwiseNot,
+    };
+
+    struct UnaryOperatorContext : public ExpressionContext
+    {
+        UnaryOperator opType;
+        ExpressionContextNode arg;
+    };
+
+    enum class BinaryOperator : uint8_t
+    {
+        Add,
+        Sub,
+        Mul,
+        Div,
+        Mod,
+        Equal,
+        NotEqual,
+        Greater,
+        GreaterEqual,
+        Less,
+        LessEqual,
+        LogicAnd,
+        LogicOr,
+        BitwiseAnd,
+        BitwiseOr,
+        BitwiseXOr,
+        BitshiftLeft,
+        BitshiftRight,
+    };
+
+    struct BinaryOperatorContext : public ExpressionContext
+    {
+        BinaryOperator opType;
+        ExpressionContextNode left;
+        ExpressionContextNode right;
+    };
+
+    struct BlockContext : public ExpressionContext
+    {
+        std::vector<ExpressionContextNode> expressions;
+    };
+
+    struct SourceListContext : public TextContext
+    {
+        NodeList<ValueContext> defs;
+    };
+
+    struct SinkDefContext : public TextContext
+    {
+        Node<Identifier> id;
+        ExpressionContextNode expression;
+    };
+
+    struct SinkListContext : public TextContext
+    {
+        NodeList<SinkDefContext> values;
+    };
+
+    struct CallContext : public ExpressionContext
+    {
+        ScopedIdentifier id;
+        std::vector<ExpressionContextNode> arguments;
+        std::vector<ExpressionContextNode> outputs;
+    };
 
     struct FunctionDescriptionContext : public TextContext
     {
         Identifier identifier;
-        LabeledNodeList<ValueContext> sources;
-        LabeledNodeList<ValueContext> sinks;
+        Node<SourceListContext> sources;
+        Node<SinkListContext> sinks;
         std::string longId() const override;
     };
 
@@ -343,69 +422,69 @@ Node<BinaryOperatorContext>
 
         Node<ScopeContext> body;
 
-        std::optional<DocumentContextNode> findIdentifier(std::string_view identifier, uint8_t searchOptions) override;
+        std::optional<TextContextNode> findIdentifier(std::string_view identifier, uint8_t searchOptions) override;
         std::string longId() const override;
         std::string signature() const;
     };
 
-    struct ImplContext: public TextContext 
+    struct ImplContext : public TextContext
     {
-        TypeContext type;
+        Node<TypeContext> type;
         LabeledNodeMap<FunctionContext> methods;
         std::string longId() const override;
     };
 
     struct TraitContext : public TextContext
     {
-        Identifier identifier;  
-        LabeledNodeList<FunctionDescriptionContext> methods;       
+        Identifier identifier;
+        NodeList<FunctionDescriptionContext> methods;
         std::string longId() const override;
     };
 
-    struct TraitImplContext: public ImplContext
+    struct TraitImplContext : public ImplContext
     {
         Identifier trait;
-        TypeContext type;
+        Node<TypeContext> type;
         std::string longId() const override;
     };
 
     struct PipelineContext : public TextContext
     {
-        Identifier identifier;
+        Node<Identifier> identifier;
         // Arguments
-        LabeledNodeList<ValueContext> sources;
-        LabeledNodeList<ValueContext> sinks;
+        Node<SourceListContext> sources;
+        Node<SinkListContext> sinks;
 
-        LabeledNodeList<PipelineStageContext> stages;
+        NodeList<PipelineStageContext> stages;
 
-        std::optional<DocumentContextNode> findIdentifier(std::string_view identifier, uint8_t searchOptions) override;
+        std::optional<TextContextNode> findIdentifier(std::string_view identifier, uint8_t searchOptions) override;
         std::string longId() const override;
         std::string argSig() const;
         std::string signature() const;
     };
 
-
     struct StructContext : public TextContext
     {
         Identifier identifier;
 
-        LabeledNodeList<ValueContext> variables;
-        LabeledNodeList<FunctionContext> functions;
+        NodeList<ValueContext> variables;
+        NodeList<FunctionContext> functions;
         bool packed = false;
 
-        std::optional<DocumentContextNode> getNodeAtChar(TSPoint pos) override;
-        std::optional<DocumentContextNode> findIdentifier(std::string_view identifier, uint8_t searchOptions) override;
+        std::optional<TextContextNode> getNodeAtChar(TSPoint pos) override;
+        std::optional<TextContextNode> findIdentifier(std::string_view identifier, uint8_t searchOptions) override;
         std::string longId() const override;
     };
 
     struct ModuleContext : public TextContext
     {
-        Identifier identifier;
-        LabeledNodeList<StructContext> structs;
-        LabeledNodeList<FunctionContext> functions;
+        Node<Identifier> identifier;
+        NodeList<StructContext> structs;
+        NodeList<FunctionContext> functions;
+        NodeList<PipelineContext> pipelines;
 
-        std::optional<DocumentContextNode> getNodeAtChar(TSPoint pos) override;
-        std::optional<DocumentContextNode> findIdentifier(std::string_view identifier, uint8_t searchOptions) override;
+        std::optional<TextContextNode> getNodeAtChar(TSPoint pos) override;
+        std::optional<TextContextNode> findIdentifier(std::string_view identifier, uint8_t searchOptions) override;
         std::string longId() const override;
     };
 
@@ -414,9 +493,9 @@ Node<BinaryOperatorContext>
         std::filesystem::path source;
         LabeledNodeMap<ModuleContext> modules;
 
-        std::optional<DocumentContextNode> getNodeAtChar(TSPoint pos) override;
-        std::optional<DocumentContextNode> findIdentifier(std::string_view identifier, uint8_t searchOptions) override;
+        std::optional<TextContextNode> getNodeAtChar(TSPoint pos) override;
+        std::optional<TextContextNode> findIdentifier(std::string_view identifier, uint8_t searchOptions) override;
     };
-}
+} // namespace BraneScript
 
 #endif
