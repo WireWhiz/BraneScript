@@ -21,7 +21,7 @@ jobs:
       uses: actions/checkout@v4
 
     - name: Load cache
-      id: build cache
+      id: build-cache
       uses: actions/cache@v3
       env:
         cache-name: cache dependencies & build
