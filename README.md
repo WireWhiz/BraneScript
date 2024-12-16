@@ -2,7 +2,7 @@
 
 Embeddable scripting system in development with and intended for use in [Brane Engine](https://github.com/WireWhiz/BraneEngine).
 
-Read more about why we're using a custom scripting system instead of a pre-existing one [here](https://wirewhiz.github.io/BraneScript/docs/spec/goals).
+Read more about why we're using a custom scripting system instead of a pre-existing one [here](https://branereality.github.io/BraneScript/docs/spec/goals).
 
 ## Setup
 
