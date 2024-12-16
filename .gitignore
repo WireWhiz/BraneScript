@@ -21,7 +21,11 @@ yarn-error.log*
 
 # VS Code cache
 .idea/
+
+# Repo switching artifacts
 vcpkg_installed/
 cmake-build-debug/
 cmake-build-release/
 cmake-build-relDebug/
+
+/TreeSitterBraneScript/
