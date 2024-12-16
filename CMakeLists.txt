@@ -55,5 +55,6 @@ target_include_directories(TreeSitterBraneScript INTERFACE ${GRAMMAR_DIR}/bindin
 add_subdirectory(src)
 
 if(BS_BUILD_TESTS)
+    enable_testing()
     add_subdirectory(tests)
 endif()

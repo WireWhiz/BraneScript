@@ -6,6 +6,5 @@
 #define BRANESCRIPT_TESTING_H
 
 #include <gtest/gtest.h>
-#include "analyzer.h"
 
 #endif
