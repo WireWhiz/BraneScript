@@ -5,7 +5,8 @@ use branec_parser::ast::{self, Ty};
 use branec_source::{SourceManager, Span};
 use chumsky::span::Span as _;
 use chumsky::Parser;
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
+use std::fmt::Debug;
 use std::ops::Range;
 use std::rc::Rc;
 use std::sync::Arc;
@@ -92,7 +93,7 @@ impl<E: DiagnosticEmitter> CompileContext<E> {
             bail!("Failed to register names");
         }
 
-        self.register_functions(&root_namespace, &mut module_ctx)?;
+        self.index_functions(&root_namespace, &root_namespace, &mut module_ctx)?;
 
         self.loaded_modules
             .insert(module_uri.clone(), root_namespace.clone());
@@ -127,7 +128,12 @@ impl<E: DiagnosticEmitter> CompileContext<E> {
         Ok(())
     }
 
-    fn register_functions(&self, namespace: &IdentTree, module_ctx: &mut ModuleCtx) -> Result<()> {
+    fn index_functions(
+        &self,
+        namespace: &IdentTree,
+        root_ns: &IdentTree,
+        module_ctx: &mut ModuleCtx,
+    ) -> Result<()> {
         match namespace {
             IdentTree::Namespace { imports, children } => {
                 for (uri, i_path) in imports {
@@ -159,7 +165,7 @@ impl<E: DiagnosticEmitter> CompileContext<E> {
                 }
 
                 for child in children.values() {
-                    self.register_functions(child, module_ctx)?;
+                    self.index_functions(child, root_ns, module_ctx)?;
                 }
             }
             IdentTree::Def(IdentTarget::Fn(overrides)) => {
@@ -171,11 +177,11 @@ impl<E: DiagnosticEmitter> CompileContext<E> {
                             let param_tys = function
                                 .params
                                 .iter()
-                                .map(|(_, ty)| self.emit_ty(ty, namespace, module_ctx))
+                                .map(|(_, ty)| self.emit_ty(ty, root_ns, module_ctx))
                                 .collect::<Result<Vec<_>>>()?;
 
                             let ret_ty = match &function.ret_ty {
-                                Some(ty) => Some(self.emit_ty(ty, namespace, module_ctx)?),
+                                Some(ty) => Some(self.emit_ty(ty, root_ns, module_ctx)?),
                                 None => None,
                             };
 
@@ -347,32 +353,32 @@ impl<E: DiagnosticEmitter> CompileContext<E> {
             return Ok(res);
         }
 
-        let IdentTree::Namespace {
+        // I can't remember why this was the way it is, should this be a find_in_namespace thing?
+        if let IdentTree::Namespace {
             ref imports,
             children: _,
         } = current_ns.value()
-        else {
-            unreachable!("Namespace was not a namespace");
-        };
+        {
+            for (uri, i_path) in imports {
+                match uri {
+                    Some(uri) => {
+                        let mod_ns = self
+                            .loaded_modules
+                            .get(uri)
+                            .ok_or_else(|| anyhow!("module \"{}\" was not found", uri))?;
 
-        for (uri, i_path) in imports {
-            match uri {
-                Some(uri) => {
-                    let mod_ns = self
-                        .loaded_modules
-                        .get(uri)
-                        .ok_or_else(|| anyhow!("module \"{}\" was not found", uri))?;
-
-                    let mut mod_cursor = mod_ns.get_cursor();
-                    if let Some(path) = i_path {
-                        mod_cursor.set_scope_from_path(path)?;
+                        let mut mod_cursor = mod_ns.get_cursor();
+                        if let Some(path) = i_path {
+                            mod_cursor.set_scope_from_path(path)?;
+                        }
+                        if let Ok(res) = self.find_identified_in_namespace(path, mod_cursor.value())
+                        {
+                            return Ok(res);
+                        }
                     }
-                    if let Ok(res) = self.find_identified_in_namespace(path, mod_cursor.value()) {
-                        return Ok(res);
+                    None => {
+                        // Not quite sure what to do here tbh
                     }
-                }
-                None => {
-                    // Not quite sure what to do here tbh
                 }
             }
         }
@@ -412,7 +418,9 @@ impl<E: DiagnosticEmitter> CompileContext<E> {
             ref children,
         } = namespace
         else {
-            unreachable!("Namespace was not a namespace");
+            return Err(anyhow!(
+                "Cannot find_identified_in_namespace for non-namespace path"
+            ));
         };
 
         let Some(found) = children.get(&segment.ident.text) else {
@@ -1115,7 +1123,7 @@ impl<E: DiagnosticEmitter> CompileContext<E> {
 
                 if candidates.is_empty() {
                     let mut c = root_ns.get_cursor();
-                    c.set_scope(&ctx.mod_ctx.current_namespace);
+                    c.set_scope(&ctx.mod_ctx.current_namespace)?;
 
                     if let Ok(IdentTarget::Fn(fn_temp)) = self.find_identified(&path.segments, c) {
                         for o in fn_temp.iter() {
@@ -1578,7 +1586,7 @@ impl<E: DiagnosticEmitter> CompileContext<E> {
             }
             ast::TyKind::Path(path) => {
                 let mut c = root_ns.get_cursor();
-                c.set_scope(&ctx.current_namespace);
+                c.set_scope(&ctx.current_namespace)?;
                 let template = self.find_identified(&path.segments, c)?;
                 match &template {
                     IdentTarget::Struct(s) => {
@@ -1682,16 +1690,28 @@ pub enum FnLocation {
     },
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub enum IdentTree {
     Namespace {
         imports: Vec<(Option<Uri>, Option<ast::Path>)>,
-        children: HashMap<String, IdentTree>,
+        children: BTreeMap<String, IdentTree>,
     },
     Def(IdentTarget),
 }
 
-#[derive(Clone)]
+impl IdentTree {
+    pub fn is_namespace(&self) -> bool {
+        match self {
+            IdentTree::Namespace {
+                imports: _,
+                children: _,
+            } => true,
+            IdentTree::Def(_) => false,
+        }
+    }
+}
+
+#[derive(Clone, Debug)]
 pub enum IdentTarget {
     Struct(ast::Struct),
     Enum(ast::Enum),
@@ -1881,8 +1901,8 @@ impl IdentTarget {
     }
 }
 
-#[derive(Clone)]
-struct IdentTreeCursor<'a> {
+#[derive(Clone, Debug)]
+pub struct IdentTreeCursor<'a> {
     tree_root: &'a IdentTree,
     scope_stack: Vec<&'a IdentTree>,
 }
@@ -1931,13 +1951,13 @@ impl<'a> IdentTreeCursor<'a> {
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub enum TyPattern {
     Any,
     Exact(ir::Ty),
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct FnOverride {
     pub temp_args: Vec<TyPattern>,
     pub arg_tys: Vec<TyPattern>,
@@ -1982,10 +2002,27 @@ pub enum FnOverrideKind {
     Intrinsic(IntrinsicFn),
 }
 
+impl Debug for FnOverrideKind {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Template(arg0) => f.debug_tuple("Template").field(arg0).finish(),
+            Self::Intrinsic(_) => f.debug_tuple("IntrinsicFn").finish(),
+        }
+    }
+}
+
 /// Callback sig for directly generating ir.
 ///
 /// Args (template types, args, ctx)
-pub type IntrinsicFn = Rc<dyn Fn(&[ir::Ty], &[RValue], &mut FunctionCtx) -> Result<Option<RValue>>>;
+pub trait IntrinsicFnTrait:
+    Fn(&[ir::Ty], &[RValue], &mut FunctionCtx) -> Result<Option<RValue>>
+{
+}
+impl<T> IntrinsicFnTrait for T where
+    T: Fn(&[ir::Ty], &[RValue], &mut FunctionCtx) -> Result<Option<RValue>>
+{
+}
+pub type IntrinsicFn = Rc<dyn IntrinsicFnTrait>;
 
 pub struct FunctionCtx<'mc> {
     pub mod_ctx: &'mc mut ModuleCtx,
@@ -1998,14 +2035,14 @@ pub struct FunctionCtx<'mc> {
     /// Stack of a map from string labels in our document to actual variable ids.
     /// This allows scopes to share the same label for multiple values in ways that
     /// make sense in the document.
-    pub scopes: Vec<HashMap<String, usize>>,
+    pub scopes: Vec<BTreeMap<String, usize>>,
     /// SSA LValues
     pub variables: Vec<RValue>,
 }
 
 impl<'mc> FunctionCtx<'mc> {
     pub fn start_scope(&mut self) {
-        self.scopes.push(HashMap::new());
+        self.scopes.push(BTreeMap::new());
     }
 
     pub fn end_scope(&mut self) {
@@ -2024,14 +2061,14 @@ impl<'mc> FunctionCtx<'mc> {
         scope.insert(label.into(), new_id);
     }
 
-    pub fn record_variables(&self) -> Vec<HashMap<String, usize>> {
+    pub fn record_variables(&self) -> Vec<BTreeMap<String, usize>> {
         self.scopes.clone()
     }
 
     pub fn set_variables(
         &mut self,
-        mut variables: Vec<HashMap<String, usize>>,
-    ) -> Vec<HashMap<String, usize>> {
+        mut variables: Vec<BTreeMap<String, usize>>,
+    ) -> Vec<BTreeMap<String, usize>> {
         std::mem::swap(&mut variables, &mut self.scopes);
         variables
     }
@@ -2364,7 +2401,7 @@ impl<'mc> FunctionCtx<'mc> {
 }
 
 /// Values without a memory address
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub enum RValue {
     Value(ir::Value, ir::NativeType),
     Struct(SSAStruct),
@@ -2541,7 +2578,7 @@ pub enum StructFieldId {
     Name(String),
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct SSAStruct {
     pub fields: Vec<(String, Box<RValue>)>,
     pub def_id: ir::StructId,
@@ -2645,7 +2682,7 @@ impl SSAStruct {
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct SSAEnum {
     /// None in the cases of a 0 or 1 variant enum, we don't need a discriminant in those cases
     index: Option<ir::Value>,
@@ -2689,7 +2726,7 @@ impl SSAEnum {
 }
 
 /// Values with a memory address or settable value
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 enum LValue {
     /// Runtime memory address and inner type TODO add mut
     Ptr(ir::Value, Option<ir::Ty>),

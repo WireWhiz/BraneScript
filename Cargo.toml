@@ -22,3 +22,7 @@ serde = { version = "1.0.218", features = ["derive"] }
 defer = "0.2.1"
 
 
+
+[profile.samply]
+inherits = "release"
+debug = true

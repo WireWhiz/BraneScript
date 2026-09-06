@@ -1,4 +1,7 @@
-use crate::{FnOverride, FnOverrideKind, FunctionCtx, IdentTree, RValue, SSAStruct, TyPattern};
+use crate::{
+    FnOverride, FnOverrideKind, FunctionCtx, IdentTree, IntrinsicFnTrait, RValue, SSAStruct,
+    TyPattern,
+};
 use anyhow::{bail, Result};
 use brane_core::ir;
 use std::rc::Rc;
@@ -6,7 +9,7 @@ use std::rc::Rc;
 pub fn intrinsic_op(
     temp_args: impl IntoIterator<Item = TyPattern>,
     arg_tys: impl IntoIterator<Item = ir::NativeType>,
-    callback: impl Fn(&[ir::Ty], &[RValue], &mut FunctionCtx) -> Result<Option<RValue>> + 'static,
+    callback: impl IntrinsicFnTrait + 'static,
 ) -> FnOverride {
     FnOverride {
         temp_args: temp_args.into_iter().collect(),

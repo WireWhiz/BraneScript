@@ -13,16 +13,16 @@
 
 #[cfg(test)]
 mod tests {
-    use brane_core::ExecutionCtx;
-    use branec_source::SourceManager;
-    use std::collections::HashMap;
     use std::mem;
+    use std::ptr::NonNull;
 
     use anyhow::Result;
-    use brane_backend_cranelift::cranelift_jit::JITModule;
-    use brane_backend_cranelift::cranelift_module::FuncId;
-    use brane_backend_cranelift::{CraneliftJitBackend, LoadedModule};
+    use brane_backend_cranelift::CraneliftJitBackend;
+    use brane_core::runtime::LoadedModule;
+    use brane_core::runtime::Runtime;
+    use brane_core::ExecutionCtx;
     use branec::CompileContext;
+    use branec_source::SourceManager;
 
     // ============================================================================
     // TYPE DEFINITIONS - These must match your script types exactly
@@ -415,6 +415,9 @@ mod tests {
 
     /// Container for all JIT-compiled ABI test functions
     pub struct JitFunctions {
+        /// The execution context every JIT'd function takes as its first argument.
+        /// Points into the `AbiTestHarness` that owns this struct.
+        pub ctx: *mut ExecutionCtx,
         pub abi_test_struct_4b: extern "C" fn(*mut ExecutionCtx, Struct4B) -> Struct4B,
         pub abi_test_struct_8b: extern "C" fn(*mut ExecutionCtx, Struct8B) -> Struct8B,
         pub abi_test_struct_16b: extern "C" fn(*mut ExecutionCtx, Struct16B) -> Struct16B,
@@ -470,203 +473,201 @@ mod tests {
     // JIT INTEGRATION HELPER
     // ============================================================================
 
-    /// Helper to load and manage JIT-compiled test functions
+    /// Helper to load and manage JIT-compiled test functions.
+    ///
+    /// Field order matters for drop: `functions` holds raw code pointers and a
+    /// pointer to `exe_ctx`, so it must be dropped before the runtime that owns
+    /// the JIT'd code and before the pages the bindings point at.
     pub struct AbiTestHarness {
         functions: JitFunctions,
+        /// Boxed so its address is stable once `functions.ctx` records it.
+        _exe_ctx: Box<ExecutionCtx>,
+        /// Owns the JIT'd code the function pointers refer to.
+        _rt: Runtime<CraneliftJitBackend>,
     }
 
     impl AbiTestHarness {
-        /// Create harness from your JIT backend
-        ///
-        /// # Example with your existing code structure
-        /// ```ignore
-        /// use brane_core::compile::{CompileContext, SourceManager};
-        /// use brane_core::uri::Uri;
-        /// use branec_emitter::ConsoleEmitter;
-        ///
-        /// let mut ctx = CompileContext {
-        ///     emitter: ConsoleEmitter::new(),
-        ///     sources: SourceManager::new(),
-        ///     loaded_modules: Default::default(),
-        /// };
-        ///
-        /// let module = ctx.emit_module(
-        ///     &Uri::File("../tests/abi_test_script.bscript".into()),
-        ///     vec!["abi_test".into()],
-        /// )?;
-        ///
-        /// let mut jit = CraneliftJitBackend::default();
-        /// let (fn_map, jit_module) = jit.jit(module)?;
-        ///
-        /// let harness = AbiTestHarness::from_jit_module(jit_module, fn_map)?;
-        /// ```
-        pub fn from_jit_module(module: JITModule, fn_map: HashMap<String, FuncId>) -> Result<Self> {
-            macro_rules! get_fn {
-                ($name:literal, $type:ty) => {{
-                    let func_id = fn_map
-                        .get($name)
-                        .ok_or_else(|| anyhow::anyhow!("Function '{}' not found", $name))?;
-                    println!("found {} as {}", $name, func_id);
-                    let ptr = module.get_finalized_function(*func_id);
-                    unsafe { std::mem::transmute::<_, $type>(ptr) }
-                }};
-            }
-
-            let functions = JitFunctions {
-                abi_test_struct_4b: get_fn!(
-                    "abi_test_struct_4b",
-                    extern "C" fn(*mut ExecutionCtx, Struct4B) -> Struct4B
-                ),
-                abi_test_struct_8b: get_fn!(
-                    "abi_test_struct_8b",
-                    extern "C" fn(*mut ExecutionCtx, Struct8B) -> Struct8B
-                ),
-                abi_test_struct_16b: get_fn!(
-                    "abi_test_struct_16b",
-                    extern "C" fn(*mut ExecutionCtx, Struct16B) -> Struct16B
-                ),
-                abi_test_struct_16f: get_fn!(
-                    "abi_test_struct_16f",
-                    extern "C" fn(*mut ExecutionCtx, Struct16BF) -> Struct16BF
-                ),
-                abi_test_struct_24b: get_fn!(
-                    "abi_test_struct_24b",
-                    extern "C" fn(*mut ExecutionCtx, Struct24B) -> Struct24B
-                ),
-                abi_test_enum_empty_2: get_fn!(
-                    "abi_test_enum_empty_2",
-                    extern "C" fn(*mut ExecutionCtx, EnumEmpty2) -> EnumEmpty2
-                ),
-                abi_test_enum_empty_256: get_fn!(
-                    "abi_test_enum_empty_256",
-                    extern "C" fn(*mut ExecutionCtx, EnumEmpty256) -> EnumEmpty256
-                ),
-                abi_test_enum_single_4b: get_fn!(
-                    "abi_test_enum_single_4b",
-                    extern "C" fn(*mut ExecutionCtx, EnumSingle4B) -> EnumSingle4B
-                ),
-                abi_test_enum_single_8b: get_fn!(
-                    "abi_test_enum_single_8b",
-                    extern "C" fn(*mut ExecutionCtx, EnumSingle8B) -> EnumSingle8B
-                ),
-                abi_test_enum_single_16b: get_fn!(
-                    "abi_test_enum_single_16b",
-                    extern "C" fn(*mut ExecutionCtx, EnumSingle16B) -> EnumSingle16B
-                ),
-                abi_test_enum_single_24b: get_fn!(
-                    "abi_test_enum_single_24b",
-                    extern "C" fn(*mut ExecutionCtx, EnumSingle24B) -> EnumSingle24B
-                ),
-                abi_test_enum_multi_4b: get_fn!(
-                    "abi_test_enum_multi_4b",
-                    extern "C" fn(*mut ExecutionCtx, EnumMulti4B) -> EnumMulti4B
-                ),
-                abi_test_enum_multi_8b: get_fn!(
-                    "abi_test_enum_multi_8b",
-                    extern "C" fn(*mut ExecutionCtx, EnumMulti8B) -> EnumMulti8B
-                ),
-                abi_test_enum_multi_16b: get_fn!(
-                    "abi_test_enum_multi_16b",
-                    extern "C" fn(*mut ExecutionCtx, EnumMulti16B) -> EnumMulti16B
-                ),
-                abi_test_enum_multi_24b: get_fn!(
-                    "abi_test_enum_multi_24b",
-                    extern "C" fn(*mut ExecutionCtx, EnumMulti24B) -> EnumMulti24B
-                ),
-                abi_test_enum_mixed_4b_8b: get_fn!(
-                    "abi_test_enum_mixed_4b_8b",
-                    extern "C" fn(*mut ExecutionCtx, EnumMixed4B8B) -> EnumMixed4B8B
-                ),
-                abi_test_enum_mixed_4b_8b_16b: get_fn!(
-                    "abi_test_enum_mixed_4b_8b_16b",
-                    extern "C" fn(*mut ExecutionCtx, EnumMixed4B8B16B) -> EnumMixed4B8B16B
-                ),
-                abi_test_enum_mixed_all: get_fn!(
-                    "abi_test_enum_mixed_all",
-                    extern "C" fn(*mut ExecutionCtx, EnumMixedAll) -> EnumMixedAll
-                ),
-                abi_test_multi_params: get_fn!(
-                    "abi_test_multi_params",
-                    extern "C" fn(
-                        *mut ExecutionCtx,
-                        Struct4B,
-                        Struct8B,
-                        Struct16B,
-                        Struct24B,
-                    ) -> Struct24B
-                ),
-                abi_test_exaust_general_6: get_fn!(
-                    "abi_test_exaust_general_6",
-                    extern "C" fn(
-                        *mut ExecutionCtx,
-                        i32,
-                        f32,
-                        i32,
-                        i32,
-                        i32,
-                        Struct16B,
-                    ) -> Struct16B
-                ),
-                abi_test_exaust_general_8: get_fn!(
-                    "abi_test_exaust_general_8",
-                    extern "C" fn(
-                        *mut ExecutionCtx,
-                        i32,
-                        f32,
-                        i32,
-                        i32,
-                        i32,
-                        i32,
-                        i32,
-                        Struct16B,
-                    ) -> Struct16B
-                ),
-                abi_test_exaust_vector_8: get_fn!(
-                    "abi_test_exaust_vector_8",
-                    extern "C" fn(
-                        *mut ExecutionCtx,
-                        f32,
-                        i32,
-                        f32,
-                        f32,
-                        f32,
-                        f32,
-                        f32,
-                        f32,
-                        Struct16BF,
-                    ) -> Struct16BF
-                ),
-            };
-
-            Ok(Self { functions })
-        }
-
-        /// Compile script and create harness in one step
-        ///
-        /// This is a convenience method that handles the entire compilation pipeline.
-        /// Adjust the implementation to match your actual API.
-        pub fn from_script_file() -> Result<Self> {
-            let mut ctx = CompileContext {
+        /// Compile the test script, load it into a runtime, and pull out every
+        /// JIT'd function from the execution context's binding table.
+        pub fn new() -> Result<Self> {
+            let mut cctx = CompileContext {
                 emitter: branec_emitter::ConsoleEmitter::new(),
                 sources: SourceManager::new(),
                 loaded_modules: Default::default(),
             };
+            cctx.load_std();
 
-            let test_source = ctx
+            let mut rt = Runtime::<CraneliftJitBackend>::new();
+            let mut exe_ctx = Box::new(rt.new_execution_ctx());
+
+            // Bindings 1 and 2 are the vars / return pages, same as the CLI sets up.
+            // The pages are leaked into the runtime's store for the life of the
+            // harness; the harness is a `static` so this is fine.
+            let mut vars_page = rt.store.alloc_page()?;
+            let mut ret_page = rt.store.alloc_page()?;
+            exe_ctx.bindings[1] = NonNull::new(vars_page.data.as_mut_ptr());
+            exe_ctx.bindings[2] = NonNull::new(ret_page.data.as_mut_ptr());
+            std::mem::forget(vars_page);
+            std::mem::forget(ret_page);
+
+            let uri = cctx
                 .sources
                 .add_custom(include_str!("../../tests/c_abi.bscript").to_string())?;
 
-            let module = ctx.emit_module("test_mod".into(), &test_source)?;
-
-            println!("Emitted module:\n{}", module);
+            let module_src = cctx.emit_module("test_mod".into(), &uri)?;
+            println!("Emitted module:\n{}", module_src);
             println!("Jitting...");
-            let jit = CraneliftJitBackend::default();
-            let LoadedModule {
+            let mod_id = rt.load_module(uri, module_src)?;
+
+            let functions = {
+                let module = rt
+                    .get_module(mod_id)
+                    .ok_or_else(|| anyhow::anyhow!("Module was not loaded"))?;
+
+                macro_rules! get_fn {
+                    ($name:literal, $type:ty) => {{
+                        let index = module.get_fn_by_name($name).ok_or_else(|| {
+                            anyhow::anyhow!("Function '{}' not found in compiled module", $name)
+                        })?;
+                        println!("found {} as {}", $name, index);
+                        let code = unsafe { *exe_ctx.fn_bindings_ptr().add(index as usize) };
+                        unsafe { std::mem::transmute::<_, $type>(code) }
+                    }};
+                }
+
+                JitFunctions {
+                    ctx: &mut *exe_ctx as *mut ExecutionCtx,
+                    abi_test_struct_4b: get_fn!(
+                        "abi_test_struct_4b",
+                        extern "C" fn(*mut ExecutionCtx, Struct4B) -> Struct4B
+                    ),
+                    abi_test_struct_8b: get_fn!(
+                        "abi_test_struct_8b",
+                        extern "C" fn(*mut ExecutionCtx, Struct8B) -> Struct8B
+                    ),
+                    abi_test_struct_16b: get_fn!(
+                        "abi_test_struct_16b",
+                        extern "C" fn(*mut ExecutionCtx, Struct16B) -> Struct16B
+                    ),
+                    abi_test_struct_16f: get_fn!(
+                        "abi_test_struct_16f",
+                        extern "C" fn(*mut ExecutionCtx, Struct16BF) -> Struct16BF
+                    ),
+                    abi_test_struct_24b: get_fn!(
+                        "abi_test_struct_24b",
+                        extern "C" fn(*mut ExecutionCtx, Struct24B) -> Struct24B
+                    ),
+                    abi_test_enum_empty_2: get_fn!(
+                        "abi_test_enum_empty_2",
+                        extern "C" fn(*mut ExecutionCtx, EnumEmpty2) -> EnumEmpty2
+                    ),
+                    abi_test_enum_empty_256: get_fn!(
+                        "abi_test_enum_empty_256",
+                        extern "C" fn(*mut ExecutionCtx, EnumEmpty256) -> EnumEmpty256
+                    ),
+                    abi_test_enum_single_4b: get_fn!(
+                        "abi_test_enum_single_4b",
+                        extern "C" fn(*mut ExecutionCtx, EnumSingle4B) -> EnumSingle4B
+                    ),
+                    abi_test_enum_single_8b: get_fn!(
+                        "abi_test_enum_single_8b",
+                        extern "C" fn(*mut ExecutionCtx, EnumSingle8B) -> EnumSingle8B
+                    ),
+                    abi_test_enum_single_16b: get_fn!(
+                        "abi_test_enum_single_16b",
+                        extern "C" fn(*mut ExecutionCtx, EnumSingle16B) -> EnumSingle16B
+                    ),
+                    abi_test_enum_single_24b: get_fn!(
+                        "abi_test_enum_single_24b",
+                        extern "C" fn(*mut ExecutionCtx, EnumSingle24B) -> EnumSingle24B
+                    ),
+                    abi_test_enum_multi_4b: get_fn!(
+                        "abi_test_enum_multi_4b",
+                        extern "C" fn(*mut ExecutionCtx, EnumMulti4B) -> EnumMulti4B
+                    ),
+                    abi_test_enum_multi_8b: get_fn!(
+                        "abi_test_enum_multi_8b",
+                        extern "C" fn(*mut ExecutionCtx, EnumMulti8B) -> EnumMulti8B
+                    ),
+                    abi_test_enum_multi_16b: get_fn!(
+                        "abi_test_enum_multi_16b",
+                        extern "C" fn(*mut ExecutionCtx, EnumMulti16B) -> EnumMulti16B
+                    ),
+                    abi_test_enum_multi_24b: get_fn!(
+                        "abi_test_enum_multi_24b",
+                        extern "C" fn(*mut ExecutionCtx, EnumMulti24B) -> EnumMulti24B
+                    ),
+                    abi_test_enum_mixed_4b_8b: get_fn!(
+                        "abi_test_enum_mixed_4b_8b",
+                        extern "C" fn(*mut ExecutionCtx, EnumMixed4B8B) -> EnumMixed4B8B
+                    ),
+                    abi_test_enum_mixed_4b_8b_16b: get_fn!(
+                        "abi_test_enum_mixed_4b_8b_16b",
+                        extern "C" fn(*mut ExecutionCtx, EnumMixed4B8B16B) -> EnumMixed4B8B16B
+                    ),
+                    abi_test_enum_mixed_all: get_fn!(
+                        "abi_test_enum_mixed_all",
+                        extern "C" fn(*mut ExecutionCtx, EnumMixedAll) -> EnumMixedAll
+                    ),
+                    abi_test_multi_params: get_fn!(
+                        "abi_test_multi_params",
+                        extern "C" fn(
+                            *mut ExecutionCtx,
+                            Struct4B,
+                            Struct8B,
+                            Struct16B,
+                            Struct24B,
+                        ) -> Struct24B
+                    ),
+                    abi_test_exaust_general_6: get_fn!(
+                        "abi_test_exaust_general_6",
+                        extern "C" fn(
+                            *mut ExecutionCtx,
+                            i32,
+                            f32,
+                            i32,
+                            i32,
+                            i32,
+                            Struct16B,
+                        ) -> Struct16B
+                    ),
+                    abi_test_exaust_general_8: get_fn!(
+                        "abi_test_exaust_general_8",
+                        extern "C" fn(
+                            *mut ExecutionCtx,
+                            i32,
+                            f32,
+                            i32,
+                            i32,
+                            i32,
+                            i32,
+                            i32,
+                            Struct16B,
+                        ) -> Struct16B
+                    ),
+                    abi_test_exaust_vector_8: get_fn!(
+                        "abi_test_exaust_vector_8",
+                        extern "C" fn(
+                            *mut ExecutionCtx,
+                            f32,
+                            i32,
+                            f32,
+                            f32,
+                            f32,
+                            f32,
+                            f32,
+                            f32,
+                            Struct16BF,
+                        ) -> Struct16BF
+                    ),
+                }
+            };
+
+            Ok(Self {
                 functions,
-                jit_module,
-                name_to_function,
-            } = jit.jit(module)?;
-            Self::from_jit_module(jit_module, functions)
+                _exe_ctx: exe_ctx,
+                _rt: rt,
+            })
         }
 
         /// Get reference to the loaded functions
@@ -682,7 +683,7 @@ mod tests {
     // Struct tests
     fn test_struct_4b(funcs: &JitFunctions) -> Result<()> {
         let input = Struct4B { field: 42 };
-        let output = (funcs.abi_test_struct_4b)(std::ptr::null_mut(), input);
+        let output = (funcs.abi_test_struct_4b)(funcs.ctx, input);
         if input != output {
             anyhow::bail!("Expected {:?}, got {:?}", input, output);
         }
@@ -693,7 +694,7 @@ mod tests {
         let input = Struct8B {
             field: 0x0123456789ABCDEF,
         };
-        let output = (funcs.abi_test_struct_8b)(std::ptr::null_mut(), input);
+        let output = (funcs.abi_test_struct_8b)(funcs.ctx, input);
         if input != output {
             anyhow::bail!("Expected {:?}, got {:?}", input, output);
         }
@@ -705,7 +706,7 @@ mod tests {
             field1: 0x0123456789ABCDEF,
             field2: 0xFEDCBA9876543210,
         };
-        let output = (funcs.abi_test_struct_16b)(std::ptr::null_mut(), input);
+        let output = (funcs.abi_test_struct_16b)(funcs.ctx, input);
         if input != output {
             anyhow::bail!("Expected {:?}, got {:?}", input, output);
         }
@@ -719,7 +720,7 @@ mod tests {
             field3: 3.125,
             field4: -4.5,
         };
-        let output = (funcs.abi_test_struct_16f)(std::ptr::null_mut(), input);
+        let output = (funcs.abi_test_struct_16f)(funcs.ctx, input);
         if input != output {
             anyhow::bail!("Expected {:?}, got {:?}", input, output);
         }
@@ -732,7 +733,7 @@ mod tests {
             field2: -1 as i64,
             field3: 0x1111111111111111,
         };
-        let output = (funcs.abi_test_struct_24b)(std::ptr::null_mut(), input);
+        let output = (funcs.abi_test_struct_24b)(funcs.ctx, input);
         if input != output {
             anyhow::bail!("Expected {:?}, got {:?}", input, output);
         }
@@ -742,7 +743,7 @@ mod tests {
     // Empty enum tests
     fn test_enum_empty_2_variant1(funcs: &JitFunctions) -> Result<()> {
         let input = EnumEmpty2::Variant1;
-        let output = (funcs.abi_test_enum_empty_2)(std::ptr::null_mut(), input);
+        let output = (funcs.abi_test_enum_empty_2)(funcs.ctx, input);
         if input != output {
             anyhow::bail!("Expected {:?}, got {:?}", input, output);
         }
@@ -751,7 +752,7 @@ mod tests {
 
     fn test_enum_empty_2_variant2(funcs: &JitFunctions) -> Result<()> {
         let input = EnumEmpty2::Variant2;
-        let output = (funcs.abi_test_enum_empty_2)(std::ptr::null_mut(), input);
+        let output = (funcs.abi_test_enum_empty_2)(funcs.ctx, input);
         if input != output {
             anyhow::bail!("Expected {:?}, got {:?}", input, output);
         }
@@ -761,7 +762,7 @@ mod tests {
     // Empty enum with 256 variants tests
     fn test_enum_empty_256_v1(funcs: &JitFunctions) -> Result<()> {
         let input = EnumEmpty256::V1;
-        let output = (funcs.abi_test_enum_empty_256)(std::ptr::null_mut(), input);
+        let output = (funcs.abi_test_enum_empty_256)(funcs.ctx, input);
         if input != output {
             anyhow::bail!("Expected {:?}, got {:?}", input, output);
         }
@@ -770,7 +771,7 @@ mod tests {
 
     fn test_enum_empty_256_v128(funcs: &JitFunctions) -> Result<()> {
         let input = EnumEmpty256::V128;
-        let output = (funcs.abi_test_enum_empty_256)(std::ptr::null_mut(), input);
+        let output = (funcs.abi_test_enum_empty_256)(funcs.ctx, input);
         if input != output {
             anyhow::bail!("Expected {:?}, got {:?}", input, output);
         }
@@ -779,7 +780,7 @@ mod tests {
 
     fn test_enum_empty_256_v256(funcs: &JitFunctions) -> Result<()> {
         let input = EnumEmpty256::V256;
-        let output = (funcs.abi_test_enum_empty_256)(std::ptr::null_mut(), input);
+        let output = (funcs.abi_test_enum_empty_256)(funcs.ctx, input);
         if input != output {
             anyhow::bail!("Expected {:?}, got {:?}", input, output);
         }
@@ -789,7 +790,7 @@ mod tests {
     // Single variant enum tests
     fn test_enum_single_4b(funcs: &JitFunctions) -> Result<()> {
         let input = EnumSingle4B::Variant(Struct4B { field: 42 });
-        let output = (funcs.abi_test_enum_single_4b)(std::ptr::null_mut(), input);
+        let output = (funcs.abi_test_enum_single_4b)(funcs.ctx, input);
         if input != output {
             anyhow::bail!("Expected {:?}, got {:?}", input, output);
         }
@@ -800,7 +801,7 @@ mod tests {
         let input = EnumSingle8B::Variant(Struct8B {
             field: 0x0123456789ABCDEF,
         });
-        let output = (funcs.abi_test_enum_single_8b)(std::ptr::null_mut(), input);
+        let output = (funcs.abi_test_enum_single_8b)(funcs.ctx, input);
         if input != output {
             anyhow::bail!("Expected {:?}, got {:?}", input, output);
         }
@@ -812,7 +813,7 @@ mod tests {
             field1: 0x0123456789ABCDEF,
             field2: 0xFEDCBA9876543210,
         });
-        let output = (funcs.abi_test_enum_single_16b)(std::ptr::null_mut(), input);
+        let output = (funcs.abi_test_enum_single_16b)(funcs.ctx, input);
         if input != output {
             anyhow::bail!("Expected {:?}, got {:?}", input, output);
         }
@@ -825,7 +826,7 @@ mod tests {
             field2: 0xFEDCBA9876543210u64 as i64,
             field3: 0x1111111111111111,
         });
-        let output = (funcs.abi_test_enum_single_24b)(std::ptr::null_mut(), input);
+        let output = (funcs.abi_test_enum_single_24b)(funcs.ctx, input);
         if input != output {
             anyhow::bail!("Expected {:?}, got {:?}", input, output);
         }
@@ -835,7 +836,7 @@ mod tests {
     // Multi variant same-size enum tests
     fn test_enum_multi_4b_v1(funcs: &JitFunctions) -> Result<()> {
         let input = EnumMulti4B::Variant1(Struct4B { field: 42 });
-        let output = (funcs.abi_test_enum_multi_4b)(std::ptr::null_mut(), input);
+        let output = (funcs.abi_test_enum_multi_4b)(funcs.ctx, input);
         if input != output {
             anyhow::bail!("Expected {:?}, got {:?}", input, output);
         }
@@ -847,7 +848,7 @@ mod tests {
 
     fn test_enum_multi_4b_v2(funcs: &JitFunctions) -> Result<()> {
         let input = EnumMulti4B::Variant2(Struct4B { field: 99 });
-        let output = (funcs.abi_test_enum_multi_4b)(std::ptr::null_mut(), input);
+        let output = (funcs.abi_test_enum_multi_4b)(funcs.ctx, input);
         if input != output {
             anyhow::bail!("Expected {:?}, got {:?}", input, output);
         }
@@ -861,7 +862,7 @@ mod tests {
         let input = EnumMulti8B::Variant1(Struct8B {
             field: 0x0123456789ABCDEF,
         });
-        let output = (funcs.abi_test_enum_multi_8b)(std::ptr::null_mut(), input);
+        let output = (funcs.abi_test_enum_multi_8b)(funcs.ctx, input);
         if input != output {
             anyhow::bail!("Expected {:?}, got {:?}", input, output);
         }
@@ -875,7 +876,7 @@ mod tests {
         let input = EnumMulti8B::Variant2(Struct8B {
             field: 0xFEDCBA9876543210u64 as i64,
         });
-        let output = (funcs.abi_test_enum_multi_8b)(std::ptr::null_mut(), input);
+        let output = (funcs.abi_test_enum_multi_8b)(funcs.ctx, input);
         if input != output {
             anyhow::bail!("Expected {:?}, got {:?}", input, output);
         }
@@ -890,7 +891,7 @@ mod tests {
             field1: 0x0123456789ABCDEF,
             field2: 0xFEDCBA9876543210,
         });
-        let output = (funcs.abi_test_enum_multi_16b)(std::ptr::null_mut(), input);
+        let output = (funcs.abi_test_enum_multi_16b)(funcs.ctx, input);
         if input != output {
             anyhow::bail!("Expected {:?}, got {:?}", input, output);
         }
@@ -905,7 +906,7 @@ mod tests {
             field1: 0x1111111111111111,
             field2: 0x2222222222222222,
         });
-        let output = (funcs.abi_test_enum_multi_16b)(std::ptr::null_mut(), input);
+        let output = (funcs.abi_test_enum_multi_16b)(funcs.ctx, input);
         if input != output {
             anyhow::bail!("Expected {:?}, got {:?}", input, output);
         }
@@ -921,7 +922,7 @@ mod tests {
             field2: 0xFEDCBA9876543210u64 as i64,
             field3: 0x1111111111111111,
         });
-        let output = (funcs.abi_test_enum_multi_24b)(std::ptr::null_mut(), input);
+        let output = (funcs.abi_test_enum_multi_24b)(funcs.ctx, input);
         if input != output {
             anyhow::bail!("Expected {:?}, got {:?}", input, output);
         }
@@ -937,7 +938,7 @@ mod tests {
             field2: 0x3333333333333333,
             field3: 0x4444444444444444,
         });
-        let output = (funcs.abi_test_enum_multi_24b)(std::ptr::null_mut(), input);
+        let output = (funcs.abi_test_enum_multi_24b)(funcs.ctx, input);
         if input != output {
             anyhow::bail!("Expected {:?}, got {:?}", input, output);
         }
@@ -950,7 +951,7 @@ mod tests {
     // Mixed size enum tests
     fn test_enum_mixed_4b_8b_v4(funcs: &JitFunctions) -> Result<()> {
         let input = EnumMixed4B8B::Variant4B(Struct4B { field: 42 });
-        let output = (funcs.abi_test_enum_mixed_4b_8b)(std::ptr::null_mut(), input);
+        let output = (funcs.abi_test_enum_mixed_4b_8b)(funcs.ctx, input);
         if input != output {
             anyhow::bail!("Expected {:?}, got {:?}", input, output);
         }
@@ -964,7 +965,7 @@ mod tests {
         let input = EnumMixed4B8B::Variant8B(Struct8B {
             field: 0x0123456789ABCDEF,
         });
-        let output = (funcs.abi_test_enum_mixed_4b_8b)(std::ptr::null_mut(), input);
+        let output = (funcs.abi_test_enum_mixed_4b_8b)(funcs.ctx, input);
         if input != output {
             anyhow::bail!("Expected {:?}, got {:?}", input, output);
         }
@@ -976,7 +977,7 @@ mod tests {
 
     fn test_enum_mixed_4b_8b_16b_v4(funcs: &JitFunctions) -> Result<()> {
         let input = EnumMixed4B8B16B::Variant4B(Struct4B { field: 42 });
-        let output = (funcs.abi_test_enum_mixed_4b_8b_16b)(std::ptr::null_mut(), input);
+        let output = (funcs.abi_test_enum_mixed_4b_8b_16b)(funcs.ctx, input);
         if input != output {
             anyhow::bail!("Expected {:?}, got {:?}", input, output);
         }
@@ -990,7 +991,7 @@ mod tests {
         let input = EnumMixed4B8B16B::Variant8B(Struct8B {
             field: 0x0123456789ABCDEF,
         });
-        let output = (funcs.abi_test_enum_mixed_4b_8b_16b)(std::ptr::null_mut(), input);
+        let output = (funcs.abi_test_enum_mixed_4b_8b_16b)(funcs.ctx, input);
         if input != output {
             anyhow::bail!("Expected {:?}, got {:?}", input, output);
         }
@@ -1005,7 +1006,7 @@ mod tests {
             field1: 0x0123456789ABCDEF,
             field2: 0xFEDCBA9876543210,
         });
-        let output = (funcs.abi_test_enum_mixed_4b_8b_16b)(std::ptr::null_mut(), input);
+        let output = (funcs.abi_test_enum_mixed_4b_8b_16b)(funcs.ctx, input);
         if input != output {
             anyhow::bail!("Expected {:?}, got {:?}", input, output);
         }
@@ -1017,7 +1018,7 @@ mod tests {
 
     fn test_enum_mixed_all_v4(funcs: &JitFunctions) -> Result<()> {
         let input = EnumMixedAll::Variant4B(Struct4B { field: 1 });
-        let output = (funcs.abi_test_enum_mixed_all)(std::ptr::null_mut(), input);
+        let output = (funcs.abi_test_enum_mixed_all)(funcs.ctx, input);
         if input != output {
             anyhow::bail!("Expected {:?}, got {:?}", input, output);
         }
@@ -1031,7 +1032,7 @@ mod tests {
         let input = EnumMixedAll::Variant8B(Struct8B {
             field: 0x0123456789ABCDEF,
         });
-        let output = (funcs.abi_test_enum_mixed_all)(std::ptr::null_mut(), input);
+        let output = (funcs.abi_test_enum_mixed_all)(funcs.ctx, input);
         if input != output {
             anyhow::bail!("Expected {:?}, got {:?}", input, output);
         }
@@ -1046,7 +1047,7 @@ mod tests {
             field1: 0x0123456789ABCDEF,
             field2: 0xFEDCBA9876543210,
         });
-        let output = (funcs.abi_test_enum_mixed_all)(std::ptr::null_mut(), input);
+        let output = (funcs.abi_test_enum_mixed_all)(funcs.ctx, input);
         if input != output {
             anyhow::bail!("Expected {:?}, got {:?}", input, output);
         }
@@ -1062,7 +1063,7 @@ mod tests {
             field2: 0xFEDCBA9876543210u64 as i64,
             field3: 0x1111111111111111,
         });
-        let output = (funcs.abi_test_enum_mixed_all)(std::ptr::null_mut(), input);
+        let output = (funcs.abi_test_enum_mixed_all)(funcs.ctx, input);
         if input != output {
             anyhow::bail!("Expected {:?}, got {:?}", input, output);
         }
@@ -1087,7 +1088,7 @@ mod tests {
             field2: 0x2222222222222222,
             field3: 0x3333333333333333,
         };
-        let output = (funcs.abi_test_multi_params)(std::ptr::null_mut(), s4, s8, s16, s24);
+        let output = (funcs.abi_test_multi_params)(funcs.ctx, s4, s8, s16, s24);
         if output != s24 {
             anyhow::bail!("Expected {:?}, got {:?}", s24, output);
         }
@@ -1100,8 +1101,7 @@ mod tests {
             field1: 0x1122334455667788,
             field2: 0x99AABBCCDDEEFF00,
         };
-        let output =
-            (funcs.abi_test_exaust_general_6)(std::ptr::null_mut(), 1, 2.5, -3, 4, 5, value);
+        let output = (funcs.abi_test_exaust_general_6)(funcs.ctx, 1, 2.5, -3, 4, 5, value);
         if output != value {
             anyhow::bail!("Expected {:?}, got {:?}", value, output);
         }
@@ -1113,8 +1113,7 @@ mod tests {
             field1: 0x1122334455667788,
             field2: 0x99AABBCCDDEEFF00,
         };
-        let output =
-            (funcs.abi_test_exaust_general_8)(std::ptr::null_mut(), 1, 2.5, -3, 4, 5, 6, 7, value);
+        let output = (funcs.abi_test_exaust_general_8)(funcs.ctx, 1, 2.5, -3, 4, 5, 6, 7, value);
         if output != value {
             anyhow::bail!("Expected {:?}, got {:?}", value, output);
         }
@@ -1129,16 +1128,7 @@ mod tests {
             field4: -1000.0,
         };
         let output = (funcs.abi_test_exaust_vector_8)(
-            std::ptr::null_mut(),
-            1.0f32,
-            2i32,
-            -3.5f32,
-            4.25f32,
-            2.54325,
-            8.15124,
-            3.14523,
-            -3.1415,
-            value,
+            funcs.ctx, 1.0f32, 2i32, -3.5f32, 4.25f32, 2.54325, 8.15124, 3.14523, -3.1415, value,
         );
         if output != value {
             anyhow::bail!("Expected {:?}, got {:?}", value, output);
@@ -1149,7 +1139,7 @@ mod tests {
     // Edge case tests
     fn test_struct_4b_zero(funcs: &JitFunctions) -> Result<()> {
         let input = Struct4B { field: 0 };
-        let output = (funcs.abi_test_struct_4b)(std::ptr::null_mut(), input);
+        let output = (funcs.abi_test_struct_4b)(funcs.ctx, input);
         if input != output {
             anyhow::bail!("Expected {:?}, got {:?}", input, output);
         }
@@ -1158,7 +1148,7 @@ mod tests {
 
     fn test_struct_4b_negative(funcs: &JitFunctions) -> Result<()> {
         let input = Struct4B { field: -42 };
-        let output = (funcs.abi_test_struct_4b)(std::ptr::null_mut(), input);
+        let output = (funcs.abi_test_struct_4b)(funcs.ctx, input);
         if input != output {
             anyhow::bail!("Expected {:?}, got {:?}", input, output);
         }
@@ -1167,7 +1157,7 @@ mod tests {
 
     fn test_struct_4b_max(funcs: &JitFunctions) -> Result<()> {
         let input = Struct4B { field: i32::MAX };
-        let output = (funcs.abi_test_struct_4b)(std::ptr::null_mut(), input);
+        let output = (funcs.abi_test_struct_4b)(funcs.ctx, input);
         if input != output {
             anyhow::bail!("Expected {:?}, got {:?}", input, output);
         }
@@ -1176,7 +1166,7 @@ mod tests {
 
     fn test_struct_4b_min(funcs: &JitFunctions) -> Result<()> {
         let input = Struct4B { field: i32::MIN };
-        let output = (funcs.abi_test_struct_4b)(std::ptr::null_mut(), input);
+        let output = (funcs.abi_test_struct_4b)(funcs.ctx, input);
         if input != output {
             anyhow::bail!("Expected {:?}, got {:?}", input, output);
         }
@@ -1185,7 +1175,7 @@ mod tests {
 
     fn test_struct_8b_max(funcs: &JitFunctions) -> Result<()> {
         let input = Struct8B { field: i64::MAX };
-        let output = (funcs.abi_test_struct_8b)(std::ptr::null_mut(), input);
+        let output = (funcs.abi_test_struct_8b)(funcs.ctx, input);
         if input != output {
             anyhow::bail!("Expected {:?}, got {:?}", input, output);
         }
@@ -1194,7 +1184,7 @@ mod tests {
 
     fn test_struct_8b_min(funcs: &JitFunctions) -> Result<()> {
         let input = Struct8B { field: i64::MIN };
-        let output = (funcs.abi_test_struct_8b)(std::ptr::null_mut(), input);
+        let output = (funcs.abi_test_struct_8b)(funcs.ctx, input);
         if input != output {
             anyhow::bail!("Expected {:?}, got {:?}", input, output);
         }
@@ -1261,13 +1251,24 @@ mod tests {
         assert!(mem::align_of::<EnumSingle24B>() >= 8);
     }
 
-    static TEST_HARNESS: std::sync::LazyLock<AbiTestHarness> = std::sync::LazyLock::new(|| {
-        AbiTestHarness::from_script_file().expect("Unable to create test harness")
+    /// The harness holds raw pointers (the ctx and the JIT'd code), so it isn't
+    /// auto-`Sync`. Wrap it to share one instance across the test threads.
+    ///
+    /// SAFETY: the ABI shims are pure value-in / value-out - they don't mutate the
+    /// shared ctx or the bound pages - so concurrent calls don't race. If a test
+    /// script function ever starts writing through the ctx, drop this and make the
+    /// harness a `thread_local!` instead (or run with `--test-threads=1`).
+    struct SharedHarness(AbiTestHarness);
+    unsafe impl Sync for SharedHarness {}
+    unsafe impl Send for SharedHarness {}
+
+    static TEST_HARNESS: std::sync::LazyLock<SharedHarness> = std::sync::LazyLock::new(|| {
+        SharedHarness(AbiTestHarness::new().expect("Unable to create test harness"))
     });
 
     // Helper to load harness for tests
     fn get_test_harness() -> &'static AbiTestHarness {
-        &TEST_HARNESS
+        &TEST_HARNESS.0
     }
 
     #[test]
@@ -1562,7 +1563,7 @@ mod tests {
         unsafe {
             brane_core::sandbox::try_run(&mut || {
                 for i in 0..1000 {
-                    let output = (funcs.abi_test_struct_16b)(std::ptr::null_mut(), input);
+                    let output = (funcs.abi_test_struct_16b)(funcs.ctx, input);
                     if input != output {
                         anyhow::bail!("Call {} failed: expected {:?}, got {:?}", i, input, output);
                     }
@@ -1585,7 +1586,7 @@ mod tests {
                     let v1 = EnumMulti8B::Variant1(Struct8B {
                         field: 0xAAAAAAAAAAAAAAAAu64 as i64,
                     });
-                    let out1 = (funcs.abi_test_enum_multi_8b)(std::ptr::null_mut(), v1);
+                    let out1 = (funcs.abi_test_enum_multi_8b)(funcs.ctx, v1);
                     if v1 != out1 {
                         anyhow::bail!("Variant1 failed");
                     }
@@ -1593,7 +1594,7 @@ mod tests {
                     let v2 = EnumMulti8B::Variant2(Struct8B {
                         field: 0xBBBBBBBBBBBBBBBBu64 as i64,
                     });
-                    let out2 = (funcs.abi_test_enum_multi_8b)(std::ptr::null_mut(), v2);
+                    let out2 = (funcs.abi_test_enum_multi_8b)(funcs.ctx, v2);
                     if v2 != out2 {
                         anyhow::bail!("Variant2 failed");
                     }

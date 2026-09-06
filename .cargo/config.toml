@@ -1,0 +1,5 @@
+[target.x86_64-pc-windows-msvc]
+rustflags = [
+    "-C", "symbol-mangling-version=v0",
+    "-C", "link-arg=/pdbpagesize:16384"
+]

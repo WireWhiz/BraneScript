@@ -5,7 +5,7 @@ use std::{
     sync::Arc,
 };
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub enum LiteralKind {
     I8(i8),
     I16(i16),
@@ -166,7 +166,7 @@ impl Display for LiteralKind {
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct Literal {
     pub kind: LiteralKind,
     pub span: Span,
@@ -196,7 +196,7 @@ impl Display for Ident {
     }
 }
 
-#[derive(PartialEq, Clone)]
+#[derive(PartialEq, Clone, Debug)]
 pub struct TemplateParam(pub Ident);
 
 impl Display for TemplateParam {
@@ -326,7 +326,7 @@ impl PartialEq for Ty {
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub enum ExprKind {
     Literal(Literal),
     Array(Vec<Expr>),
@@ -342,7 +342,7 @@ pub enum ExprKind {
     ImplcitSelfCall(Box<Expr>, PathSegment, Vec<Expr>),
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct Expr {
     pub span: Span,
     pub kind: ExprKind,
@@ -399,7 +399,7 @@ impl PartialEq for Path {
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct Struct {
     pub ident: Ident,
     pub span: Span,
@@ -407,7 +407,7 @@ pub struct Struct {
     pub template_params: Vec<TemplateParam>,
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct Enum {
     pub ident: Ident,
     pub span: Span,
@@ -415,7 +415,7 @@ pub struct Enum {
     pub template_params: Vec<TemplateParam>,
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct Function {
     pub ident: Ident,
     pub span: Span,
@@ -426,20 +426,20 @@ pub struct Function {
     pub is_node_def: bool,
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub enum CaseKind {
     Int(usize),
     EnumVariant(Ident, Option<Ident>),
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct MatchBranch {
     pub span: Span,
     pub case: CaseKind,
     pub body: Stmt,
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub enum StmtKind {
     Expression(Expr),
     Assign(Expr, Expr),
@@ -451,13 +451,13 @@ pub enum StmtKind {
     Return(Option<Expr>),
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct Stmt {
     pub span: Span,
     pub kind: StmtKind,
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct Block {
     pub statements: Vec<Stmt>,
     pub span: Span,
