@@ -1955,6 +1955,7 @@ impl<'a> IdentTreeCursor<'a> {
 pub enum TyPattern {
     Any,
     Exact(ir::Ty),
+    AnyPtr,
 }
 
 #[derive(Clone, Debug)]
@@ -1973,6 +1974,13 @@ impl FnOverride {
         for (pat, ty) in self.arg_tys.iter().zip(func_args) {
             match pat {
                 TyPattern::Any => {}
+                TyPattern::AnyPtr => {
+                    if let ir::Ty::Native(ir::NativeType::Ptr(_, _)) = ty {
+                        return true;
+                    } else {
+                        return false;
+                    }
+                }
                 TyPattern::Exact(pat_ty) => {
                     if pat_ty != ty {
                         return false;
@@ -1984,6 +1992,13 @@ impl FnOverride {
         for (pat, ty) in self.temp_args.iter().zip(temp_args) {
             match pat {
                 TyPattern::Any => {}
+                TyPattern::AnyPtr => {
+                    if let ir::Ty::Native(ir::NativeType::Ptr(_, _)) = ty {
+                        return true;
+                    } else {
+                        return false;
+                    }
+                }
                 TyPattern::Exact(pat_ty) => {
                     if pat_ty != ty {
                         return false;

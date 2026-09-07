@@ -10,6 +10,7 @@ use anyhow::{Result, anyhow, bail};
 use brane_core::{ir, memory};
 use cranelift_codegen::ir::{
     ArgumentPurpose, BlockArg, ConstantData, Endianness, Signature, StackSlotData, StackSlotKind,
+    TrapCode,
 };
 use cranelift_codegen::{
     isa,
@@ -479,7 +480,11 @@ impl CraneliftJitBackend {
 
                         let rt_to_ty = Self::jit_ty(to_ty);
 
-                        let to = if from_ty.is_int() && to_ty.is_int() {
+                        let to = if (from_ty.is_int() && to_ty.is_int())
+                            || (from_ty.is_ptr() && to_ty.is_int())
+                            || (to_ty.is_ptr() && from_ty.is_int())
+                            || (to_ty.is_ptr() && from_ty.is_ptr())
+                        {
                             if from_ty.size() < to_ty.size() {
                                 if from_ty.is_unsigned() {
                                     ctx.builder.ins().uextend(rt_to_ty, from)
@@ -575,66 +580,120 @@ impl CraneliftJitBackend {
         Ok(())
     }
 
-    fn load(int_ptr: Value, ty: Type, ctx: &mut FunctionCtx) -> Value {
-        let binding = ctx.builder.ins().ushr_imm(int_ptr, 16);
-        let binding = ctx.builder.ins().uextend(ctx.ptr_ty, binding);
-        let offset = ctx.builder.ins().band_imm(int_ptr, 0xFFFF);
-        let offset = ctx.builder.ins().uextend(ctx.ptr_ty, offset);
+    // Output is the raw pointer, along with the first pointer for the
+    // allocation and length
+    fn handle_to_ptr_data(ptr_handle: Value, ctx: &mut FunctionCtx) -> (Value, Value, Value) {
+        // First 16 bits of handle is unused
+        // Second 16 bits is handle id
+        // last 32 bits is offset
+        let handle_generation = ctx.builder.ins().ushr_imm(ptr_handle, 48);
+        let allocation_id = ctx.builder.ins().ushr_imm(ptr_handle, 32);
+        // clean out those unused top bits and only keep the 16 we want
+        let allocation_id = ctx.builder.ins().band_imm(allocation_id, 0xFFFF);
+        //let allocation_id = ctx.builder.ins().uextend(ctx.ptr_ty, allocation_id);
 
-        let bindings = ctx
+        let offset = ctx.builder.ins().band_imm(ptr_handle, 0xFFFFFFFF);
+        //let offset = ctx.builder.ins().uextend(ctx.ptr_ty, offset);
+
+        let allocation_bindings_ptr =
+            ctx.builder
+                .ins()
+                .load(ctx.ptr_ty, MemFlags::trusted(), ctx.ctx_ptr, 0);
+
+        // Offset by 3 for the number of members in the buffer binding struct that the ctx array is
+        // made of
+        let binding_offset = ctx
             .builder
             .ins()
-            .load(ctx.ptr_ty, MemFlags::trusted(), ctx.ctx_ptr, 0);
-
-        let mul_shift = match ctx.ptr_bytes {
-            1 => 0,
-            2 => 1,
-            4 => 2,
-            8 => 3,
-            _ => unreachable!(),
-        };
-        let binding_offset = ctx.builder.ins().ishl_imm(binding, mul_shift);
-        let binding_ptr = ctx.builder.ins().iadd(bindings, binding_offset);
-
-        let page_ptr = ctx
+            .imul_imm(allocation_id, (ctx.ptr_bytes * 3) as i64);
+        let allocation_data_ptr = ctx
             .builder
             .ins()
-            .load(ctx.ptr_ty, MemFlags::trusted(), binding_ptr, 0);
-        let value_ptr = ctx.builder.ins().iadd(page_ptr, offset);
+            .iadd(allocation_bindings_ptr, binding_offset);
+
+        let base_ptr =
+            ctx.builder
+                .ins()
+                .load(ctx.ptr_ty, MemFlags::trusted(), allocation_data_ptr, 0);
+        let length = ctx.builder.ins().load(
+            types::I64,
+            MemFlags::trusted(),
+            allocation_data_ptr,
+            ctx.ptr_bytes,
+        );
+        let binding_generation = ctx.builder.ins().load(
+            types::I64,
+            MemFlags::trusted(),
+            allocation_data_ptr,
+            ctx.ptr_bytes * 2,
+        );
+
+        let bindings_same =
+            ctx.builder
+                .ins()
+                .icmp(IntCC::Equal, handle_generation, binding_generation);
+        // TODO have this enableable with a runtime or build flag. Checks for bindings being
+        // different
         ctx.builder
             .ins()
-            .load(ty, MemFlags::trusted(), value_ptr, 0)
+            .trapz(bindings_same, TrapCode::user(10).unwrap());
+
+        // We're not clamping the access_ptr here, because every load/store operation does it's own
+        // type-size dependant range checking
+        let access_ptr = ctx.builder.ins().iadd(offset, base_ptr);
+
+        (access_ptr, base_ptr, length)
     }
 
-    fn store(int_ptr: Value, value: Value, ctx: &mut FunctionCtx) {
-        let binding = ctx.builder.ins().ushr_imm(int_ptr, 16);
-        let binding = ctx.builder.ins().uextend(ctx.ptr_ty, binding);
-        let offset = ctx.builder.ins().band_imm(int_ptr, 0xFFFF);
-        let offset = ctx.builder.ins().uextend(ctx.ptr_ty, offset);
+    // Adds traps for if reads are out of bounds. This is vulnerable to allocation sizes less than
+    // read sizes.
+    fn bounds_check_ptr_access(
+        ptr: Value,
+        access_bytes: i64,
+        alloc_ptr: Value,
+        alloc_length: Value,
+        ctx: &mut FunctionCtx,
+    ) {
+        let limit = ctx.builder.ins().iadd_imm(alloc_length, -access_bytes);
+        let offset = ctx.builder.ins().isub(ptr, alloc_ptr);
 
-        let bindings = ctx
+        let out_of_bounds = ctx
             .builder
             .ins()
-            .load(ctx.ptr_ty, MemFlags::trusted(), ctx.ctx_ptr, 0);
-
-        let mul_shift = match ctx.ptr_bytes {
-            1 => 0,
-            2 => 1,
-            4 => 2,
-            8 => 3,
-            _ => unreachable!(),
-        };
-        let binding_offset = ctx.builder.ins().ishl_imm(binding, mul_shift);
-        let binding_ptr = ctx.builder.ins().iadd(bindings, binding_offset);
-
-        let page_ptr = ctx
-            .builder
-            .ins()
-            .load(ctx.ptr_ty, MemFlags::trusted(), binding_ptr, 0);
-        let value_ptr = ctx.builder.ins().iadd(page_ptr, offset);
+            .icmp(IntCC::UnsignedGreaterThan, offset, limit);
+        let too_small =
+            ctx.builder
+                .ins()
+                .icmp_imm(IntCC::UnsignedLessThan, alloc_length, access_bytes);
+        let bad_access = ctx.builder.ins().bor(out_of_bounds, too_small);
         ctx.builder
             .ins()
-            .store(MemFlags::trusted(), value, value_ptr, 0);
+            .trapnz(bad_access, TrapCode::HEAP_OUT_OF_BOUNDS);
+    }
+
+    // TODO eventually we could optimize pointer lookup by converting pointers on-load to a
+    // pointer-rage pair, not doing it yet though since function calling conventions would need
+    // special cases for converting pointers back to handles
+    fn load(ptr_handle: Value, ty: Type, ctx: &mut FunctionCtx) -> Value {
+        let (access_ptr, alloc_ptr, alloc_length) = Self::handle_to_ptr_data(ptr_handle, ctx);
+        Self::bounds_check_ptr_access(access_ptr, ty.bytes() as i64, alloc_ptr, alloc_length, ctx);
+
+        ctx.builder.ins().load(ty, MemFlags::new(), access_ptr, 0)
+    }
+
+    fn store(ptr_handle: Value, value: Value, ctx: &mut FunctionCtx) {
+        let (access_ptr, alloc_ptr, alloc_length) = Self::handle_to_ptr_data(ptr_handle, ctx);
+        Self::bounds_check_ptr_access(
+            access_ptr,
+            ctx.builder.func.dfg.value_type(value).bytes() as i64,
+            alloc_ptr,
+            alloc_length,
+            ctx,
+        );
+
+        ctx.builder
+            .ins()
+            .store(MemFlags::new(), value, access_ptr, 0);
     }
 
     fn jump_args(
@@ -755,9 +814,9 @@ impl CraneliftJitBackend {
         match nt {
             ir::NativeType::Bool | ir::NativeType::U8 | ir::NativeType::I8 => types::I8,
             ir::NativeType::U16 | ir::NativeType::I16 => types::I16,
-            ir::NativeType::U32 | ir::NativeType::I32 | ir::NativeType::Ptr(_, _) => types::I32,
+            ir::NativeType::U32 | ir::NativeType::I32 => types::I32,
             ir::NativeType::F32 => types::F32,
-            ir::NativeType::U64 | ir::NativeType::I64 => types::I64,
+            ir::NativeType::U64 | ir::NativeType::I64 | ir::NativeType::Ptr(_, _) => types::I64,
             ir::NativeType::F64 => types::F64,
         }
     }
@@ -1224,7 +1283,7 @@ impl CraneliftJitBackend {
                                 stack_slot,
                                 0,
                             );
-                            arg.store(stack_ptr, 0, ir, fn_ctx)?;
+                            arg.raw_store(stack_ptr, 0, ir, fn_ctx)?;
                             arg_values.push(stack_ptr)
                         } else {
                             let mut eightbyte = [fn_ctx.builder.ins().iconst(types::I64, 0)];
@@ -1292,7 +1351,7 @@ impl CraneliftJitBackend {
                                     stack_slot,
                                     0,
                                 );
-                                arg.store(stack_ptr, 0, ir, fn_ctx)?;
+                                arg.raw_store(stack_ptr, 0, ir, fn_ctx)?;
                                 arg_values.push(stack_ptr);
                                 Ok(())
                             };
@@ -1506,7 +1565,7 @@ impl CraneliftJitBackend {
                                         stack_slot,
                                         0,
                                     );
-                                    arg.store(stack_ptr, 0, ir, fn_ctx)?;
+                                    arg.raw_store(stack_ptr, 0, ir, fn_ctx)?;
                                     ngrn = 8.min(ngrn + 1);
                                     arg_values.push(stack_ptr);
                                 }
@@ -1564,7 +1623,7 @@ impl CraneliftJitBackend {
             {
                 CallingConvention::WindowsFastcall => {
                     if let Some(ret_alloc) = ret_alloc {
-                        Ok(Some(FValue::load(
+                        Ok(Some(FValue::raw_load(
                             fn_ctx
                                 .builder
                                 .ins()
@@ -1612,7 +1671,8 @@ impl CraneliftJitBackend {
                                     ret_alloc,
                                     0,
                                 );
-                                let loaded = FValue::load(ptr, 0, ret_ty, ir, &mut fn_ctx.builder)?;
+                                let loaded =
+                                    FValue::raw_load(ptr, 0, ret_ty, ir, &mut fn_ctx.builder)?;
                                 Ok(Some(loaded))
                             } else {
                                 let ret_vals = fn_ctx.builder.inst_results(call_inst).to_vec();
@@ -1645,7 +1705,8 @@ impl CraneliftJitBackend {
                                     ret_alloc,
                                     0,
                                 );
-                                let loaded = FValue::load(ptr, 0, ret_ty, ir, &mut fn_ctx.builder)?;
+                                let loaded =
+                                    FValue::raw_load(ptr, 0, ret_ty, ir, &mut fn_ctx.builder)?;
                                 Ok(Some(loaded))
                             } else {
                                 let ret_vals = fn_ctx.builder.inst_results(call_inst).to_vec();
@@ -1726,7 +1787,7 @@ impl CraneliftJitBackend {
                             } else {
                                 let stack_ptr = params[consumed_params];
                                 consumed_params += 1;
-                                let loaded_arg = FValue::load(stack_ptr, 0, arg, ir, builder)?;
+                                let loaded_arg = FValue::raw_load(stack_ptr, 0, arg, ir, builder)?;
                                 fn_args.push(loaded_arg);
                             }
                         }
@@ -1761,7 +1822,7 @@ impl CraneliftJitBackend {
                                 let mut load_as_mem = || -> anyhow::Result<_> {
                                     let ptr = params[params_consumed];
                                     params_consumed += 1;
-                                    let loaded = FValue::load(ptr, 0, arg, ir, builder)?;
+                                    let loaded = FValue::raw_load(ptr, 0, arg, ir, builder)?;
                                     Ok(loaded)
                                 };
 
@@ -1945,7 +2006,7 @@ impl CraneliftJitBackend {
                                     } else {
                                         let ptr = params[params_consumed];
                                         params_consumed += 1;
-                                        fn_args.push(FValue::load(ptr, 0, arg, ir, builder)?);
+                                        fn_args.push(FValue::raw_load(ptr, 0, arg, ir, builder)?);
                                     }
                                 }
                             }
@@ -1993,7 +2054,7 @@ impl CraneliftJitBackend {
                 {
                     CallingConvention::WindowsFastcall => {
                         if let Some(ret_ptr) = ctx.ret_ptr.clone() {
-                            ret_obj.store(ret_ptr, 0, ir, ctx)?;
+                            ret_obj.raw_store(ret_ptr, 0, ir, ctx)?;
                             ctx.builder.ins().return_(&[ret_ptr]);
                         } else {
                             assert!(ret_obj.size() <= 8);
@@ -2019,7 +2080,7 @@ impl CraneliftJitBackend {
                     CallingConvention::SystemV => match &triple.architecture {
                         Architecture::X86_64 => {
                             if let Some(ret_ptr) = ctx.ret_ptr.clone() {
-                                ret_obj.store(ret_ptr, 0, ir, ctx)?;
+                                ret_obj.raw_store(ret_ptr, 0, ir, ctx)?;
                                 ctx.builder.ins().return_(&[ret_ptr]);
                             } else {
                                 assert!(ret_obj.size() <= 16);
@@ -2057,7 +2118,7 @@ impl CraneliftJitBackend {
                             } else {
                                 let (size, _) = ir.size_align(ret_ty)?;
                                 if let Some(ret_ptr) = ctx.ret_ptr {
-                                    ret_obj.store(ret_ptr, 0, ir, ctx)?;
+                                    ret_obj.raw_store(ret_ptr, 0, ir, ctx)?;
                                     ctx.builder.ins().return_(&[]);
                                 } else {
                                     let mut packed = [
@@ -2434,7 +2495,7 @@ impl FValue {
         }
     }
 
-    pub fn load(
+    pub fn raw_load(
         ptr: Value,
         base_offset: i32,
         ty: &ir::Ty,
@@ -2442,14 +2503,14 @@ impl FValue {
         builder: &mut FunctionBuilder,
     ) -> anyhow::Result<Self> {
         let mut fvalues = Vec::new();
-        let desc = Self::load_internal(ptr, base_offset, ty, ir, builder, 0, &mut fvalues)?;
+        let desc = Self::raw_load_internal(ptr, base_offset, ty, ir, builder, 0, &mut fvalues)?;
         Ok(Self {
             values: fvalues,
             desc,
         })
     }
 
-    fn load_internal(
+    fn raw_load_internal(
         ptr: Value,
         base_offset: i32,
         ty: &ir::Ty,
@@ -2482,7 +2543,7 @@ impl FValue {
                     .iter()
                     .zip(&layout.byte_offsets)
                     .map(|(member, offset)| {
-                        Self::load_internal(
+                        Self::raw_load_internal(
                             ptr,
                             base_offset,
                             &member.ty,
@@ -2580,8 +2641,13 @@ impl FValue {
                         };
                         builder.switch_to_block(block);
 
-                        let loaded =
-                            Self::load(ptr, (struct_offset + v_offset) as i32, v_ty, ir, builder)?;
+                        let loaded = Self::raw_load(
+                            ptr,
+                            (struct_offset + v_offset) as i32,
+                            v_ty,
+                            ir,
+                            builder,
+                        )?;
 
                         builder.ins().jump(
                             join_block,
@@ -2634,7 +2700,7 @@ impl FValue {
                         let v = &def.variants[0];
                         v.ty.as_ref()
                             .map(|v_ty| {
-                                Self::load_internal(
+                                Self::raw_load_internal(
                                     ptr,
                                     base_offset,
                                     v_ty,
@@ -2658,17 +2724,17 @@ impl FValue {
         }
     }
 
-    pub fn store(
+    fn raw_store(
         &self,
         ptr: Value,
         base_offset: i32,
         ir: &ir::Module,
         ctx: &mut FunctionCtx,
     ) -> anyhow::Result<()> {
-        self.store_internal(ptr, base_offset, ir, ctx, &self.desc)
+        self.raw_store_internal(ptr, base_offset, ir, ctx, &self.desc)
     }
 
-    fn store_internal(
+    fn raw_store_internal(
         &self,
         ptr: Value,
         base_offset: i32,
@@ -2689,7 +2755,7 @@ impl FValue {
             }
             FValueDesc::Struct(obj) => {
                 for field_desc in &obj.fields {
-                    self.store_internal(ptr, base_offset, ir, ctx, field_desc)?;
+                    self.raw_store_internal(ptr, base_offset, ir, ctx, field_desc)?;
                 }
                 Ok(())
             }
@@ -2723,7 +2789,7 @@ impl FValue {
                     for (v_desc, block) in branches {
                         ctx.builder.switch_to_block(block);
 
-                        self.store_internal(ptr, base_offset, ir, ctx, v_desc)?;
+                        self.raw_store_internal(ptr, base_offset, ir, ctx, v_desc)?;
 
                         ctx.builder.ins().jump(join_block, &[]);
                     }
@@ -2733,7 +2799,7 @@ impl FValue {
                     // No discriminant, store the single variant
                     for variant_desc in &obj.variants {
                         if let Some(v_desc) = variant_desc {
-                            self.store_internal(ptr, base_offset, ir, ctx, v_desc)?;
+                            self.raw_store_internal(ptr, base_offset, ir, ctx, v_desc)?;
                         }
                     }
                 }

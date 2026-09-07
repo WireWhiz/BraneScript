@@ -1,45 +1,68 @@
-use bimap::BiMap;
 use region::Allocation;
-use std::collections::HashMap;
-use std::ops::Range;
-use std::sync::atomic::{AtomicU16, AtomicU32, AtomicUsize};
-use std::{
-    ptr::NonNull,
-    sync::{Arc, Mutex, RwLock},
-};
+use std::fmt::Display;
+use std::sync::atomic::{AtomicU16, AtomicU32};
+use std::{ptr::NonNull, sync::Mutex};
 
-pub const BS_PAGE_SIZE: usize = u16::MAX as usize;
+pub const BS_PAGE_SIZE: usize = u16::MAX as usize + 1;
+
+#[repr(C)]
+pub struct BufferBinding {
+    pub data: Option<NonNull<u8>>,
+    pub len: usize,
+    // This is a usize for alignment purposes, but should never exceed u16::MAX
+    pub generation: usize,
+}
 
 // Both these types are api safe, in accordance with the "null pointer optimization"
-pub type PageTable = [Option<NonNull<u8>>; BS_PAGE_SIZE];
+pub type BufferTable = [BufferBinding; BS_PAGE_SIZE];
 pub type FnTable = [Option<NonNull<u8>>; BS_PAGE_SIZE];
 /// Currently an alias for global binding index
 pub type PageId = u16;
 pub type FnId = u16;
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 #[repr(C)]
-pub struct BSPtr(pub u32);
+pub struct BSPtr(pub u64);
 
 impl BSPtr {
-    pub fn new(binding: u16, offset: u16) -> Self {
-        Self(((binding as u32) << 16) | offset as u32)
+    pub fn new(generation: u16, binding: u16, offset: u32) -> Self {
+        Self(((generation as u64) << 48) | ((binding as u64) << 32) | offset as u64)
+    }
+
+    pub fn generation(self) -> u16 {
+        (self.0 >> 48) as u16
     }
 
     pub fn binding(self) -> u16 {
-        (self.0 >> 16) as u16
+        ((self.0 >> 32) & 0xFFFF) as u16
     }
 
-    pub fn offset(self) -> u16 {
-        (self.0 & 0x0000FFFF) as u16
+    pub fn offset(self) -> u32 {
+        (self.0 & 0x00000000FFFFFFFF) as u32
+    }
+
+    pub fn set_generation(&mut self, generation: u16) {
+        *self = Self::new(generation, self.binding(), self.offset());
     }
 
     pub fn set_binding(&mut self, binding: u16) {
-        self.0 = ((binding as u32) << 16) & self.offset() as u32;
+        *self = Self::new(self.generation(), binding, self.offset());
     }
 
-    pub fn set_offset(&mut self, offset: u16) {
-        self.0 = (((self.binding() as u32) << 16) & offset as u32) as u32;
+    pub fn set_offset(&mut self, offset: u32) {
+        *self = Self::new(self.generation(), self.binding(), offset);
+    }
+}
+
+impl Display for BSPtr {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "BSPtr {{ gen: {}, binding: {}, offset: {} }} ",
+            self.generation(),
+            self.binding(),
+            self.offset()
+        )
     }
 }
 

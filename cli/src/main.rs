@@ -1,18 +1,17 @@
-use std::ptr::NonNull;
-use std::{collections::HashMap, ffi::OsString, io::Write as _, time::Instant};
+use std::{ffi::OsString, io::Write as _, time::Instant};
 
-use anyhow::{anyhow, bail, Context};
-//use brane_script_runtime::backend::llvm::LLVMJitBackend;
+use anyhow::{anyhow, bail};
 use brane_backend_cranelift::CraneliftJitBackend;
-use brane_core::ir::{self, Uri};
+use brane_core::ir::Uri;
 use brane_core::memory::BSPtr;
 use brane_core::runtime::{LoadedModule, Runtime};
-use brane_core::{sandbox, ExecutionCtx};
+use brane_core::ExecutionCtx;
 use branec::CompileContext;
 use branec_source::SourceManager;
 use clap::Subcommand;
 
 mod c_abi_tests;
+mod memory_binding_tests;
 
 fn format_duration(duration: std::time::Duration) -> String {
     let nanos = duration.as_nanos();
@@ -89,7 +88,7 @@ enum PrintKind {
         module_name: String,
     },
     Memory {
-        binding_index: u16,
+        buffer_index: u16,
 
         /// Offset to start printing from, rounds down to nearest 8 bytes
         #[arg(short, long)]
@@ -185,14 +184,14 @@ fn main() -> anyhow::Result<()> {
         loaded_modules: Default::default(),
     };
     ctx.load_std();
-    let mut rt = Runtime::<CraneliftJitBackend>::new();
+    let rt = Runtime::<CraneliftJitBackend>::new();
 
     let mut exe_ctx = rt.new_execution_ctx();
     let mut vars_page = rt.store.alloc_page()?;
     let mut ret_page = rt.store.alloc_page()?;
 
-    exe_ctx.bindings[1] = NonNull::new(vars_page.data.as_mut_ptr());
-    exe_ctx.bindings[2] = NonNull::new(ret_page.data.as_mut_ptr());
+    exe_ctx.add_allocation(vars_page.data.as_mut_ptr(), vars_page.data.len());
+    exe_ctx.add_allocation(ret_page.data.as_mut_ptr(), ret_page.data.len());
 
     let user_code = ctx.sources.add_custom("".into())?;
 
@@ -242,13 +241,13 @@ fn main() -> anyhow::Result<()> {
                         }
                     }
                     PrintKind::Memory {
-                        binding_index,
+                        buffer_index,
                         offset,
                         eightbytes,
                     } => {
-                        let binding = exe_ctx.bindings[binding_index as usize];
-                        let Some(binding) = binding else {
-                            bail!("Binding {} was unset", binding_index);
+                        let buffer = &exe_ctx.buffers[buffer_index as usize];
+                        let Some(buffer) = buffer.data else {
+                            bail!("Buffer {} was unset", buffer_index);
                         };
 
                         let offset = offset.unwrap_or(0);
@@ -264,14 +263,14 @@ fn main() -> anyhow::Result<()> {
                                 println!(
                                     "({:>5}) {:04X} {:04X} {:04X} {:04X}  {:04X} {:04X} {:04X} {:04X}",
                                     index,
-                                    binding.add(index + 7).as_ref(),
-                                    binding.add(index + 6).as_ref(),
-                                    binding.add(index + 5).as_ref(),
-                                    binding.add(index + 4).as_ref(),
-                                    binding.add(index + 3).as_ref(),
-                                    binding.add(index + 2).as_ref(),
-                                    binding.add(index + 1).as_ref(),
-                                    binding.add(index).as_ref(),
+                                    buffer.add(index + 7).as_ref(),
+                                    buffer.add(index + 6).as_ref(),
+                                    buffer.add(index + 5).as_ref(),
+                                    buffer.add(index + 4).as_ref(),
+                                    buffer.add(index + 3).as_ref(),
+                                    buffer.add(index + 2).as_ref(),
+                                    buffer.add(index + 1).as_ref(),
+                                    buffer.add(index).as_ref(),
                                 )
                             }
                         }
@@ -323,7 +322,7 @@ fn main() -> anyhow::Result<()> {
                     let name = module_name.unwrap_or("default".into());
                     let uri = Uri::File(src.into());
                     let module = ctx.emit_module(name.clone(), &uri)?;
-                    println!("Compiled successfully");
+                    println!("Compiled, now loading...");
                     let mod_id = rt.load_module(uri, module)?;
                     println!("Loaded module with id {}", mod_id);
                 }
@@ -345,13 +344,14 @@ fn main() -> anyhow::Result<()> {
                         function_name,
                         module_name
                     ))?;
-                    let func_src = module_src.get_function(func_id).unwrap();
+                    let _func_src = module_src.get_function(func_id).unwrap();
 
-                    let func_table_entry = module.get_fn_by_name(&function_name).ok_or(anyhow!(
-                        "Function {} not found in compiled {}",
-                        function_name,
-                        module_name
-                    ))?;
+                    let _func_table_entry =
+                        module.get_fn_by_name(&function_name).ok_or(anyhow!(
+                            "Function {} not found in compiled {}",
+                            function_name,
+                            module_name
+                        ))?;
 
                     let compile_start = Instant::now();
                     // TODO need an ir writer library that isn't string concatination
@@ -378,12 +378,12 @@ fn main() -> anyhow::Result<()> {
                     let user_call_index = new_mod.get_fn_by_name("user_call").unwrap();
 
                     unsafe {
-                        let func = std::mem::transmute::<_, fn(*const ExecutionCtx, u32, u32)>(
+                        let func = std::mem::transmute::<_, fn(*const ExecutionCtx, u64, u64)>(
                             *exe_ctx.fn_bindings_ptr().add(user_call_index as usize),
                         );
 
-                        let ctx_ptr = BSPtr::new(1, 0).0;
-                        let ret_ptr = BSPtr::new(2, 0).0;
+                        let ctx_ptr = BSPtr::new(0, 1, 0).0;
+                        let ret_ptr = BSPtr::new(0, 2, 0).0;
 
                         let start = Instant::now();
                         func(&exe_ctx, ctx_ptr, ret_ptr);
@@ -404,7 +404,7 @@ fn main() -> anyhow::Result<()> {
             Ok(false)
         }() {
             Err(err) => {
-                println!("Command failed: {}", err);
+                println!("Command failed: {:?}", err);
                 println!("backtrace: {}", err.backtrace());
             }
             Ok(true) => break,

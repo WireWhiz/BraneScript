@@ -14,7 +14,6 @@
 #[cfg(test)]
 mod tests {
     use std::mem;
-    use std::ptr::NonNull;
 
     use anyhow::Result;
     use brane_backend_cranelift::CraneliftJitBackend;
@@ -497,7 +496,7 @@ mod tests {
             };
             cctx.load_std();
 
-            let mut rt = Runtime::<CraneliftJitBackend>::new();
+            let rt = Runtime::<CraneliftJitBackend>::new();
             let mut exe_ctx = Box::new(rt.new_execution_ctx());
 
             // Bindings 1 and 2 are the vars / return pages, same as the CLI sets up.
@@ -505,8 +504,8 @@ mod tests {
             // harness; the harness is a `static` so this is fine.
             let mut vars_page = rt.store.alloc_page()?;
             let mut ret_page = rt.store.alloc_page()?;
-            exe_ctx.bindings[1] = NonNull::new(vars_page.data.as_mut_ptr());
-            exe_ctx.bindings[2] = NonNull::new(ret_page.data.as_mut_ptr());
+            exe_ctx.add_allocation(vars_page.data.as_mut_ptr(), vars_page.data.len());
+            exe_ctx.add_allocation(ret_page.data.as_mut_ptr(), ret_page.data.len());
             std::mem::forget(vars_page);
             std::mem::forget(ret_page);
 
@@ -1269,6 +1268,33 @@ mod tests {
     // Helper to load harness for tests
     fn get_test_harness() -> &'static AbiTestHarness {
         &TEST_HARNESS.0
+    }
+
+    #[test]
+    fn sandbox_catches_faults_regardless_of_return_type() {
+        let mut unit = || unsafe { std::arch::asm!("ud2", options(noreturn)) };
+        assert!(
+            unsafe { brane_core::sandbox::try_run(&mut unit) }.is_err(),
+            "T = ()"
+        );
+
+        let mut int = || -> i64 {
+            unsafe { std::arch::asm!("ud2", options(noreturn)) };
+            42
+        };
+        assert!(
+            unsafe { brane_core::sandbox::try_run(&mut int) }.is_err(),
+            "T = i64"
+        );
+
+        let mut byte = || -> u8 {
+            unsafe { std::arch::asm!("ud2", options(noreturn)) };
+            7
+        };
+        assert!(
+            unsafe { brane_core::sandbox::try_run(&mut byte) }.is_err(),
+            "T = u8"
+        );
     }
 
     #[test]

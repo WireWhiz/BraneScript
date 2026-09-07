@@ -1,11 +1,13 @@
 use std::{
     collections::HashMap,
+    ptr::NonNull,
     sync::{Arc, RwLock},
 };
 
 use crate::{
     ir,
-    memory::{self, FnTable, Page, PageTable, Store},
+    memory::{self, BSPtr, BufferBinding, BufferTable, FnTable, Store},
+    BS_PAGE_SIZE,
 };
 
 pub trait LoadedModule {
@@ -103,36 +105,67 @@ pub enum BindingError {
 
 #[repr(C)]
 pub struct ExecutionCtx {
-    pub bindings: Box<PageTable>,
+    pub buffers: Box<BufferTable>,
     pub fn_bindings: *const FnTable,
-
-    owned_pages: Vec<Page>,
-    shared_pages: Vec<Arc<Page>>,
 }
 
 impl ExecutionCtx {
     pub fn new(fn_bindings: *const FnTable) -> Self {
-        let bindings = unsafe {
-            let mut array = Box::<PageTable>::new_uninit();
+        let buffers = unsafe {
+            let mut array = Box::<BufferTable>::new_uninit();
             for i in array.assume_init_mut().iter_mut() {
-                *i = None;
+                *i = BufferBinding {
+                    data: None,
+                    len: 0,
+                    generation: 0,
+                };
             }
             array.assume_init()
         };
 
         Self {
-            bindings: bindings,
-            fn_bindings: fn_bindings,
-            owned_pages: Vec::new(),
-            shared_pages: Vec::new(),
+            buffers,
+            fn_bindings,
         }
     }
 
-    pub fn bindings_ptr(&self) -> *const *mut u8 {
-        unsafe { std::mem::transmute(self.bindings.as_ptr()) }
+    pub fn allocations_ptr(&self) -> *const *mut u8 {
+        unsafe { std::mem::transmute(self.buffers.as_ptr()) }
     }
 
     pub fn fn_bindings_ptr(&self) -> *const *mut u8 {
         unsafe { std::mem::transmute(self.fn_bindings) }
+    }
+
+    pub fn add_allocation(&mut self, data: *mut u8, len: usize) -> BSPtr {
+        for i in 0..BS_PAGE_SIZE {
+            if self.buffers[i].data.is_none() {
+                let generation = self.buffers[i].generation;
+                self.buffers[i] = BufferBinding {
+                    data: NonNull::new(data),
+                    len,
+                    generation,
+                };
+                return BSPtr::new(generation as u16, i as u16, 0);
+            }
+        }
+
+        panic!("too many allocations!");
+    }
+
+    pub fn remove_allocation(&mut self, ptr: BSPtr) {
+        let buffer = &mut self.buffers[ptr.binding() as usize];
+        if buffer.generation != ptr.generation() as usize {
+            //TODO report this
+            println!("Tried to dealocate ptr for wrong generation");
+            return;
+        }
+
+        let next_generation = (buffer.generation as u16).wrapping_add(1) as usize;
+        *buffer = BufferBinding {
+            data: None,
+            len: 0,
+            generation: next_generation,
+        };
     }
 }

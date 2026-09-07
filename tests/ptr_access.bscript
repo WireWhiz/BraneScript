@@ -1,0 +1,103 @@
+
+// Memory-safety test surface.
+//
+// Pointers arrive as BSPtr: [ unused:u16 | binding:u16 | offset:u32 ].
+//
+// Two deliberate design choices this file is written against:
+//
+//   1. `add`/`sub` are BYTE-based. add(ptr, 1) moves one byte regardless of
+//      the pointee type. Callers scale by element size themselves.
+//   2. Offset arithmetic is allowed to carry into the binding field. A carried
+//      pointer names a different allocation; that's an accepted silent failure,
+//      not something to check for. The only guarantee is that every access is
+//      bounds-checked against whichever binding it ends up naming.
+//
+// Because add is byte-based, the old separate "byte-granular" entry points are
+// gone — mem_load_i64 already takes a byte offset, so an 8-byte load starting
+// 4 bytes before the end is just mem_load_i64(ptr, len - 4).
+
+// --- byte-offset access -----------------------------------------------------
+
+fn mem_load_i64(ptr: *mut i64, byte_offset: i64) -> i64 {
+    return *add(ptr, byte_offset);
+}
+fn mem_store_i64(ptr: *mut i64, byte_offset: i64, value: i64) {
+    *add(ptr, byte_offset) = value;
+}
+fn mem_load_u8(ptr: *mut u8, byte_offset: i64) -> u8 {
+    return *add(ptr, byte_offset);
+}
+fn mem_store_u8(ptr: *mut u8, byte_offset: i64, value: u8) {
+    *add(ptr, byte_offset) = value;
+}
+
+// --- encoding probes --------------------------------------------------------
+//
+// TEST ONLY. These expose the raw handle bits so the Rust side can assert what
+// the JIT produced for a derived pointer. Handle bits are forgeable by design,
+// so exposing them doesn't weaken the model — but don't ship them in std.
+
+fn mem_ptr_bits(ptr: *mut u8) -> u64 {
+    return as<u64>(ptr);
+}
+
+// Derived from a *mut i64 specifically: proves add is byte-based rather than
+// scaled by the 8-byte pointee.
+fn mem_ptr_add_bits_i64(ptr: *mut i64, byte_offset: i64) -> u64 {
+    let p: *mut i64 = add(ptr, byte_offset);
+    return as<u64>(p);
+}
+
+fn mem_ptr_add_bits_u8(ptr: *mut u8, byte_offset: i64) -> u64 {
+    let p: *mut u8 = add(ptr, byte_offset);
+    return as<u64>(p);
+}
+
+// Fabricate a pointer from raw bits inside the guest. The actual threat model:
+// hostile bytecode forging a handle rather than deriving one.
+fn mem_load_from_raw_bits(bits: u64) -> i64 {
+    let p: *mut i64 = as<*mut i64>(bits);
+    return *p;
+}
+fn mem_store_to_raw_bits(bits: u64, value: i64) {
+    let p: *mut i64 = as<*mut i64>(bits);
+    *p = value;
+}
+
+// --- arithmetic without dereference -----------------------------------------
+//
+// Forming an out-of-range pointer is permitted; only the dereference is checked.
+
+fn mem_ptr_add_only(ptr: *mut i64, byte_offset: i64) -> i64 {
+    let p: *mut i64 = add(ptr, byte_offset);
+    return 0;
+}
+
+// --- multi-step derivation --------------------------------------------------
+//
+// Bounds must travel with the pointer through several steps rather than being
+// re-derived or lost at each one.
+
+fn mem_load_after_walk(ptr: *mut i64, a: i64, b: i64, c: i64) -> i64 {
+    let p1: *mut i64 = add(ptr, a);
+    let p2: *mut i64 = add(p1, b);
+    let p3: *mut i64 = sub(p2, c);
+    return *p3;
+}
+
+// --- round trip -------------------------------------------------------------
+
+fn mem_roundtrip_i64(ptr: *mut i64, byte_offset: i64, value: i64) -> i64 {
+    *add(ptr, byte_offset) = value;
+    return *add(ptr, byte_offset);
+}
+
+// --- two-pointer access -----------------------------------------------------
+//
+// Two independently derived pointers, so the JIT can't collapse them into a
+// single bounds check.
+
+fn mem_copy_i64(dst: *mut i64, dst_off: i64, src: *mut i64, src_off: i64) {
+    *add(dst, dst_off) = *add(src, src_off);
+}
+

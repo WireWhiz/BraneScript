@@ -39,8 +39,8 @@ impl NativeType {
         match self {
             Bool | I8 | U8 => 1,
             I16 | U16 => 2,
-            I32 | U32 | F32 | Ptr(_, _) => 4,
-            I64 | U64 | F64 => 8,
+            I32 | U32 | F32 => 4,
+            I64 | U64 | F64 | Ptr(_, _) => 8,
         }
     }
 
@@ -71,6 +71,10 @@ impl NativeType {
             self,
             NativeType::U8 | NativeType::U16 | NativeType::U32 | NativeType::U64
         )
+    }
+
+    pub fn is_ptr(&self) -> bool {
+        matches!(self, NativeType::Ptr(_, _))
     }
 }
 

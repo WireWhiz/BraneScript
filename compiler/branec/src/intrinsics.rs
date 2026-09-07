@@ -1,8 +1,7 @@
 use crate::{
-    FnOverride, FnOverrideKind, FunctionCtx, IdentTree, IntrinsicFnTrait, RValue, SSAStruct,
-    TyPattern,
+    FnOverride, FnOverrideKind, IdentTree, IntrinsicFnTrait, RValue, SSAStruct, TyPattern,
 };
-use anyhow::{bail, Result};
+use anyhow::bail;
 use brane_core::ir;
 use std::rc::Rc;
 
@@ -199,6 +198,74 @@ pub fn define_as_op_for<'a>(root: &mut IdentTree) {
         )
         .unwrap();
     }
+
+    for int_ty in [I64, U64] {
+        root.insert_fn(
+            "as",
+            FnOverride {
+                temp_args: vec![TyPattern::AnyPtr],
+                arg_tys: vec![TyPattern::Exact(ir::Ty::Native(int_ty.clone()))],
+                kind: FnOverrideKind::Intrinsic(Rc::new(move |temp_tys, args, ctx| {
+                    let [to_ty] = temp_tys else {
+                        unreachable!("incorrect as<>() template args");
+                    };
+                    let ir::Ty::Native(to_ty) = to_ty else {
+                        bail!(
+                            "as<T>() is only implemented for native types, not for {}",
+                            to_ty
+                        )
+                    };
+
+                    let [RValue::Value(from, from_ty)] = args else {
+                        unreachable!("incorrect as<>() args");
+                    };
+
+                    Ok(Some(RValue::Value(
+                        ctx.emit_op(ir::Op::Cast {
+                            src: from.clone(),
+                            from_ty: from_ty.clone(),
+                            to_ty: to_ty.clone(),
+                        })?,
+                        to_ty.clone(),
+                    )))
+                })),
+            },
+        )
+        .unwrap();
+
+        root.insert_fn(
+            "as",
+            FnOverride {
+                temp_args: vec![TyPattern::Exact(ir::Ty::Native(int_ty))],
+                arg_tys: vec![TyPattern::AnyPtr],
+                kind: FnOverrideKind::Intrinsic(Rc::new(move |temp_tys, args, ctx| {
+                    let [to_ty] = temp_tys else {
+                        unreachable!("incorrect as<>() template args");
+                    };
+                    let ir::Ty::Native(to_ty) = to_ty else {
+                        bail!(
+                            "as<T>() is only implemented for native types, not for {}",
+                            to_ty
+                        )
+                    };
+
+                    let [RValue::Value(from, from_ty)] = args else {
+                        unreachable!("incorrect as<>() args");
+                    };
+
+                    Ok(Some(RValue::Value(
+                        ctx.emit_op(ir::Op::Cast {
+                            src: from.clone(),
+                            from_ty: from_ty.clone(),
+                            to_ty: to_ty.clone(),
+                        })?,
+                        to_ty.clone(),
+                    )))
+                })),
+            },
+        )
+        .unwrap();
+    }
 }
 
 pub fn populate(root: &mut IdentTree) {
@@ -208,11 +275,105 @@ pub fn populate(root: &mut IdentTree) {
     let signed = [I8, I16, I32, I64];
     let floats = [F64, F32];
 
+    define_as_op_for(root);
+
     define_bin_op_for("add", &ints, None, ir::BinaryOp::IAdd, root);
     define_bin_op_for("add", &floats, None, ir::BinaryOp::FAdd, root);
 
+    root.insert_fn(
+        "add",
+        FnOverride {
+            temp_args: vec![],
+            arg_tys: vec![TyPattern::AnyPtr, TyPattern::Exact(ir::Ty::Native(I64))],
+            kind: FnOverrideKind::Intrinsic(Rc::new(move |_, args, ctx| {
+                let [RValue::Value(left, l_ty), RValue::Value(right, _r_ty)] = args else {
+                    unreachable!("incorrect binary intrinsic sig");
+                };
+
+                Ok(Some(RValue::Value(
+                    ctx.emit_op(ir::Op::Binary {
+                        op: ir::BinaryOp::IAdd,
+                        left: *left,
+                        right: *right,
+                    })?,
+                    l_ty.clone(),
+                )))
+            })),
+        },
+    )
+    .unwrap();
+
+    root.insert_fn(
+        "add",
+        FnOverride {
+            temp_args: vec![],
+            arg_tys: vec![TyPattern::AnyPtr, TyPattern::Exact(ir::Ty::Native(U64))],
+            kind: FnOverrideKind::Intrinsic(Rc::new(move |_, args, ctx| {
+                let [RValue::Value(left, l_ty), RValue::Value(right, _r_ty)] = args else {
+                    unreachable!("incorrect binary intrinsic sig");
+                };
+
+                Ok(Some(RValue::Value(
+                    ctx.emit_op(ir::Op::Binary {
+                        op: ir::BinaryOp::IAdd,
+                        left: *left,
+                        right: *right,
+                    })?,
+                    l_ty.clone(),
+                )))
+            })),
+        },
+    )
+    .unwrap();
+
     define_bin_op_for("sub", &ints, None, ir::BinaryOp::ISub, root);
     define_bin_op_for("sub", &floats, None, ir::BinaryOp::FSub, root);
+
+    root.insert_fn(
+        "sub",
+        FnOverride {
+            temp_args: vec![],
+            arg_tys: vec![TyPattern::AnyPtr, TyPattern::Exact(ir::Ty::Native(I64))],
+            kind: FnOverrideKind::Intrinsic(Rc::new(move |_, args, ctx| {
+                let [RValue::Value(left, l_ty), RValue::Value(right, _r_ty)] = args else {
+                    unreachable!("incorrect binary intrinsic sig");
+                };
+
+                Ok(Some(RValue::Value(
+                    ctx.emit_op(ir::Op::Binary {
+                        op: ir::BinaryOp::ISub,
+                        left: *left,
+                        right: *right,
+                    })?,
+                    l_ty.clone(),
+                )))
+            })),
+        },
+    )
+    .unwrap();
+
+    root.insert_fn(
+        "sub",
+        FnOverride {
+            temp_args: vec![],
+            arg_tys: vec![TyPattern::AnyPtr, TyPattern::Exact(ir::Ty::Native(U64))],
+            kind: FnOverrideKind::Intrinsic(Rc::new(move |_, args, ctx| {
+                let [RValue::Value(left, l_ty), RValue::Value(right, _r_ty)] = args else {
+                    unreachable!("incorrect binary intrinsic sig");
+                };
+
+                Ok(Some(RValue::Value(
+                    ctx.emit_op(ir::Op::Binary {
+                        op: ir::BinaryOp::ISub,
+                        left: *left,
+                        right: *right,
+                    })?,
+                    l_ty.clone(),
+                )))
+            })),
+        },
+    )
+    .unwrap();
 
     define_bin_op_for("mul", &ints, None, ir::BinaryOp::IMul, root);
     define_bin_op_for("mul", &floats, None, ir::BinaryOp::FMul, root);
